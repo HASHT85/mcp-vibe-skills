@@ -97,3 +97,23 @@ export async function fetchTrending(limit = 20): Promise<SkillItem[]> {
 export async function fetchHot(limit = 20): Promise<SkillItem[]> {
     return fetchListPage("https://skills.sh/hot", limit);
 }
+
+export async function searchSkills(q: string, limit = 20): Promise<SkillItem[]> {
+    const term = q.toLowerCase().trim();
+    if (!term) return [];
+
+    const [t, h] = await Promise.all([fetchTrending(50), fetchHot(50)]);
+    const merged = [...t, ...h];
+
+    const uniq = new Map<string, SkillItem>();
+    for (const it of merged) uniq.set(it.href, it);
+
+    const filtered = Array.from(uniq.values()).filter((it) =>
+        it.title.toLowerCase().includes(term) ||
+        it.owner.toLowerCase().includes(term) ||
+        it.repo.toLowerCase().includes(term) ||
+        it.skill.toLowerCase().includes(term)
+    );
+
+    return filtered.slice(0, limit);
+}
