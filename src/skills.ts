@@ -83,3 +83,55 @@ export async function fetchTrending(limit = 20): Promise<SkillItem[]> {
 
     return Array.from(uniq.values()).slice(0, limit);
 }
+
+export async function fetchHot(limit = 20): Promise<SkillItem[]> {
+    const res = await fetch("https://skills.sh/hot", {
+        headers: { "user-agent": "mcp-vibe-skills/1.0" }
+    });
+    if (!res.ok) throw new Error(`skills.sh http ${res.status}`);
+    const html = await res.text();
+    const $ = cheerio.load(html);
+
+    const items: SkillItem[] = [];
+
+    $("a[href]").each((_, a) => {
+        const hrefRaw = String($(a).attr("href") || "");
+        if (!hrefRaw.startsWith("/")) return;
+
+        const parsed = parseSkillUrl(hrefRaw);
+        if (!parsed) return;
+
+        const href = `https://skills.sh${hrefRaw}`;
+
+        // Texte brut (peut être collé)
+        const raw = $(a).text().replace(/\s+/g, " ").trim();
+
+        // Rank: commence souvent par "1", "2", ...
+        const rankMatch = raw.match(/^(\d{1,3})/);
+        const rank = rankMatch ? Number(rankMatch[1]) : undefined;
+
+        // Installs: souvent finit par "7.1K" etc.
+        const installsMatch = raw.match(/(\d+(?:\.\d+)?\s*[KMB])\s*$/i) || raw.match(/(\d+(?:\.\d+)?\s*[KMB])\b/i);
+        const installs_display = installsMatch ? installsMatch[1].replace(/\s+/g, "") : undefined;
+        const installs = installs_display ? parseCompactNumber(installs_display) : undefined;
+
+        // Titre propre : on privilégie le slug (stable)
+        const title = titleFromSlug(parsed.skill);
+
+        items.push({
+            rank,
+            title,
+            href,
+            owner: parsed.owner,
+            repo: parsed.repo,
+            skill: parsed.skill,
+            installs,
+            installs_display
+        });
+    });
+
+    const uniq = new Map<string, SkillItem>();
+    for (const it of items) uniq.set(it.href, it);
+
+    return Array.from(uniq.values()).slice(0, limit);
+}
