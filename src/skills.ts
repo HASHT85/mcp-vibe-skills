@@ -1,19 +1,35 @@
 import * as cheerio from "cheerio";
 
 export type SkillItem = {
+    rank?: number;
     title: string;
     href: string;
-    owner?: string;
-    repo?: string;
-    skill?: string;
+    owner: string;
+    repo: string;
+    skill: string;
+    installs?: number; // ex: 7100
+    installs_display?: string; // ex: "7.1K"
 };
 
 function parseSkillUrl(href: string) {
-    // ex: /vercel-labs/agent-skills/vercel-react-best-practices
     const m = href.match(/^\/([^/]+)\/([^/]+)\/([^/]+)$/);
     if (!m) return null;
     const [, owner, repo, skill] = m;
     return { owner, repo, skill };
+}
+
+function parseCompactNumber(s: string): number | undefined {
+    // "7.1K" -> 7100, "1.3K" -> 1300, "950" -> 950
+    const m = s.match(/(\d+(?:\.\d+)?)\s*([KMB])?/i);
+    if (!m) return;
+    const n = Number(m[1]);
+    const u = (m[2] || "").toUpperCase();
+    const mult = u === "K" ? 1_000 : u === "M" ? 1_000_000 : u === "B" ? 1_000_000_000 : 1;
+    return Math.round(n * mult);
+}
+
+function titleFromSlug(slug: string) {
+    return slug.replace(/[-_]+/g, " ").trim();
 }
 
 export async function fetchTrending(limit = 20): Promise<SkillItem[]> {
@@ -31,21 +47,37 @@ export async function fetchTrending(limit = 20): Promise<SkillItem[]> {
         if (!hrefRaw.startsWith("/")) return;
 
         const parsed = parseSkillUrl(hrefRaw);
-        if (!parsed) return; // garde uniquement les URLs "skill"
+        if (!parsed) return;
 
         const href = `https://skills.sh${hrefRaw}`;
 
-        // Texte brut du lien, on nettoie
-        const text = $(a).text().replace(/\s+/g, " ").trim();
-        const title =
-            text && text.length < 120
-                ? text
-                : parsed.skill.replace(/[-_]/g, " ");
+        // Texte brut (peut être collé)
+        const raw = $(a).text().replace(/\s+/g, " ").trim();
 
-        items.push({ title, href, ...parsed });
+        // Rank: commence souvent par "1", "2", ...
+        const rankMatch = raw.match(/^(\d{1,3})/);
+        const rank = rankMatch ? Number(rankMatch[1]) : undefined;
+
+        // Installs: souvent finit par "7.1K" etc.
+        const installsMatch = raw.match(/(\d+(?:\.\d+)?\s*[KMB])\s*$/i) || raw.match(/(\d+(?:\.\d+)?\s*[KMB])\b/i);
+        const installs_display = installsMatch ? installsMatch[1].replace(/\s+/g, "") : undefined;
+        const installs = installs_display ? parseCompactNumber(installs_display) : undefined;
+
+        // Titre propre : on privilégie le slug (stable)
+        const title = titleFromSlug(parsed.skill);
+
+        items.push({
+            rank,
+            title,
+            href,
+            owner: parsed.owner,
+            repo: parsed.repo,
+            skill: parsed.skill,
+            installs,
+            installs_display
+        });
     });
 
-    // dédup + limit
     const uniq = new Map<string, SkillItem>();
     for (const it of items) uniq.set(it.href, it);
 
