@@ -29,14 +29,12 @@ export async function fetchSkillDetail(owner: string, repo: string, skill: strin
 
     const title = cleanText($("h1").first().text()) || titleFromSlug(skill);
 
-    // Try to pick first paragraph after H1; fallback to meta description
-    let description =
+    // typed explicitly to satisfy strict TS
+    let description: string | undefined =
         cleanText($("h1").first().nextAll("p").first().text()) ||
-        cleanText($("meta[name='description']").attr("content") || "");
+        cleanText($("meta[name='description']").attr("content") || "") ||
+        undefined;
 
-    if (!description) description = undefined;
-
-    // Best-effort extraction of sections
     const sections: Array<{ heading: string; content: string }> = [];
     $("h2, h3").each((_, h) => {
         const heading = cleanText($(h).text());
