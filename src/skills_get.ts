@@ -14,41 +14,44 @@ function cleanText(s: string) {
     return s.replace(/\s+/g, " ").trim();
 }
 
+function titleFromSlug(slug: string) {
+    return slug.replace(/[-_]+/g, " ").trim();
+}
+
 export async function fetchSkillDetail(owner: string, repo: string, skill: string): Promise<SkillDetail> {
     const href = `https://skills.sh/${owner}/${repo}/${skill}`;
 
     const res = await fetch(href, { headers: { "user-agent": "mcp-vibe-skills/1.0" } });
     if (!res.ok) throw new Error(`skills.sh http ${res.status}`);
+
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    // Heuristiques: on récupère un titre et une description si présents.
-    const title =
-        cleanText($("h1").first().text()) ||
-        skill.replace(/[-_]+/g, " ");
+    const title = cleanText($("h1").first().text()) || titleFromSlug(skill);
 
-    // Description: souvent un bloc texte sous le titre (varie selon le site)
+    // Try to pick first paragraph after H1; fallback to meta description
     let description =
         cleanText($("h1").first().nextAll("p").first().text()) ||
         cleanText($("meta[name='description']").attr("content") || "");
 
     if (!description) description = undefined;
 
-    // Sections: on essaye d'extraire les H2/H3 + contenu texte associé (best effort)
+    // Best-effort extraction of sections
     const sections: Array<{ heading: string; content: string }> = [];
     $("h2, h3").each((_, h) => {
         const heading = cleanText($(h).text());
         if (!heading) return;
 
-        // contenu jusqu'au prochain h2/h3
         const parts: string[] = [];
         let el = $(h).next();
+
         while (el.length && !el.is("h2") && !el.is("h3")) {
             const t = cleanText(el.text());
             if (t) parts.push(t);
             el = el.next();
         }
-        const content = parts.join("\n").slice(0, 4000); // éviter des réponses énormes
+
+        const content = parts.join("\n").slice(0, 4000);
         if (content) sections.push({ heading, content });
     });
 
