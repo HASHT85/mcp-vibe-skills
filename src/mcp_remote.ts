@@ -14,12 +14,10 @@ export function mountRemoteMcp(app: Express) {
         // Le client recevra un sessionId via le transport
         const sse = new SSEServerTransport("/mcp/messages", res);
         const httpTransport = new StreamableHTTPServerTransport({
-            // @ts-expect-error: selon version SDK, sessionId est exposé via transport
             sessionId: sse.sessionId,
             sse,
         });
 
-        // @ts-expect-error: selon version SDK, sessionId peut être porté par l'instance
         const sessionId: string = httpTransport.sessionId ?? sse.sessionId;
         transports.set(sessionId, httpTransport);
 
@@ -46,7 +44,6 @@ export function mountRemoteMcp(app: Express) {
         const transport = transports.get(sessionId)!;
 
         // Le SDK sait parser/traiter la requête JSON-RPC
-        // @ts-expect-error: selon version SDK, la méthode peut être handleRequest/handleMessage
         await transport.handleRequest(req, res);
     });
 }

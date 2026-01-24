@@ -99,8 +99,8 @@ export async function fetchHot(limit = 20): Promise<SkillItem[]> {
 }
 
 export async function searchSkills(q: string, limit = 20): Promise<SkillItem[]> {
-    const term = q.toLowerCase().trim();
-    if (!term) return [];
+    const query = q.toLowerCase().trim();
+    if (!query) return [];
 
     const [t, h] = await Promise.all([fetchTrending(50), fetchHot(50)]);
     const merged = [...t, ...h];
@@ -108,12 +108,12 @@ export async function searchSkills(q: string, limit = 20): Promise<SkillItem[]> 
     const uniq = new Map<string, SkillItem>();
     for (const it of merged) uniq.set(it.href, it);
 
-    const filtered = Array.from(uniq.values()).filter((it) =>
-        it.title.toLowerCase().includes(term) ||
-        it.owner.toLowerCase().includes(term) ||
-        it.repo.toLowerCase().includes(term) ||
-        it.skill.toLowerCase().includes(term)
-    );
-
-    return filtered.slice(0, limit);
+    return Array.from(uniq.values())
+        .filter((it) =>
+            it.title.toLowerCase().includes(query) ||
+            it.owner.toLowerCase().includes(query) ||
+            it.repo.toLowerCase().includes(query) ||
+            it.skill.toLowerCase().includes(query)
+        )
+        .slice(0, Math.min(limit, 50));
 }
