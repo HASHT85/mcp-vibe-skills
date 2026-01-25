@@ -100,3 +100,13 @@ if (process.env.ENABLE_REMOTE_MCP === "true") {
     // @ts-ignore - mountRemoteMcp may not be available in this build
     mountRemoteMcp(app);
 }
+
+const PORT = Number(process.env.PORT) || 8080;
+
+app.get("/health", (_req, res) => {
+    res.status(200).send("ok");
+});
+
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server listening on port ${PORT}`);
+});
