@@ -4,6 +4,7 @@ import { fetchTrending } from "./skills.js";
 import { searchSkills } from "./skills.js";
 import { fetchSkillDetail } from "./skills_get.js";
 
+
 export function buildMcpServer() {
     const server = new McpServer({
         name: "skills-sh",
