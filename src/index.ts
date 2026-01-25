@@ -95,9 +95,8 @@ app.get("/events", async (req: Request, res: Response) => {
 });
 
 // MCP remote
-mountRemoteMcp(app);
-
-const port = Number(process.env.PORT ?? 8080);
-app.listen(port, "0.0.0.0", () => {
-    console.error(`Listening on ${port}`);
-});
+// Remote MCP disabled (Dockploy build)
+if (process.env.ENABLE_REMOTE_MCP === "true") {
+    // @ts-ignore - mountRemoteMcp may not be available in this build
+    mountRemoteMcp(app);
+}
