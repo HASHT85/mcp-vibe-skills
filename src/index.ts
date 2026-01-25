@@ -1,6 +1,5 @@
 import express, { type Request, type Response } from "express";
 import { AgentsStore } from "./agents_store.js";
-import { mountRemoteMcp } from "./mcp_remote.js";
 import { fetchTrending, searchSkills } from "./skills.js";
 import { fetchSkillDetail } from "./skills_get.js";
 
