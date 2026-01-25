@@ -76,6 +76,10 @@ export class AgentsStore {
         await this.save(s);
     }
 
+    private agentExists(s: StoreShape, agentId: string) {
+        return s.agents.some((a) => a.id === agentId);
+    }
+
     async listAgents(): Promise<Agent[]> {
         const s = await this.load();
         return s.agents;
@@ -93,13 +97,13 @@ export class AgentsStore {
 
     async getAgent(agentId: string): Promise<Agent | undefined> {
         const s = await this.load();
-        return s.agents.find(a => a.id === agentId);
+        return s.agents.find((a) => a.id === agentId);
     }
 
     async deleteAgent(agentId: string): Promise<boolean> {
         const s = await this.load();
         const before = s.agents.length;
-        s.agents = s.agents.filter(a => a.id !== agentId);
+        s.agents = s.agents.filter((a) => a.id !== agentId);
         delete s.assignments[agentId];
         await this.save(s);
         if (s.agents.length !== before) {
@@ -111,15 +115,18 @@ export class AgentsStore {
 
     async listSkills(agentId: string): Promise<AssignedSkill[]> {
         const s = await this.load();
+        if (!this.agentExists(s, agentId)) throw new Error("agent_not_found");
         return s.assignments[agentId] ?? [];
     }
 
     async assignSkill(agentId: string, skill: Omit<AssignedSkill, "assigned_at">): Promise<AssignedSkill> {
         const s = await this.load();
+        if (!this.agentExists(s, agentId)) throw new Error("agent_not_found");
+
         if (!s.assignments[agentId]) s.assignments[agentId] = [];
 
         // dédup par href
-        const existing = s.assignments[agentId].find(x => x.href === skill.href);
+        const existing = s.assignments[agentId].find((x) => x.href === skill.href);
         if (existing) return existing;
 
         const assigned: AssignedSkill = { ...skill, assigned_at: nowIso() };
@@ -131,10 +138,13 @@ export class AgentsStore {
 
     async unassignSkill(agentId: string, href: string): Promise<boolean> {
         const s = await this.load();
+        if (!this.agentExists(s, agentId)) throw new Error("agent_not_found");
+
         const list = s.assignments[agentId] ?? [];
         const before = list.length;
-        s.assignments[agentId] = list.filter(x => x.href !== href);
+        s.assignments[agentId] = list.filter((x) => x.href !== href);
         await this.save(s);
+
         if (before !== s.assignments[agentId].length) {
             await this.emit("skill.unassigned", { agentId, href });
             return true;
