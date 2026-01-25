@@ -11,6 +11,8 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+ENV STORE_PATH=/data/store.json
+RUN mkdir -p /data
 
 COPY package.json ./
 RUN npm install --omit=dev
