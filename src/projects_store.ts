@@ -133,8 +133,8 @@ export class ProjectsStore {
         const template = getTemplate(templateId);
         if (!template) throw new Error("template_not_found");
 
-        // 1) crée le projet
         const s = await this.loadRaw();
+
         const project: Project = {
             id: makeId("prj"),
             name,
@@ -143,26 +143,38 @@ export class ProjectsStore {
             meta,
         };
         s.projects.push(project);
-        await this.saveRaw(s);
-        await this.emit("project.created", { project });
 
-        // 2) instancie les agents
         const createdAgents: Agent[] = [];
 
+        const pushEvent = (type: string, payload: any) => {
+            s.events.push({ ts: nowIso(), type, payload });
+            if (s.events.length > 2000) s.events = s.events.slice(-2000);
+        };
+
+        pushEvent("project.created", { project });
+
         for (const a of template.agents) {
-            const agent = await this.agents.createAgent(a.name, a.meta);
+            // Crée l’agent dans le même store
+            const agent: Agent = {
+                id: makeId("agt"),
+                name: a.name,
+                created_at: nowIso(),
+                meta: a.meta,
+            };
+            s.agents.push(agent);
+            s.assignments[agent.id] = s.assignments[agent.id] ?? [];
             createdAgents.push(agent);
 
-            await this.emit("project.agent.created", { projectId: project.id, agent });
+            pushEvent("agent.created", agent);
+            pushEvent("project.agent.created", { projectId: project.id, agent });
 
-            // 3) applique le profile => assigne les skills
+            // applique le profile (assigne les skills)
             const profile = getProfile(a.profileId);
             if (!profile) {
-                // on note l’erreur dans les events, mais on ne casse pas tout
-                await this.emit("profile.missing", { projectId: project.id, agentId: agent.id, profileId: a.profileId });
+                pushEvent("profile.missing", { projectId: project.id, agentId: agent.id, profileId: a.profileId });
             } else {
                 for (const sk of profile.skills) {
-                    await this.agents.assignSkill(agent.id, {
+                    const assigned = {
                         owner: sk.owner,
                         repo: sk.repo,
                         skill: sk.skill,
@@ -170,17 +182,33 @@ export class ProjectsStore {
                         title: sk.title,
                         installs: sk.installs,
                         installs_display: sk.installs_display,
-                    });
+                        assigned_at: nowIso(),
+                    };
+
+                    // dédup par href
+                    const list = s.assignments[agent.id] as any[];
+                    if (!list.some((x) => x.href === assigned.href)) {
+                        list.push(assigned);
+                        pushEvent("skill.assigned", { agentId: agent.id, skill: assigned });
+                    }
                 }
-                await this.emit("profile.applied", { projectId: project.id, agentId: agent.id, profileId: a.profileId });
+                pushEvent("profile.applied", { projectId: project.id, agentId: agent.id, profileId: a.profileId });
             }
 
-            // 4) lie agent ↔ project
-            await this.linkAgentToProject(project.id, agent.id);
+            // lien project ↔ agent dans le même store
+            s.project_agents.push({
+                projectId: project.id,
+                agentId: agent.id,
+                created_at: nowIso(),
+            });
+            pushEvent("project.agent.linked", { projectId: project.id, agentId: agent.id });
         }
+
+        await this.saveRaw(s);
 
         return { project, agents: createdAgents };
     }
+
 
     /**
      * Ajoute un agent à un projet (utile si l’UI veut “ajouter un agent X” après coup)
