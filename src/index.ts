@@ -146,13 +146,6 @@ app.get("/events", async (req: Request, res: Response) => {
     res.json({ events });
 });
 
-// ---- MCP remote (désactivé par défaut) ----
-const mountRemoteMcp: undefined | ((app: any) => void) = undefined;
-
-if (process.env.ENABLE_REMOTE_MCP === "true" && mountRemoteMcp) {
-    mountRemoteMcp(app);
-}
-
 // ---- Start HTTP server ----
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, "0.0.0.0", () => {
