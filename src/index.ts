@@ -1,18 +1,25 @@
 import express, { type Request, type Response } from "express";
+
 import { AgentsStore } from "./agents_store.js";
+import { ProjectsStore } from "./projects_store.js";
+
 import { fetchTrending, searchSkills } from "./skills.js";
 import { fetchSkillDetail } from "./skills_get.js";
 import { PROFILES, getProfile } from "./profiles.js";
+import { TEMPLATES } from "./templates.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
 const store = new AgentsStore();
+const projects = new ProjectsStore();
 
 // Health
 app.get("/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
-// ---- skills.sh HTTP API ----
+// ----------------------------
+// skills.sh HTTP API
+// ----------------------------
 
 app.get("/skills/trending", async (req: Request, res: Response) => {
     const limit = req.query.limit ? Number(req.query.limit) : 10;
@@ -35,13 +42,21 @@ app.get("/skills/get", async (req: Request, res: Response) => {
     res.json(detail);
 });
 
-// ---- Profiles ----
+// ----------------------------
+// Profiles + Templates
+// ----------------------------
 
 app.get("/profiles", (_req: Request, res: Response) => {
     res.json({ profiles: PROFILES });
 });
 
-// ---- Agents ----
+app.get("/templates", (_req: Request, res: Response) => {
+    res.json({ templates: TEMPLATES });
+});
+
+// ----------------------------
+// Agents
+// ----------------------------
 
 app.get("/agents", async (_req: Request, res: Response) => {
     const agents = await store.listAgents();
@@ -76,13 +91,6 @@ app.post("/agents", async (req: Request, res: Response) => {
 
     res.json({ agent, profileId: profileId ?? null });
 });
-
-app.delete("/agents/:id", async (req: Request, res: Response) => {
-    const ok = await store.deleteAgent(req.params.id);
-    res.json({ ok });
-});
-
-// ---- Assignments ----
 
 app.get("/agents/:id/skills", async (req: Request, res: Response) => {
     try {
@@ -138,7 +146,63 @@ app.delete("/agents/:id/skills", async (req: Request, res: Response) => {
     }
 });
 
-// ---- Events (pour Vibecraft / UI) ----
+// ----------------------------
+// Projects
+// ----------------------------
+
+app.get("/projects", async (_req: Request, res: Response) => {
+    const items = await projects.listProjects();
+    res.json({ projects: items });
+});
+
+app.get("/projects/:id", async (req: Request, res: Response) => {
+    const project = await projects.getProject(req.params.id);
+    if (!project) return res.status(404).json({ error: "project_not_found" });
+
+    const links = await projects.listProjectAgents(req.params.id);
+    res.json({ project, agents: links });
+});
+
+app.post("/projects", async (req: Request, res: Response) => {
+    try {
+        const name = String(req.body?.name ?? "").trim();
+        const templateId = String(req.body?.templateId ?? "").trim();
+        const meta = (req.body?.meta ?? undefined) as Record<string, unknown> | undefined;
+
+        if (!name) return res.status(400).json({ error: "missing_name" });
+        if (!templateId) return res.status(400).json({ error: "missing_templateId" });
+
+        const out = await projects.createProjectFromTemplate({ name, templateId, meta });
+        res.json(out);
+    } catch (e: any) {
+        const msg = String(e?.message || "internal_error");
+        if (msg === "template_not_found") return res.status(400).json({ error: "template_not_found" });
+        return res.status(500).json({ error: "internal_error" });
+    }
+});
+
+app.post("/projects/:id/agents", async (req: Request, res: Response) => {
+    try {
+        const projectId = req.params.id;
+        const name = String(req.body?.name ?? "").trim();
+        const profileId = req.body?.profileId ? String(req.body.profileId) : undefined;
+        const meta = (req.body?.meta ?? undefined) as Record<string, unknown> | undefined;
+        const role = req.body?.role ? String(req.body.role) : undefined;
+
+        if (!name) return res.status(400).json({ error: "missing_name" });
+
+        const out = await projects.addAgentToProject({ projectId, name, profileId, meta, role });
+        res.json(out);
+    } catch (e: any) {
+        const msg = String(e?.message || "internal_error");
+        if (msg === "project_not_found") return res.status(404).json({ error: "project_not_found" });
+        return res.status(500).json({ error: "internal_error" });
+    }
+});
+
+// ----------------------------
+// Events
+// ----------------------------
 
 app.get("/events", async (req: Request, res: Response) => {
     const limit = req.query.limit ? Number(req.query.limit) : 200;
@@ -146,7 +210,7 @@ app.get("/events", async (req: Request, res: Response) => {
     res.json({ events });
 });
 
-// ---- Start HTTP server ----
+// Start HTTP server
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`HTTP server listening on ${PORT}`);
