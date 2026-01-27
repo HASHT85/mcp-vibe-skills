@@ -200,6 +200,31 @@ app.post("/projects/:id/agents", async (req: Request, res: Response) => {
     }
 });
 
+app.get("/projects/:id/full", async (req: Request, res: Response) => {
+    const project = await projects.getProject(req.params.id);
+    if (!project) return res.status(404).json({ error: "project_not_found" });
+
+    const links = await projects.listProjectAgents(req.params.id);
+
+    const agentsWithSkills = await Promise.all(
+        links.map(async (l) => {
+            const skills = await store.listSkills(l.agentId).catch(() => []);
+            return {
+                agentId: l.agentId,
+                role: l.role ?? null,
+                skills,
+            };
+        })
+    );
+
+    res.json({
+        project,
+        agents: links,
+        agentsWithSkills,
+    });
+});
+
+
 // ----------------------------
 // Events
 // ----------------------------
