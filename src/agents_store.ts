@@ -50,7 +50,7 @@ export class AgentsStore {
         await this.ensureDir();
         try {
             const raw = await fs.readFile(this.filePath, "utf-8");
-            const parsed = JSON.parse(raw) as StoreShape;
+            const parsed = JSON.parse(raw) as any;
             return {
                 agents: parsed.agents ?? [],
                 assignments: parsed.assignments ?? {},
@@ -61,10 +61,27 @@ export class AgentsStore {
         }
     }
 
-    private async save(data: StoreShape) {
+    private async save(partial: StoreShape) {
         await this.ensureDir();
+
+        // IMPORTANT: preserve other keys (projects, project_agents, etc.)
+        let existing: any = {};
+        try {
+            const raw = await fs.readFile(this.filePath, "utf-8");
+            existing = JSON.parse(raw);
+        } catch {
+            existing = {};
+        }
+
+        const merged = {
+            ...existing,
+            agents: partial.agents ?? existing.agents ?? [],
+            assignments: partial.assignments ?? existing.assignments ?? {},
+            events: partial.events ?? existing.events ?? [],
+        };
+
         const tmp = `${this.filePath}.tmp`;
-        await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf-8");
+        await fs.writeFile(tmp, JSON.stringify(merged, null, 2), "utf-8");
         await fs.rename(tmp, this.filePath);
     }
 
