@@ -7,6 +7,13 @@ import { fetchTrending, searchSkills } from "./skills.js";
 import { fetchSkillDetail } from "./skills_get.js";
 import { PROFILES, getProfile } from "./profiles.js";
 import { TEMPLATES } from "./templates.js";
+import {
+    isDokployConfigured,
+    listDokployProjects,
+    getDokployProject,
+    listDokployApplications,
+    triggerDeploy,
+} from "./dokploy.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -224,6 +231,57 @@ app.get("/projects/:id/full", async (req: Request, res: Response) => {
     });
 });
 
+
+// ----------------------------
+// Dokploy Integration
+// ----------------------------
+
+app.get("/dokploy/status", (_req: Request, res: Response) => {
+    res.json({ configured: isDokployConfigured() });
+});
+
+app.get("/dokploy/projects", async (_req: Request, res: Response) => {
+    try {
+        if (!isDokployConfigured()) {
+            return res.status(503).json({ error: "dokploy_not_configured" });
+        }
+        const projects = await listDokployProjects();
+        res.json({ projects });
+    } catch (e: any) {
+        res.status(500).json({ error: String(e?.message || "dokploy_error") });
+    }
+});
+
+app.get("/dokploy/projects/:id", async (req: Request, res: Response) => {
+    try {
+        if (!isDokployConfigured()) {
+            return res.status(503).json({ error: "dokploy_not_configured" });
+        }
+        const project = await getDokployProject(req.params.id);
+        if (!project) return res.status(404).json({ error: "project_not_found" });
+
+        const applications = await listDokployApplications(req.params.id);
+        res.json({ project, applications });
+    } catch (e: any) {
+        res.status(500).json({ error: String(e?.message || "dokploy_error") });
+    }
+});
+
+app.post("/dokploy/deploy/:applicationId", async (req: Request, res: Response) => {
+    try {
+        if (!isDokployConfigured()) {
+            return res.status(503).json({ error: "dokploy_not_configured" });
+        }
+        const ok = await triggerDeploy(req.params.applicationId);
+        if (ok) {
+            await store.listEvents(1); // Force load to emit event
+            // Emit event manually
+        }
+        res.json({ ok, applicationId: req.params.applicationId });
+    } catch (e: any) {
+        res.status(500).json({ error: String(e?.message || "dokploy_error") });
+    }
+});
 
 // ----------------------------
 // Events

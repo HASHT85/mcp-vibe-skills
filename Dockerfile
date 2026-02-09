@@ -15,6 +15,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 ENV STORE_PATH=/data/store.json
+ENV DOKPLOY_URL=
+ENV DOKPLOY_TOKEN=
 
 # Create data directory for persistence
 RUN mkdir -p /data
