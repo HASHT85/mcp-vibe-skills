@@ -1,3 +1,4 @@
+# Build version: 2026-02-09-v2 (force rebuild)
 FROM node:20-alpine AS build
 WORKDIR /app
 
