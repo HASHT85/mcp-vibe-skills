@@ -26,7 +26,7 @@ const DOKPLOY_TOKEN = process.env.DOKPLOY_TOKEN || "";
 function getHeaders() {
     return {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${DOKPLOY_TOKEN}`,
+        "x-api-key": DOKPLOY_TOKEN,
     };
 }
 
