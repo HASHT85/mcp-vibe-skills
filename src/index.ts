@@ -15,11 +15,19 @@ import {
     triggerDeploy,
 } from "./dokploy.js";
 
+import { BmadEngine } from './bmad.js';
+
 const app = express();
+const port = process.env.PORT || 3000;
+const storePath = process.env.STORE_PATH || '/data/store.json';
 app.use(express.json({ limit: "1mb" }));
 
-const store = new AgentsStore();
-const projects = new ProjectsStore();
+// Initialize Stores
+const agentsStore = new AgentsStore(storePath);
+const projectsStore = new ProjectsStore(storePath);
+
+// Initialize BMAD Engine
+const bmadEngine = BmadEngine.getInstance();
 
 // Health
 app.get("/health", (_req: Request, res: Response) => res.json({ ok: true }));
@@ -66,7 +74,7 @@ app.get("/templates", (_req: Request, res: Response) => {
 // ----------------------------
 
 app.get("/agents", async (_req: Request, res: Response) => {
-    const agents = await store.listAgents();
+    const agents = await agentsStore.listAgents();
     res.json({ agents });
 });
 
@@ -77,14 +85,14 @@ app.post("/agents", async (req: Request, res: Response) => {
 
     if (!name) return res.status(400).json({ error: "missing_name" });
 
-    const agent = await store.createAgent(name, meta);
+    const agent = await agentsStore.createAgent(name, meta);
 
     if (profileId) {
         const profile = getProfile(profileId);
         if (!profile) return res.status(400).json({ error: "unknown_profile", profileId });
 
         for (const sk of profile.skills) {
-            await store.assignSkill(agent.id, {
+            await agentsStore.assignSkill(agent.id, {
                 owner: sk.owner,
                 repo: sk.repo,
                 skill: sk.skill,
@@ -101,7 +109,7 @@ app.post("/agents", async (req: Request, res: Response) => {
 
 app.get("/agents/:id/skills", async (req: Request, res: Response) => {
     try {
-        const skills = await store.listSkills(req.params.id);
+        const skills = await agentsStore.listSkills(req.params.id);
         res.json({ agentId: req.params.id, skills });
     } catch (e: any) {
         if (String(e?.message) === "agent_not_found") return res.status(404).json({ error: "agent_not_found" });
@@ -123,7 +131,7 @@ app.post("/agents/:id/skills", async (req: Request, res: Response) => {
             return res.status(400).json({ error: "missing_fields", required: ["owner", "repo", "skill", "href"] });
         }
 
-        const assigned = await store.assignSkill(req.params.id, {
+        const assigned = await agentsStore.assignSkill(req.params.id, {
             owner,
             repo,
             skill,
@@ -145,7 +153,7 @@ app.delete("/agents/:id/skills", async (req: Request, res: Response) => {
         const href = String(req.query.href ?? "");
         if (!href) return res.status(400).json({ error: "missing_href" });
 
-        const ok = await store.unassignSkill(req.params.id, href);
+        const ok = await agentsStore.unassignSkill(req.params.id, href);
         res.json({ ok });
     } catch (e: any) {
         if (String(e?.message) === "agent_not_found") return res.status(404).json({ error: "agent_not_found" });
@@ -158,15 +166,15 @@ app.delete("/agents/:id/skills", async (req: Request, res: Response) => {
 // ----------------------------
 
 app.get("/projects", async (_req: Request, res: Response) => {
-    const items = await projects.listProjects();
+    const items = await projectsStore.listProjects();
     res.json({ projects: items });
 });
 
 app.get("/projects/:id", async (req: Request, res: Response) => {
-    const project = await projects.getProject(req.params.id);
+    const project = await projectsStore.getProject(req.params.id);
     if (!project) return res.status(404).json({ error: "project_not_found" });
 
-    const links = await projects.listProjectAgents(req.params.id);
+    const links = await projectsStore.listProjectAgents(req.params.id);
     res.json({ project, agents: links });
 });
 
@@ -179,7 +187,7 @@ app.post("/projects", async (req: Request, res: Response) => {
         if (!name) return res.status(400).json({ error: "missing_name" });
         if (!templateId) return res.status(400).json({ error: "missing_templateId" });
 
-        const out = await projects.createProjectFromTemplate({ name, templateId, meta });
+        const out = await projectsStore.createProjectFromTemplate({ name, templateId, meta });
         res.json(out);
     } catch (e: any) {
         const msg = String(e?.message || "internal_error");
@@ -198,7 +206,7 @@ app.post("/projects/:id/agents", async (req: Request, res: Response) => {
 
         if (!name) return res.status(400).json({ error: "missing_name" });
 
-        const out = await projects.addAgentToProject({ projectId, name, profileId, meta, role });
+        const out = await projectsStore.addAgentToProject({ projectId, name, profileId, meta, role });
         res.json(out);
     } catch (e: any) {
         const msg = String(e?.message || "internal_error");
@@ -208,14 +216,14 @@ app.post("/projects/:id/agents", async (req: Request, res: Response) => {
 });
 
 app.get("/projects/:id/full", async (req: Request, res: Response) => {
-    const project = await projects.getProject(req.params.id);
+    const project = await projectsStore.getProject(req.params.id);
     if (!project) return res.status(404).json({ error: "project_not_found" });
 
-    const links = await projects.listProjectAgents(req.params.id);
+    const links = await projectsStore.listProjectAgents(req.params.id);
 
     const agentsWithSkills = await Promise.all(
-        links.map(async (l) => {
-            const skills = await store.listSkills(l.agentId).catch(() => []);
+        links.map(async (l: any) => {
+            const skills = await agentsStore.listSkills(l.agentId).catch(() => []);
             return {
                 agentId: l.agentId,
                 role: l.role ?? null,
@@ -274,7 +282,7 @@ app.post("/dokploy/deploy/:applicationId", async (req: Request, res: Response) =
         }
         const ok = await triggerDeploy(req.params.applicationId);
         if (ok) {
-            await store.listEvents(1); // Force load to emit event
+            await agentsStore.listEvents(1); // Force load to emit event
             // Emit event manually
         }
         res.json({ ok, applicationId: req.params.applicationId });
@@ -289,7 +297,7 @@ app.post("/dokploy/deploy/:applicationId", async (req: Request, res: Response) =
 
 app.get("/events", async (req: Request, res: Response) => {
     const limit = req.query.limit ? Number(req.query.limit) : 200;
-    const events = await store.listEvents(limit);
+    const events = await agentsStore.listEvents(limit);
     res.json({ events });
 });
 
