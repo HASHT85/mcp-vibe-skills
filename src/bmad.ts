@@ -1,4 +1,6 @@
 import { ClaudeClient, ProjectAnalysis, PRD, ArchitectureDesign, SecurityAudit, CodeGeneration, QAReport } from './claude.js';
+import { createRepo, pushFiles, createWebhook } from './github_api.js';
+import { createDokployProject, createDokployApplication } from './dokploy.js';
 
 export type BmadPhase =
     | 'IDLE'
@@ -22,6 +24,8 @@ export interface BmadState {
         securityAudit?: SecurityAudit;
         code?: CodeGeneration;
         qaReport?: QAReport;
+        github?: { owner: string; name: string; url: string; };
+        deployment?: { url: string; projectId: string; applicationId: string; };
     };
     error?: string;
 }
@@ -105,14 +109,77 @@ export class BmadEngine {
 
                 case 'DEVELOPMENT': // Ready to code
                     if (!state.artifacts.architecture || !state.artifacts.prd) throw new Error("Missing artifacts");
+
+                    // 1. Generate Code
                     state.artifacts.code = await this.claude.generateCode(state.artifacts.architecture, state.artifacts.prd);
-                    state.currentPhase = 'QA';
+
+                    // 2. Create GitHub Repo
+                    try {
+                        const repoName = `vibecraft-${projectId}`;
+                        const repo = await createRepo(repoName, `AI Generated Project: ${state.input.substring(0, 50)}...`);
+                        state.artifacts.github = { owner: repo.owner, name: repo.name, url: repo.url };
+
+                        // 3. Push Code
+                        // Convert generated files to format needed by GitHub API
+                        const files = state.artifacts.code.files.map(f => ({ path: f.path, content: f.content }));
+                        // Add a simple README if not present
+                        if (!files.find(f => f.path === 'README.md')) {
+                            files.push({ path: 'README.md', content: `# ${state.artifacts.prd.title}\n\n${state.artifacts.prd.overview}` });
+                        }
+
+                        await pushFiles(repo.owner, repo.name, files, "feat: initial commit by VibeCraft AI");
+
+                        state.currentPhase = 'QA';
+                    } catch (err: any) {
+                        console.error("GitHub Error:", err);
+                        state.error = `GitHub Error: ${err.message}`;
+                        state.currentPhase = 'FAILED';
+                        return state; // Stop processing
+                    }
                     break;
 
                 case 'QA': // Ready to test
                     if (!state.artifacts.code) throw new Error("Missing Code artifact");
                     state.artifacts.qaReport = await this.claude.qaReview(state.artifacts.code);
-                    state.currentPhase = 'COMPLETED';
+
+                    // If QA passes (or we just proceed for MVP), Deploy!
+                    try {
+                        // 4. Deploy to Dokploy
+                        if (!state.artifacts.github) throw new Error("Missing GitHub artifact for deployment");
+
+                        // Create Project
+                        const dokployProject = await createDokployProject(state.artifacts.prd?.title || projectId);
+
+                        // Create Application
+                        const appSettings = {
+                            name: "web-app",
+                            projectId: dokployProject.projectId, // DokployProject type uses projectId not id? Let's check type in dokploy.ts. Checked: it has projectId.
+                            repository: state.artifacts.github.url,
+                            branch: "main",
+                            buildType: "dockerfile" as const,
+                            env: ""
+                        };
+
+                        const dokployApp = await createDokployApplication(appSettings);
+
+                        // Setup Webhook
+                        if (dokployApp.webhookUrl) {
+                            await createWebhook(state.artifacts.github.owner, state.artifacts.github.name, dokployApp.webhookUrl);
+                        }
+
+                        state.artifacts.deployment = {
+                            url: `https://${dokployApp.appName}.${process.env.DOKPLOY_HOST || 'hach.dev'}`,
+                            projectId: dokployProject.projectId,
+                            applicationId: dokployApp.applicationId
+                        };
+
+                        state.currentPhase = 'COMPLETED';
+
+                    } catch (err: any) {
+                        console.error("Deploy Error:", err);
+                        state.error = `Deploy Error: ${err.message}`;
+                        state.currentPhase = 'FAILED';
+                    }
                     break;
 
                 case 'COMPLETED':

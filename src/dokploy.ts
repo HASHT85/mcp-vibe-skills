@@ -20,6 +20,16 @@ export type DokployApplication = {
     createdAt: string;
 };
 
+export type CreateApplicationInput = {
+    name: string;
+    projectId: string;
+    description?: string;
+    repository?: string;
+    branch?: string;
+    buildType?: "dockerfile" | "heroku_buildpacks" | "nixpacks";
+    env?: string;
+};
+
 const DOKPLOY_URL = process.env.DOKPLOY_URL || "";
 const DOKPLOY_TOKEN = process.env.DOKPLOY_TOKEN || "";
 
@@ -112,4 +122,33 @@ export async function triggerDeploy(applicationId: string): Promise<boolean> {
     });
 
     return res.ok;
+    return res.ok;
+}
+
+export async function createDokployProject(name: string, description?: string): Promise<DokployProject> {
+    if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
+
+    const res = await fetch(`${DOKPLOY_URL}/api/trpc/project.create`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ name, description }),
+    });
+
+    if (!res.ok) throw new Error(`dokploy_create_project_error: ${res.status}`);
+    const data = await res.json();
+    return data?.result?.data;
+}
+
+export async function createDokployApplication(input: CreateApplicationInput): Promise<DokployApplication & { webhookUrl?: string }> {
+    if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
+
+    const res = await fetch(`${DOKPLOY_URL}/api/trpc/application.create`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify(input),
+    });
+
+    if (!res.ok) throw new Error(`dokploy_create_app_error: ${res.status}`);
+    const data = await res.json();
+    return data?.result?.data;
 }
