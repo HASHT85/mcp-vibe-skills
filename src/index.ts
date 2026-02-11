@@ -1,4 +1,5 @@
 import express, { type Request, type Response } from "express";
+import cors from "cors";
 
 import { AgentsStore } from "./agents_store.js";
 import { ProjectsStore } from "./projects_store.js";
@@ -20,6 +21,7 @@ import { BmadEngine } from './bmad.js';
 const app = express();
 const port = process.env.PORT || 3000;
 const storePath = process.env.STORE_PATH || '/data/store.json';
+app.use(cors()); // Enable CORS for all routes
 app.use(express.json({ limit: "1mb" }));
 
 // Initialize Stores
