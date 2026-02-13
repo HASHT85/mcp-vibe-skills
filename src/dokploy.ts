@@ -59,8 +59,14 @@ export async function listDokployProjects(): Promise<DokployProject[]> {
     }
 
     const data = await res.json();
-    // tRPC returns { result: { data: [...] } }
-    return data?.result?.data || [];
+
+    // Debug: Check response shape
+    const list = data?.result?.data;
+    if (!Array.isArray(list)) {
+        throw new Error(`dokploy_api_invalid_response: Expected array, got ${typeof list}. Response: ${JSON.stringify(data).substring(0, 100)}...`);
+    }
+
+    return list;
 }
 
 export async function getDokployProject(projectId: string): Promise<DokployProject | null> {
