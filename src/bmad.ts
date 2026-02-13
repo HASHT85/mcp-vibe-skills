@@ -93,6 +93,8 @@ export class BmadEngine {
                     state.artifacts.analysis = await this.claude.analyzeProject(state.input);
                     this.addMessage(projectId, 'assistant', `Analysis Complete. Summary: ${state.artifacts.analysis.summary.substring(0, 100)}...`);
                     state.currentPhase = 'PLANNING';
+                    // Auto-advance
+                    await this.next(projectId);
                     break;
 
                 case 'PLANNING': // Ready to generate PRD
@@ -101,6 +103,8 @@ export class BmadEngine {
                     state.artifacts.prd = await this.claude.generatePRD(state.artifacts.analysis);
                     this.addMessage(projectId, 'assistant', `PRD Generated: ${state.artifacts.prd.title}`);
                     state.currentPhase = 'ARCHITECTURE';
+                    // Auto-advance
+                    await this.next(projectId);
                     break;
 
                 case 'ARCHITECTURE': // Ready to design architecture
@@ -109,6 +113,8 @@ export class BmadEngine {
                     state.artifacts.architecture = await this.claude.designArchitecture(state.artifacts.prd);
                     this.addMessage(projectId, 'assistant', `Architecture Designed. Stack: ${state.artifacts.architecture.stack.backend} + ${state.artifacts.architecture.stack.frontend}`);
                     state.currentPhase = 'DESIGN_REVIEW';
+                    // Auto-advance
+                    await this.next(projectId);
                     break;
 
                 case 'DESIGN_REVIEW': // Ready for SecOps review
@@ -119,6 +125,8 @@ export class BmadEngine {
                     if (state.artifacts.securityAudit.approved) {
                         this.addMessage(projectId, 'assistant', 'Security Audit Passed. Proceeding to Development.');
                         state.currentPhase = 'DEVELOPMENT';
+                        // Auto-advance
+                        await this.next(projectId);
                     } else {
                         const errorMsg = "Security Audit Failed: " + JSON.stringify(state.artifacts.securityAudit.risks);
                         this.addMessage(projectId, 'system', `CRITICAL: ${errorMsg}`);
