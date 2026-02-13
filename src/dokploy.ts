@@ -60,10 +60,17 @@ export async function listDokployProjects(): Promise<DokployProject[]> {
 
     const data = await res.json();
 
-    // Debug: Check response shape
-    const list = data?.result?.data;
+    // Debug: Check response shape & handle SuperJSON (result.data.json)
+    let list = data?.result?.data;
+    if (list && typeof list === 'object' && !Array.isArray(list) && Array.isArray(list.json)) {
+        list = list.json;
+    }
+
     if (!Array.isArray(list)) {
-        throw new Error(`dokploy_api_invalid_response: Expected array, got ${typeof list}. Response: ${JSON.stringify(data).substring(0, 100)}...`);
+        // Fallback or throw
+        // Sometimes it might be empty? But if structure is unexpected, better warn.
+        console.warn("Dokploy API unexpected response:", JSON.stringify(data).substring(0, 200));
+        return [];
     }
 
     return list;
@@ -88,7 +95,10 @@ export async function getDokployProject(projectId: string): Promise<DokployProje
     }
 
     const data = await res.json();
-    return data?.result?.data || null;
+    let result = data?.result?.data;
+    if (result && result.json) result = result.json;
+
+    return result || null;
 }
 
 export async function listDokployApplications(projectId: string): Promise<DokployApplication[]> {
@@ -113,7 +123,10 @@ export async function listDokployApplications(projectId: string): Promise<Dokplo
     if (!res.ok) return [];
 
     const data = await res.json();
-    return data?.result?.data || [];
+    let list = data?.result?.data;
+    if (list && list.json) list = list.json;
+
+    return Array.isArray(list) ? list : [];
 }
 
 export async function triggerDeploy(applicationId: string): Promise<boolean> {
