@@ -121,7 +121,8 @@ export class ClaudeClient {
     async analyzeProject(description: string): Promise<ProjectAnalysis> {
         const system = `You are an Expert Business Analyst. 
     Analyze the user's project description and extract structured requirements.
-    Output MUST be valid JSON matching this schema:
+    Output MUST be valid JSON matching this schema.
+    Do not include any explanations or conversational text. Output ONLY the JSON object.
     {
       "summary": "string",
       "features": ["string"],
@@ -137,11 +138,12 @@ export class ClaudeClient {
     async generatePRD(analysis: ProjectAnalysis): Promise<PRD> {
         const system = `You are an Expert Product Manager.
     Write a detailed Product Requirements Document (PRD) based on the analysis.
-    Output MUST be valid JSON matching this schema:
+    Output MUST be valid JSON matching this schema.
+    Do not include any explanations or conversational text. Output ONLY the JSON object.
     {
       "title": "string",
       "overview": "string",
-      "userStories": [{ "story": "string", "acceptanceCriteria": ["string"], "priority": "High" }],
+      "userStories": [{ "story": "string", "acceptanceCriteria": ["string"], "priority": "High|Medium|Low" }],
       "functionalRequirements": ["string"],
       "nonFunctionalRequirements": ["string"]
     }`;
@@ -150,16 +152,14 @@ export class ClaudeClient {
         return JSON.parse(this.extractJson(response));
     }
 
-    // 3. Agent Architect (Combined with Skills.sh)
+    // 3. Agent Architect
     async designArchitecture(prd: PRD): Promise<ArchitectureDesign> {
-        const system = `You are an Expert Software Architect using the BMAD methodology.
-    Design the technical architecture for this PRD.
-    You MUST prioritize using standard "skills" (reusable modules) where possible.
-    Common skills to consider: "stripe", "supabase", "auth0", "tailwind", "react", "node-express", "postgresql".
-    
-    Output MUST be valid JSON matching this schema:
+        const system = `You are an Expert Software Architect.
+    Design the system architecture based on the PRD.
+    Output MUST be valid JSON matching this schema.
+    Do not include any explanations or conversational text. Output ONLY the JSON object.
     {
-      "stack": { "frontend": "string", "backend": "string", "database": "string", "deployment": "Dokploy" },
+      "stack": { "frontend": "string", "backend": "string", "database": "string", "deployment": "string" },
       "skills": [{ "name": "string", "reason": "string" }],
       "fileStructure": [{ "path": "string", "description": "string" }]
     }`;
@@ -168,13 +168,14 @@ export class ClaudeClient {
         return JSON.parse(this.extractJson(response));
     }
 
-    // 4. Agent SecOps (Design Review)
+    // 4. Agent SecOps
     async securityReview(architecture: ArchitectureDesign): Promise<SecurityAudit> {
-        const system = `You are an Expert Security Engineer (SecOps).
-    Review this architecture for security risks (OWASP Top 10).
-    Output MUST be valid JSON matching this schema:
+        const system = `You are an Expert Security Engineer.
+    Perform a security audit of the proposed architecture.
+    Output MUST be valid JSON matching this schema.
+    Do not include any explanations or conversational text. Output ONLY the JSON object.
     {
-      "risks": [{ "severity": "High", "description": "string", "mitigation": "string" }],
+      "risks": [{ "severity": "Critical|High|Medium|Low", "description": "string", "mitigation": "string" }],
       "approved": boolean
     }`;
 
@@ -182,13 +183,12 @@ export class ClaudeClient {
         return JSON.parse(this.extractJson(response));
     }
 
-    // 5. Agent Developer
+    // 5. Agent Developer (Coding)
     async generateCode(architecture: ArchitectureDesign, prd: PRD): Promise<CodeGeneration> {
-        const system = `You are an Expert Full-Stack Developer.
-    Generate the initial codebase structure and key configuration files based on the architecture and PRD.
-    Do not generate binary files. Focus on: package.json, Dockerfile, main configuration files, and key source files.
-    
-    Output MUST be valid JSON matching this schema:
+        const system = `You are an Expert Full Stack Developer.
+    Generate the initial code structure and key files based on the architecture and PRD.
+    Output MUST be valid JSON matching this schema.
+    Do not include any explanations or conversational text. Output ONLY the JSON object.
     {
       "files": [{ "path": "string (relative)", "content": "string (file content)" }],
       "instructions": "string (setup instructions)"
@@ -203,7 +203,8 @@ export class ClaudeClient {
     async qaReview(code: CodeGeneration): Promise<QAReport> {
         const system = `You are an Expert QA Engineer.
     Review the generated code for syntax errors, logical bugs, and missing requirements.
-    Output MUST be valid JSON matching this schema:
+    Output MUST be valid JSON matching this schema.
+    Do not include any explanations or conversational text. Output ONLY the JSON object.
     {
       "passed": boolean,
       "issues": ["string"],
@@ -216,7 +217,17 @@ export class ClaudeClient {
 
     // Helper to handle potential markdown code blocks in response
     private extractJson(text: string): string {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        return jsonMatch ? jsonMatch[0] : text;
+        // 1. Try to find content within ```json ... ``` blocks
+        const codeBlockMatch = text.match(/```json([\s\S]*?)```/);
+        if (codeBlockMatch && codeBlockMatch[1]) {
+            return codeBlockMatch[1].trim();
+        }
+        // 2. Fallback: Find the first { and last }
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+        if (start !== -1 && end !== -1) {
+            return text.substring(start, end + 1);
+        }
+        return text;
     }
 }
