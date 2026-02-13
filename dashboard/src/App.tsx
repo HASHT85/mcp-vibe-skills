@@ -168,16 +168,34 @@ function App() {
               <button onClick={() => setActiveTab('home')} className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">← Back</button>
               <div>
                 <h2 className="text-3xl font-bold text-white tracking-tight">{currentProject.projectId}</h2>
-                <div className="text-sm text-neon-blue font-mono mt-1">Status: {currentProject.currentPhase}</div>
+                <div className={`text-sm font-mono mt-1 ${currentProject.currentPhase === 'FAILED' ? 'text-red-500' : 'text-neon-blue'}`}>
+                  Status: {currentProject.currentPhase}
+                </div>
               </div>
             </div>
 
-            <div className="glass-panel rounded-2xl p-8 border-t border-white/10 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-4 opacity-10">
-                <Cpu size={200} />
+            {/* ERROR DISPLAY */}
+            {currentProject.templateId === 'error' && (
+              <div className="p-6 bg-red-500/10 border border-red-500/50 rounded-2xl animate-pulse">
+                <h3 className="text-xl font-bold text-red-500 mb-2">🛑 System Error</h3>
+                <p className="text-white font-mono whitespace-pre-wrap">{currentProject.description}</p>
               </div>
-              <BmadPipeline currentPhase={currentProject.currentPhase} />
-            </div>
+            )}
+
+            {currentProject.templateId !== 'error' && (
+              <>
+                <div className="glass-panel rounded-2xl p-8 border-t border-white/10 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <Cpu size={200} />
+                  </div>
+                  <div className="mb-6">
+                    <h3 className="text-gray-400 text-xs uppercase tracking-widest mb-1">Objective</h3>
+                    <p className="text-gray-200 text-lg">{currentProject.description}</p>
+                  </div>
+                  <BmadPipeline currentPhase={currentProject.currentPhase} />
+                </div>
+              </>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="glass-panel p-6 rounded-2xl border border-white/5 h-[500px] flex flex-col">
