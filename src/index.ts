@@ -32,7 +32,40 @@ const projectsStore = new ProjectsStore(storePath);
 const bmadEngine = BmadEngine.getInstance();
 
 // Health
+app.get("/", (_req: Request, res: Response) => res.json({ service: "mcp-vibe-skills", status: "running" }));
 app.get("/health", (_req: Request, res: Response) => res.json({ ok: true }));
+
+// ----------------------------
+// Pipeline (BMAD)
+// ----------------------------
+
+app.post("/pipeline/create", async (req: Request, res: Response) => {
+    const projectId = req.body?.projectId ? String(req.body.projectId) : undefined;
+    const description = req.body?.description ? String(req.body.description) : undefined;
+
+    if (!projectId || !description) {
+        return res.status(400).json({ error: "missing_fields", required: ["projectId", "description"] });
+    }
+
+    try {
+        // Create and start pipeline
+        const state = bmadEngine.createPipeline(projectId, description);
+        // Start async logic (don't await confirmation for long tasks in real app, but here it's fine for initial kick-off)
+        bmadEngine.next(projectId).catch(err => console.error("Async Pipeline Error:", err));
+
+        res.json(state);
+    } catch (err: any) {
+        console.error("Pipeline Init Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get("/pipeline/:projectId", (req: Request, res: Response) => {
+    const { projectId } = req.params;
+    const state = bmadEngine.getPipeline(projectId);
+    if (!state) return res.status(404).json({ error: "pipeline_not_found" });
+    res.json(state);
+});
 
 // ----------------------------
 // skills.sh HTTP API
