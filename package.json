@@ -8,14 +8,12 @@
     "mcp": "node dist/mcp_stdio.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.74.0",
+    "@anthropic-ai/sdk": "latest",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "cheerio": "^1.0.0-rc.12",
-    "dotenv": "^17.2.4",
-    "express": "^4.19.2",
-    "dotenv": "^17.2.4",
-    "express": "^4.19.2",
     "cors": "^2.8.5",
+    "dotenv": "^17.2.4",
+    "express": "^4.19.2",
     "zod": "^3.23.8"
   },
   "devDependencies": {

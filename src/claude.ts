@@ -75,21 +75,26 @@ export class ClaudeClient {
     }
 
     private async callClaude(systemPrompt: string, userContent: string): Promise<string> {
-        const msg = await this.anthropic.messages.create({
-            model: "claude-3-5-sonnet-20241022",
-            max_tokens: 4096,
-            temperature: 0.2, // Low temp for more deterministic outputs
-            system: systemPrompt,
-            messages: [
-                { role: "user", content: userContent }
-            ],
-        });
+        try {
+            const msg = await this.anthropic.messages.create({
+                model: "claude-3-5-sonnet-20240620", // Fallback to stable version
+                max_tokens: 4096,
+                temperature: 0.2, // Low temp for more deterministic outputs
+                system: systemPrompt,
+                messages: [
+                    { role: "user", content: userContent }
+                ],
+            });
 
-        const content = msg.content[0];
-        if (content.type === 'text') {
-            return content.text;
+            const content = msg.content[0];
+            if (content.type === 'text') {
+                return content.text;
+            }
+            throw new Error("Unexpected response type from Claude");
+        } catch (error: any) {
+            console.error("Claude API Error:", error.status, error.message, error.error);
+            throw error;
         }
-        throw new Error("Unexpected response type from Claude");
     }
 
     // 1. Agent Analyst
