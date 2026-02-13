@@ -144,11 +144,15 @@ export class BmadEngine {
                     state.artifacts.code = await this.claude.generateCode(state.artifacts.architecture, state.artifacts.prd);
                     this.addMessage(projectId, 'assistant', `Code generated. ${state.artifacts.code.files.length} files created.`);
 
+
                     // 2. Create GitHub Repo
                     try {
                         const repoName = `vibecraft-${projectId}`;
                         this.addMessage(projectId, 'system', `Creating GitHub Repository: ${repoName}...`);
-                        const repo = await createRepo(repoName, `AI Generated Project: ${state.input.substring(0, 50)}...`);
+
+                        // Sanitize description to remove newlines/control chars which cause GitHub 422
+                        const sanitizedDesc = state.input.replace(/[\n\r\t]/g, ' ').substring(0, 50).trim();
+                        const repo = await createRepo(repoName, `AI Generated Project: ${sanitizedDesc}...`);
                         state.artifacts.github = { owner: repo.owner, name: repo.name, url: repo.url };
 
                         // 3. Push Code
@@ -164,11 +168,15 @@ export class BmadEngine {
                         this.addMessage(projectId, 'assistant', `Request completed. Repo available at: ${repo.url}`);
 
                         state.currentPhase = 'QA';
+                        // Auto-advance
+                        await this.next(projectId);
                     } catch (err: any) {
-                        console.error("GitHub Error:", err);
-                        state.error = `GitHub Error: ${err.message}`;
-                        state.currentPhase = 'FAILED';
-                        return state; // Stop processing
+                        const errMsg = err.message || JSON.stringify(err);
+                        this.addMessage(projectId, 'system', `GitHub Error: ${errMsg}`);
+                        console.error("GitHub/Code Error:", err);
+                        // Mark as failed
+                        state.error = errMsg;
+                        throw new Error(`GitHub Deployment Failed: ${errMsg}`);
                     }
                     break;
 
