@@ -75,9 +75,28 @@ app.get("/projects", async (req: Request, res: Response) => {
                         });
                     }
                 }
-            } catch (e) {
+            } catch (e: any) {
                 console.warn("Error fetching Dokploy projects:", e);
+                projects.push({
+                    id: 'error-dokploy',
+                    name: '⚠️ Dokploy Sync Error',
+                    description: String(e.message || e),
+                    templateId: 'error',
+                    currentPhase: 'FAILED',
+                    createdAt: new Date().toISOString(),
+                    type: 'error'
+                });
             }
+        } else {
+            projects.push({
+                id: 'dokploy-not-configured',
+                name: '⚠️ Dokploy Not Configured',
+                description: 'Add DOKPLOY_URL and DOKPLOY_TOKEN env vars to backend to enable sync.',
+                templateId: 'warning',
+                currentPhase: 'IDLE',
+                createdAt: new Date().toISOString(),
+                type: 'warning'
+            });
         }
 
         res.json({ projects });
