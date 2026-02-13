@@ -88,51 +88,58 @@ export class BmadEngine {
         try {
             switch (state.currentPhase) {
                 case 'IDLE':
+                    this.addMessage(projectId, 'system', 'Starting Phase 1: ANALYSIS');
                     state.currentPhase = 'ANALYSIS';
                     state.artifacts.analysis = await this.claude.analyzeProject(state.input);
-                    state.currentPhase = 'PLANNING'; // Auto-advance to next waiting state or wait for approval? 
-                    // For MVP, let's stop at PLANNING and wait for next call
+                    this.addMessage(projectId, 'assistant', `Analysis Complete. Summary: ${state.artifacts.analysis.summary.substring(0, 100)}...`);
+                    state.currentPhase = 'PLANNING';
                     break;
 
                 case 'PLANNING': // Ready to generate PRD
+                    this.addMessage(projectId, 'system', 'Starting Phase 2: PLANNING (PRD Generation)');
                     if (!state.artifacts.analysis) throw new Error("Missing Analysis artifact");
                     state.artifacts.prd = await this.claude.generatePRD(state.artifacts.analysis);
+                    this.addMessage(projectId, 'assistant', `PRD Generated: ${state.artifacts.prd.title}`);
                     state.currentPhase = 'ARCHITECTURE';
                     break;
 
                 case 'ARCHITECTURE': // Ready to design architecture
+                    this.addMessage(projectId, 'system', 'Starting Phase 3: ARCHITECTURE DESIGN');
                     if (!state.artifacts.prd) throw new Error("Missing PRD artifact");
                     state.artifacts.architecture = await this.claude.designArchitecture(state.artifacts.prd);
+                    this.addMessage(projectId, 'assistant', `Architecture Designed. Stack: ${state.artifacts.architecture.stack.backend} + ${state.artifacts.architecture.stack.frontend}`);
                     state.currentPhase = 'DESIGN_REVIEW';
                     break;
 
                 case 'DESIGN_REVIEW': // Ready for SecOps review
+                    this.addMessage(projectId, 'system', 'Starting Phase 4: SECURITY AUDIT');
                     if (!state.artifacts.architecture) throw new Error("Missing Architecture artifact");
                     state.artifacts.securityAudit = await this.claude.securityReview(state.artifacts.architecture);
 
                     if (state.artifacts.securityAudit.approved) {
+                        this.addMessage(projectId, 'assistant', 'Security Audit Passed. Proceeding to Development.');
                         state.currentPhase = 'DEVELOPMENT';
                     } else {
-                        // In a real app, we would loop back to Architecture with feedback. 
-                        // For MVP, we'll stop here or mark as Failed/NeedsRevision.
-                        state.error = "Security Audit Failed: " + JSON.stringify(state.artifacts.securityAudit.risks);
-                        // We stay in DESIGN_REVIEW or move to a manual intervention state? 
-                        // Let's assume user will 'approve' to override or we'd handle loop.
-                        // For simplicity, let's allow proceeding if user explicitly calls next again, or just error.
-                        // Let's stop.
+                        const errorMsg = "Security Audit Failed: " + JSON.stringify(state.artifacts.securityAudit.risks);
+                        this.addMessage(projectId, 'system', `CRITICAL: ${errorMsg}`);
+                        state.error = errorMsg;
                         throw new Error("Security Audit Failed. Pipeline paused.");
                     }
                     break;
 
                 case 'DEVELOPMENT': // Ready to code
+                    this.addMessage(projectId, 'system', 'Starting Phase 5: DEVELOPMENT & CODING');
                     if (!state.artifacts.architecture || !state.artifacts.prd) throw new Error("Missing artifacts");
 
                     // 1. Generate Code
+                    this.addMessage(projectId, 'assistant', 'Generating code structure...');
                     state.artifacts.code = await this.claude.generateCode(state.artifacts.architecture, state.artifacts.prd);
+                    this.addMessage(projectId, 'assistant', `Code generated. ${state.artifacts.code.files.length} files created.`);
 
                     // 2. Create GitHub Repo
                     try {
                         const repoName = `vibecraft-${projectId}`;
+                        this.addMessage(projectId, 'system', `Creating GitHub Repository: ${repoName}...`);
                         const repo = await createRepo(repoName, `AI Generated Project: ${state.input.substring(0, 50)}...`);
                         state.artifacts.github = { owner: repo.owner, name: repo.name, url: repo.url };
 
@@ -144,7 +151,9 @@ export class BmadEngine {
                             files.push({ path: 'README.md', content: `# ${state.artifacts.prd.title}\n\n${state.artifacts.prd.overview}` });
                         }
 
+                        this.addMessage(projectId, 'system', 'Pushing code to GitHub...');
                         await pushFiles(repo.owner, repo.name, files, "feat: initial commit by VibeCraft AI");
+                        this.addMessage(projectId, 'assistant', `Request completed. Repo available at: ${repo.url}`);
 
                         state.currentPhase = 'QA';
                     } catch (err: any) {
