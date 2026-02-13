@@ -28,6 +28,7 @@ export interface BmadState {
         deployment?: { url: string; projectId: string; applicationId: string; };
     };
     error?: string;
+    messages: { role: 'user' | 'assistant' | 'system'; content: string; timestamp: string }[];
 }
 
 export class BmadEngine {
@@ -57,9 +58,21 @@ export class BmadEngine {
             currentPhase: 'IDLE',
             input: description,
             artifacts: {},
+            messages: [{
+                role: 'system',
+                content: `Pipeline initialized for project: ${projectId}`,
+                timestamp: new Date().toISOString()
+            }]
         };
         this.pipelines.set(projectId, state);
         return state;
+    }
+
+    addMessage(projectId: string, role: 'user' | 'assistant' | 'system', content: string) {
+        const state = this.pipelines.get(projectId);
+        if (state) {
+            state.messages.push({ role, content, timestamp: new Date().toISOString() });
+        }
     }
 
     // Get pipeline status

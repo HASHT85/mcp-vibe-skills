@@ -22,3 +22,13 @@ export async function getProjects() {
     const data = await res.json();
     return data.projects || [];
 }
+
+export async function sendMessage(projectId: string, message: string) {
+    const res = await fetch(`${API_BASE}/pipeline/${projectId}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+    });
+    if (!res.ok) throw new Error('Failed to send message');
+    return res.json();
+}

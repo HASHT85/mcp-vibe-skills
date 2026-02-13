@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { LayoutDashboard, FolderPlus, Box, Loader2, Zap, Cpu, Activity, Plus, Search } from 'lucide-react';
 import { BmadPipeline } from './components/BmadPipeline';
-import { createPipeline, getProjects } from './api/client';
+import { createPipeline, getProjects, sendMessage, getPipeline } from './api/client';
 
 function App() {
   const [activeTab, setActiveTab] = useState('home');
@@ -10,9 +10,22 @@ function App() {
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [currentProject, setCurrentProject] = useState<any>(null);
 
+  // Chat State
+  const [chatInput, setChatInput] = useState('');
+  const [isSending, setIsSending] = useState(false);
+
   useEffect(() => {
     getProjects().then(setProjects).catch(console.error);
-  }, []);
+
+    // Auto-refresh current project if active to see new messages
+    const interval = setInterval(() => {
+      if (currentProject) {
+        getPipeline(currentProject.projectId).then(setCurrentProject).catch(console.error);
+      }
+    }, 2000); // Poll every 2s for chat updates
+
+    return () => clearInterval(interval);
+  }, [currentProject?.projectId]); // Re-run if projectId changes
 
   const handleCreate = async () => {
     if (!newProjectDesc) return;
@@ -28,6 +41,26 @@ function App() {
       alert('Failed to create project');
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || !currentProject) return;
+
+    const msg = chatInput;
+    setChatInput('');
+    setIsSending(true);
+
+    try {
+      await sendMessage(currentProject.projectId, msg);
+      // Immediate refresh
+      const updated = await getPipeline(currentProject.projectId);
+      setCurrentProject(updated);
+    } catch (err) {
+      console.error("Chat error", err);
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -87,7 +120,7 @@ function App() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card title="Active Projects" value={projects.length} subtitle="Running Pipelines" icon={<Activity className="text-neon-blue" />} delay="0" />
-              <Card title="Agents Deployed" value={(projects.length * 5)} subtitle="Neural Nodes Active" icon={<Cpu className="text-neon-purple" />} delay="100" />
+              <Card title="Recruited Agents" value={projects.length} subtitle="Worker Nodes" icon={<Cpu className="text-neon-purple" />} delay="100" />
               <Card title="System Load" value="12%" subtitle="Stable" icon={<Zap className="text-neon-pink" />} delay="200" />
             </div>
 
@@ -202,27 +235,43 @@ function App() {
                 <h3 className="text-lg font-semibold mb-4 text-gray-200 flex items-center gap-2">
                   <div className="w-2 h-2 bg-neon-blue rounded-full animate-pulse"></div> Agent Terminal
                 </h3>
-                <div className="flex-1 bg-black/50 rounded-xl p-4 font-mono text-xs text-green-400/80 overflow-auto space-y-2 border border-white/5 shadow-inner">
-                  <div className="opacity-50 border-b border-white/5 pb-2 mb-2">System initialized. Connection established using secure 256-bit encryption.</div>
-                  <div>[System] Pipeline started for {currentProject.projectId}...</div>
-                  <div>[Analyst] <span className="text-blue-400"> Analyzing requirements...</span></div>
-                  {currentProject.currentPhase !== 'IDLE' && <div>[Analyst] Analysis complete. 14 user stories identified.</div>}
-                  {currentProject.currentPhase === 'PLANNING' && <div>[PM] Generating PRD...</div>}
-                  {currentProject.artifacts?.prd && <div>[PM] <span className="text-yellow-400">PRD Generated successfully.</span></div>}
-                  {currentProject.currentPhase === 'ARCHITECTURE' && <div>[Architect] Designing system topology...</div>}
-                  {(currentProject.currentPhase === 'DEVELOPMENT' || currentProject.currentPhase === 'COMPLETED') && (
-                    <>
-                      <div>[Dev] Generating code structure...</div>
-                      <div>[Dev] <span className="text-neon-pink">File generation complete.</span></div>
-                      <div>[GitHub] Pushed to remote repository.</div>
-                    </>
+                <div className="flex-1 bg-black/50 rounded-xl p-4 font-mono text-xs overflow-auto space-y-2 border border-white/5 shadow-inner">
+                  {currentProject.messages && currentProject.messages.length > 0 ? (
+                    currentProject.messages.map((msg: any, i: number) => (
+                      <div key={i} className={`mb-2 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
+                        <span className={`inline-block px-3 py-2 rounded-lg max-w-[80%] ${msg.role === 'user'
+                          ? 'bg-primary/20 text-white border border-primary/30'
+                          : 'bg-white/5 text-green-400/90 border border-white/5'
+                          }`}>
+                          {msg.role !== 'user' && <span className="font-bold mr-2 text-xs uppercase opacity-70">[{msg.role === 'assistant' ? 'Agent' : 'System'}]</span>}
+                          {msg.content}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-gray-500 italic text-center mt-10">No messages yet. Start a conversation using the input below.</div>
                   )}
-                  {currentProject.currentPhase === 'COMPLETED' && (
-                    <div className="pt-4 text-center">
-                      <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded border border-green-500/30">Deployment Successful</span>
-                    </div>
-                  )}
+                  {/* Auto-scroll anchor */}
+                  <div id="terminal-end" />
                 </div>
+
+                {/* Chat Input */}
+                <form onSubmit={handleSendMessage} className="mt-4 flex gap-2">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder="Type a command to the agent..."
+                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-neon-blue transition-colors placeholder-gray-600"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!chatInput.trim() || isSending}
+                    className="bg-primary/20 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed text-neon-blue px-4 py-2 rounded-lg text-xs font-bold border border-primary/50 transition-all uppercase tracking-wider"
+                  >
+                    {isSending ? <Loader2 className="animate-spin" size={16} /> : 'Send'}
+                  </button>
+                </form>
               </div>
 
               <div className="glass-panel p-6 rounded-2xl border border-white/5 h-[500px] overflow-auto">

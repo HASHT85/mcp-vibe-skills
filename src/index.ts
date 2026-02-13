@@ -138,6 +138,26 @@ app.get("/pipeline/:projectId", (req: Request, res: Response) => {
     res.json(state);
 });
 
+// Chat Interaction
+app.post("/pipeline/:projectId/chat", (req: Request, res: Response) => {
+    const { projectId } = req.params;
+    const { message } = req.body;
+
+    if (!message) return res.status(400).json({ error: "message_required" });
+
+    // 1. Add User Message
+    bmadEngine.addMessage(projectId, 'user', message);
+
+    // 2. Simulate Response (in a real app, this would call Claude/LLM)
+    setTimeout(() => {
+        bmadEngine.addMessage(projectId, 'assistant', `Reçu : "${message}". (Simulation: Je suis un agent IA, je vais traiter cette demande.)`);
+    }, 1000);
+
+    res.json({ success: true });
+});
+
+export default app;
+
 // ----------------------------
 // skills.sh HTTP API
 // ----------------------------
