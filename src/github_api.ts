@@ -84,22 +84,29 @@ export async function pushFiles(owner: string, repo: string, files: { path: stri
     const baseTreeSha = commitData.tree.sha;
 
     // 3. Create a new tree with new files
+    // Sanitize paths: remove leading slashes and ./
     const treePayload = {
         base_tree: baseTreeSha,
         tree: files.map(f => ({
-            path: f.path,
+            path: f.path.replace(/^\/+/, '').replace(/^\.\//, ''), // Remove leading / or ./
             mode: "100644", // bulb mode
             type: "blob",
             content: f.content
         }))
     };
 
+    console.log(`[GitHub] Creating tree with ${files.length} files. First file: ${files[0]?.path}`);
+
     const treeRes = await fetch(`${baseUrl}/git/trees`, {
         method: 'POST',
         headers,
         body: JSON.stringify(treePayload)
     });
-    if (!treeRes.ok) throw new Error("Failed to create tree");
+    if (!treeRes.ok) {
+        const err = await treeRes.json();
+        console.error(`[GitHub] Tree creation failed:`, JSON.stringify(err, null, 2));
+        throw new Error(`Failed to create tree: ${JSON.stringify(err)}`);
+    }
     const treeData: any = await treeRes.json();
     const newTreeSha = treeData.sha;
 
