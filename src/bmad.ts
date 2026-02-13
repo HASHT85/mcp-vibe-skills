@@ -46,6 +46,10 @@ export class BmadEngine {
         return BmadEngine.instance;
     }
 
+    listPipelines(): BmadState[] {
+        return Array.from(this.pipelines.values());
+    }
+
     // Create a new pipeline
     createPipeline(projectId: string, description: string): BmadState {
         const state: BmadState = {

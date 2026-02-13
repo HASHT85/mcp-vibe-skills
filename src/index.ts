@@ -36,6 +36,58 @@ app.get("/", (_req: Request, res: Response) => res.json({ service: "mcp-vibe-ski
 app.get("/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
 // ----------------------------
+// Projects & Dashboard Data
+// ----------------------------
+
+app.get("/projects", async (req: Request, res: Response) => {
+    try {
+        const projects = [];
+
+        // 1. Get Local Pipelines (Active in memory)
+        const pipelines = bmadEngine.listPipelines();
+        for (const p of pipelines) {
+            projects.push({
+                id: p.projectId,
+                name: p.projectId,
+                description: p.input,
+                templateId: 'custom',
+                currentPhase: p.currentPhase,
+                createdAt: new Date().toISOString(),
+                type: 'bmad'
+            });
+        }
+
+        // 2. Get Dokploy Projects (Deployed)
+        if (isDokployConfigured()) {
+            try {
+                const dokployProjs = await listDokployProjects();
+                for (const dp of dokployProjs) {
+                    // Avoid duplicates if BMAD pipeline has same ID
+                    if (!projects.find(p => p.id === dp.projectId || p.name === dp.name)) {
+                        projects.push({
+                            id: dp.projectId,
+                            name: dp.name,
+                            description: dp.description || "Managed by Dokploy",
+                            templateId: 'dokploy',
+                            currentPhase: 'COMPLETED',
+                            createdAt: dp.createdAt,
+                            type: 'dokploy'
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn("Error fetching Dokploy projects:", e);
+            }
+        }
+
+        res.json({ projects });
+    } catch (err) {
+        console.error("GET /projects error:", err);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// ----------------------------
 // Pipeline (BMAD)
 // ----------------------------
 
