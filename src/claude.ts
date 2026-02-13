@@ -75,26 +75,46 @@ export class ClaudeClient {
     }
 
     private async callClaude(systemPrompt: string, userContent: string): Promise<string> {
-        try {
-            const msg = await this.anthropic.messages.create({
-                model: "claude-3-5-sonnet-20240620", // Fallback to stable version
-                max_tokens: 4096,
-                temperature: 0.2, // Low temp for more deterministic outputs
-                system: systemPrompt,
-                messages: [
-                    { role: "user", content: userContent }
-                ],
-            });
+        const models = [
+            "claude-3-5-sonnet-20241022",
+            "claude-3-5-sonnet-20240620",
+            "claude-3-opus-20240229",
+            "claude-3-sonnet-20240229",
+            "claude-3-haiku-20240307"
+        ];
 
-            const content = msg.content[0];
-            if (content.type === 'text') {
-                return content.text;
+        let lastError: any;
+
+        for (const model of models) {
+            try {
+                console.log(`Trying Claude model: ${model}...`);
+                const msg = await this.anthropic.messages.create({
+                    model,
+                    max_tokens: 4096,
+                    temperature: 0.2, // Low temp for more deterministic outputs
+                    system: systemPrompt,
+                    messages: [
+                        { role: "user", content: userContent }
+                    ],
+                });
+
+                const content = msg.content[0];
+                if (content.type === 'text') {
+                    console.log(`Success with model: ${model}`);
+                    return content.text;
+                }
+                throw new Error("Unexpected response type from Claude");
+            } catch (error: any) {
+                console.warn(`Failed with model ${model}:`, error.status || error.message);
+                lastError = error;
+                // If 401 (Auth) or 402 (Payment), strictly break as retrying won't help
+                if (error.status === 401 || error.status === 402) break;
+                // Otherwise (404, 500, 429), continue to next model
             }
-            throw new Error("Unexpected response type from Claude");
-        } catch (error: any) {
-            console.error("Claude API Error:", error.status, error.message, error.error);
-            throw error;
         }
+
+        console.error("All Claude models failed.");
+        throw lastError;
     }
 
     // 1. Agent Analyst
