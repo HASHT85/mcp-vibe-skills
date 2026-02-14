@@ -143,6 +143,17 @@ export async function triggerDeploy(applicationId: string): Promise<boolean> {
         body: JSON.stringify({ json: { applicationId } }),
     });
 
+    if (!res.ok) {
+        let errorBody = "";
+        try {
+            errorBody = await res.text();
+        } catch (e) {
+            errorBody = "[Could not read response body]";
+        }
+        console.error(`Dokploy Deploy Failed (Status ${res.status}):`, errorBody);
+        // We generally return boolean, but logging is crucial here.
+    }
+
     return res.ok;
     return res.ok;
 }
@@ -182,15 +193,27 @@ export async function createDokployProject(name: string, description?: string): 
 export async function createDokployApplication(input: CreateApplicationInput): Promise<DokployApplication & { webhookUrl?: string }> {
     if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
 
+    console.log(`[Dokploy] Creating app '${input.name}' in project ${input.projectId}...`);
+
     const res = await fetch(`${DOKPLOY_URL}/api/trpc/application.create`, {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({ json: input }),
     });
 
-    if (!res.ok) throw new Error(`dokploy_create_app_error: ${res.status}`);
+    if (!res.ok) {
+        let errorBody = "";
+        try {
+            errorBody = await res.text();
+        } catch (e) {
+            errorBody = "[Could not read response body]";
+        }
+        console.error(`Dokploy Create App Failed (Status ${res.status}):`, errorBody);
+        throw new Error(`dokploy_create_app_error: ${res.status} - ${errorBody}`);
+    }
+
     const data = await res.json();
-    return data?.result?.data;
+    return data?.result?.data?.json || data?.result?.data;
 }
 
 export async function deleteDokployProject(projectId: string): Promise<boolean> {
