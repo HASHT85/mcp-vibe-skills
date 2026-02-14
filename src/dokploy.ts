@@ -193,50 +193,64 @@ export async function createDokployProject(name: string, description?: string): 
 
     // 1. Find Project ID by Name
     const projects = await listDokployProjects();
-    const project = projects.find(p => p.name === name);
+    const listProject = projects.find(p => p.name === name);
 
-    if (!project) {
+    if (!listProject) {
         throw new Error(`dokploy_create_project_error: Project '${name}' created but not found in list.`);
     }
+
+    // Fetch full details to check for nested environments
+    const project = await getDokployProject(listProject.projectId);
+    // cast to any to access potentially hidden properties
+    const fullProject = project as any;
+    console.log("Full Project Details:", JSON.stringify(fullProject, null, 2));
 
     // 2. Find Environment ID (Required for App Creation)
     let environmentId = "";
 
-    // Attempt to fetch existing environments
-    try {
-        console.log(`[Dokploy] Fetching environments for project ${project.projectId}...`);
-        const envRes = await fetch(`${DOKPLOY_URL}/api/trpc/environment.all?input=${encodeURIComponent(JSON.stringify({ json: { projectId: project.projectId } }))}`, {
-            method: "GET",
-            headers: getHeaders(),
-        });
-
-        if (envRes.ok) {
-            const envData = await envRes.json();
-            const envs = envData?.result?.data?.json || envData?.result?.data;
-            console.log(`[Dokploy] Environments found: ${Array.isArray(envs) ? envs.length : 'Not an array'}`, JSON.stringify(envs));
-
-            if (Array.isArray(envs) && envs.length > 0) {
-                // Prefer 'production' or just take the first one
-                const prod = envs.find((e: any) => e.name?.toLowerCase() === "production") || envs[0];
-                environmentId = prod.id || prod.environmentId;
-                console.log(`[Dokploy] Found existing environment: ${prod.name} (${environmentId})`);
-            }
-        } else {
-            // If 404 or other error, we assume no envs or wrong endpoint. We will try to create one regardless.
-            console.warn(`[Dokploy] Could not fetch environments (Status ${envRes.status}). Proceeding to creation fallback.`);
-        }
-    } catch (e) {
-        console.warn("Error fetching environments:", e);
+    // Strategy A: Check if environment is already nested in project
+    if (fullProject && Array.isArray(fullProject.environments) && fullProject.environments.length > 0) {
+        console.log(`[Dokploy] Found nested environments in project response.`);
+        const prod = fullProject.environments.find((e: any) => e.name?.toLowerCase() === "production") || fullProject.environments[0];
+        environmentId = prod.id || prod.environmentId;
+        console.log(`[Dokploy] Using nested environment: ${prod.name} (${environmentId})`);
     }
 
-    // Fallback: Create 'production' environment if none found
+    // Strategy B: Fetch via environment.all (if Strategy A failed)
+    if (!environmentId) {
+        try {
+            console.log(`[Dokploy] Fetching environments via API for project ${listProject.projectId}...`);
+            const envRes = await fetch(`${DOKPLOY_URL}/api/trpc/environment.all?input=${encodeURIComponent(JSON.stringify({ json: { projectId: listProject.projectId } }))}`, {
+                method: "GET",
+                headers: getHeaders(),
+            });
+
+            if (envRes.ok) {
+                const envData = await envRes.json();
+                const envs = envData?.result?.data?.json || envData?.result?.data;
+                console.log(`[Dokploy] Environments found via API: ${Array.isArray(envs) ? envs.length : 'Not an array'}`, JSON.stringify(envs));
+
+                if (Array.isArray(envs) && envs.length > 0) {
+                    const prod = envs.find((e: any) => e.name?.toLowerCase() === "production") || envs[0];
+                    environmentId = prod.id || prod.environmentId;
+                    console.log(`[Dokploy] Found existing environment via API: ${prod.name} (${environmentId})`);
+                }
+            } else {
+                console.warn(`[Dokploy] Could not fetch environments via API (Status ${envRes.status}).`);
+            }
+        } catch (e) {
+            console.warn("Error fetching environments:", e);
+        }
+    }
+
+    // Strategy C: Create 'production' environment (if A and B failed)
     if (!environmentId) {
         console.log(`[Dokploy] No environment ID found. Attempting to create 'production' environment...`);
         try {
             const createEnvRes = await fetch(`${DOKPLOY_URL}/api/trpc/environment.create`, {
                 method: "POST",
                 headers: getHeaders(),
-                body: JSON.stringify({ json: { projectId: project.projectId, name: "production", description: "Default environment" } }),
+                body: JSON.stringify({ json: { projectId: listProject.projectId, name: "production", description: "Default environment" } }),
             });
 
             if (createEnvRes.ok) {
@@ -257,8 +271,8 @@ export async function createDokployProject(name: string, description?: string): 
     }
 
     // Attach environmentId to result for usage in bmad.ts
-    // Provide a valid return even if environmentId is missing (though it shouldn't be)
-    return { ...project, environmentId };
+    // Return the project object with the environmentId
+    return { ...listProject, environmentId };
 }
 
 export async function createDokployApplication(input: CreateApplicationInput): Promise<DokployApplication & { webhookUrl?: string }> {
