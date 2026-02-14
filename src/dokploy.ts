@@ -81,8 +81,10 @@ export async function getDokployProject(projectId: string): Promise<DokployProje
         throw new Error("dokploy_not_configured");
     }
 
+    // Input must be wrapped in json for SuperJSON
+    const input = { json: { projectId } };
     const res = await fetch(
-        `${DOKPLOY_URL}/api/trpc/project.one?input=${encodeURIComponent(JSON.stringify({ projectId }))}`,
+        `${DOKPLOY_URL}/api/trpc/project.one?input=${encodeURIComponent(JSON.stringify(input))}`,
         {
             method: "GET",
             headers: getHeaders(),
@@ -112,8 +114,9 @@ export async function listDokployApplications(projectId: string): Promise<Dokplo
 
     // Applications are typically nested in project response
     // or fetched via application.all with filter
+    const input = { json: { projectId } };
     const res = await fetch(
-        `${DOKPLOY_URL}/api/trpc/application.all?input=${encodeURIComponent(JSON.stringify({ projectId }))}`,
+        `${DOKPLOY_URL}/api/trpc/application.all?input=${encodeURIComponent(JSON.stringify(input))}`,
         {
             method: "GET",
             headers: getHeaders(),
@@ -137,7 +140,7 @@ export async function triggerDeploy(applicationId: string): Promise<boolean> {
     const res = await fetch(`${DOKPLOY_URL}/api/trpc/application.deploy`, {
         method: "POST",
         headers: getHeaders(),
-        body: JSON.stringify({ applicationId }),
+        body: JSON.stringify({ json: { applicationId } }),
     });
 
     return res.ok;
@@ -158,7 +161,7 @@ export async function createDokployProject(name: string, description?: string): 
     const res = await fetch(`${DOKPLOY_URL}/api/trpc/project.create`, {
         method: "POST",
         headers: getHeaders(),
-        body: JSON.stringify({ name, description }),
+        body: JSON.stringify({ json: { name, description: description || "" } }),
     });
 
     if (!res.ok) {
@@ -182,7 +185,7 @@ export async function createDokployApplication(input: CreateApplicationInput): P
     const res = await fetch(`${DOKPLOY_URL}/api/trpc/application.create`, {
         method: "POST",
         headers: getHeaders(),
-        body: JSON.stringify(input),
+        body: JSON.stringify({ json: input }),
     });
 
     if (!res.ok) throw new Error(`dokploy_create_app_error: ${res.status}`);
@@ -196,7 +199,7 @@ export async function deleteDokployProject(projectId: string): Promise<boolean> 
     const res = await fetch(`${DOKPLOY_URL}/api/trpc/project.remove`, {
         method: "POST",
         headers: getHeaders(),
-        body: JSON.stringify({ projectId }),
+        body: JSON.stringify({ json: { projectId } }),
     });
 
     if (!res.ok) {
