@@ -145,7 +145,15 @@ export async function triggerDeploy(applicationId: string): Promise<boolean> {
 }
 
 export async function createDokployProject(name: string, description?: string): Promise<DokployProject> {
-    if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
+    if (!isDokployConfigured()) {
+        console.error("Dokploy Config Missing:", {
+            URL: process.env.DOKPLOY_URL,
+            TOKEN_SET: !!process.env.DOKPLOY_TOKEN
+        });
+        throw new Error("dokploy_not_configured");
+    }
+
+    console.log(`[Dokploy] Creating project '${name}' at ${DOKPLOY_URL}...`);
 
     const res = await fetch(`${DOKPLOY_URL}/api/trpc/project.create`, {
         method: "POST",
@@ -153,7 +161,17 @@ export async function createDokployProject(name: string, description?: string): 
         body: JSON.stringify({ name, description }),
     });
 
-    if (!res.ok) throw new Error(`dokploy_create_project_error: ${res.status}`);
+    if (!res.ok) {
+        let errorBody = "";
+        try {
+            errorBody = await res.text();
+        } catch (e) {
+            errorBody = "[Could not read response body]";
+        }
+        console.error(`Dokploy Create Project Failed (Status ${res.status}):`, errorBody);
+        throw new Error(`dokploy_create_project_error: ${res.status} - ${errorBody}`);
+    }
+
     const data = await res.json();
     return data?.result?.data;
 }
