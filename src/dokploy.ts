@@ -201,6 +201,8 @@ export async function createDokployProject(name: string, description?: string): 
 
     // 2. Find Environment ID (Required for App Creation)
     let environmentId = "";
+
+    // Attempt to fetch existing environments
     try {
         console.log(`[Dokploy] Fetching environments for project ${project.projectId}...`);
         const envRes = await fetch(`${DOKPLOY_URL}/api/trpc/environment.all?input=${encodeURIComponent(JSON.stringify({ json: { projectId: project.projectId } }))}`, {
@@ -218,37 +220,40 @@ export async function createDokployProject(name: string, description?: string): 
                 const prod = envs.find((e: any) => e.name?.toLowerCase() === "production") || envs[0];
                 environmentId = prod.id || prod.environmentId;
                 console.log(`[Dokploy] Found existing environment: ${prod.name} (${environmentId})`);
-            } else {
-                // No environment found? Create 'production'
-                console.log(`[Dokploy] No environment found. Creating 'production' environment...`);
-                const createEnvRes = await fetch(`${DOKPLOY_URL}/api/trpc/environment.create`, {
-                    method: "POST",
-                    headers: getHeaders(),
-                    body: JSON.stringify({ json: { projectId: project.projectId, name: "production", description: "Default environment" } }),
-                });
-
-                if (createEnvRes.ok) {
-                    const createEnvData = await createEnvRes.json();
-                    const newEnv = createEnvData?.result?.data?.json || createEnvData?.result?.data;
-                    environmentId = newEnv?.id || newEnv?.environmentId;
-                    console.log(`[Dokploy] Created 'production' environment: ${environmentId}`);
-                } else {
-                    console.error(`[Dokploy] Failed to create environment: ${createEnvRes.status}`);
-                    try {
-                        const errText = await createEnvRes.text();
-                        console.error("Create Env Error Body:", errText);
-                    } catch { }
-                }
             }
         } else {
-            console.error(`[Dokploy] Failed to fetch environments: ${envRes.status}`);
-            try {
-                const errText = await envRes.text();
-                console.error("Fetch Env Error Body:", errText);
-            } catch { }
+            // If 404 or other error, we assume no envs or wrong endpoint. We will try to create one regardless.
+            console.warn(`[Dokploy] Could not fetch environments (Status ${envRes.status}). Proceeding to creation fallback.`);
         }
     } catch (e) {
-        console.warn("Error managing environments:", e);
+        console.warn("Error fetching environments:", e);
+    }
+
+    // Fallback: Create 'production' environment if none found
+    if (!environmentId) {
+        console.log(`[Dokploy] No environment ID found. Attempting to create 'production' environment...`);
+        try {
+            const createEnvRes = await fetch(`${DOKPLOY_URL}/api/trpc/environment.create`, {
+                method: "POST",
+                headers: getHeaders(),
+                body: JSON.stringify({ json: { projectId: project.projectId, name: "production", description: "Default environment" } }),
+            });
+
+            if (createEnvRes.ok) {
+                const createEnvData = await createEnvRes.json();
+                const newEnv = createEnvData?.result?.data?.json || createEnvData?.result?.data;
+                environmentId = newEnv?.id || newEnv?.environmentId;
+                console.log(`[Dokploy] Successfully created 'production' environment: ${environmentId}`);
+            } else {
+                console.error(`[Dokploy] Failed to create environment: ${createEnvRes.status}`);
+                try {
+                    const errText = await createEnvRes.text();
+                    console.error("Create Env Error Body:", errText);
+                } catch { }
+            }
+        } catch (e) {
+            console.error("Error creating environment:", e);
+        }
     }
 
     // Attach environmentId to result for usage in bmad.ts
