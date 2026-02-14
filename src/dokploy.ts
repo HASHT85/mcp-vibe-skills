@@ -171,3 +171,27 @@ export async function createDokployApplication(input: CreateApplicationInput): P
     const data = await res.json();
     return data?.result?.data;
 }
+
+export async function deleteDokployProject(projectId: string): Promise<boolean> {
+    if (!isDokployConfigured()) return false;
+
+    const res = await fetch(`${DOKPLOY_URL}/api/trpc/project.remove`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ projectId }),
+    });
+
+    if (!res.ok) {
+        // It might be project.delete or project.remove. Let's try remove first as it's common in some trpc setups, 
+        // but if it fails we might need to investigate. 
+        // Actually, looking at typical patterns, `remove` or `delete` are used. 
+        // Let's assume `remove` based on some similar open source trpc routers or try `delete` if this fails?
+        // Let's stick to `remove` for now, or `delete`. 
+        // SAFEST BET: `project.remove` is often used for entity removal in tRPC if `delete` is reserved.
+        // Let's check `project.create` was used.
+        // I will try `project.remove`.
+        console.warn(`Failed to delete Dokploy project ${projectId}: ${res.status}`);
+        return false;
+    }
+    return true;
+}

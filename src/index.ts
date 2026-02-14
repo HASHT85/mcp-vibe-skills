@@ -393,6 +393,18 @@ app.delete("/projects/:id", async (req: Request, res: Response) => {
                 // Continue deleting local project even if remote fails
             }
         }
+
+        // Try to delete Dokploy project if exists
+        if (pipeline.artifacts?.deployment?.projectId) {
+            try {
+                const dokployProjectId = pipeline.artifacts.deployment.projectId;
+                console.log(`Deleting Dokploy project: ${dokployProjectId}`);
+                await import('./dokploy.js').then(m => m.deleteDokployProject(dokployProjectId));
+            } catch (err) {
+                console.error("Failed to delete Dokploy project:", err);
+            }
+        }
+
         bmadEngine.deletePipeline(id);
         return res.json({ success: true, id });
     }
