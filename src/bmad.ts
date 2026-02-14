@@ -207,11 +207,13 @@ export class BmadEngine {
                             name: "web-app",
                             projectId: dokployProject.projectId,
                             repository: state.artifacts.github.url,
+                            owner: state.artifacts.github.owner,
+                            repo: state.artifacts.github.name,
                             branch: "main",
                             buildType: "dockerfile" as const,
                             env: "",
                             environmentId: dokployProject.environmentId || "",
-                            provider: 'git' as const // Force 'git' provider to avoid authentication issues
+                            provider: 'git' as const // Will be overridden or ignored by Dokploy logic if 'github' provider is used
                         };
 
                         if (!appSettings.environmentId) {

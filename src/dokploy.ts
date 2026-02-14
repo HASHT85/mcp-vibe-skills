@@ -25,12 +25,14 @@ export type CreateApplicationInput = {
     name: string;
     projectId: string;
     description?: string;
-    repository?: string;
+    repository?: string; // Full URL
+    owner?: string; // Repo owner (required for github provider)
+    repo?: string; // Repo name (required for github provider)
     branch?: string;
     buildType?: "dockerfile" | "heroku_buildpacks" | "nixpacks";
     env?: string;
     environmentId: string; // Required by Dokploy
-    provider?: "git" | "github" | "gitlab" | "bitbucket" | "docker"; // Added provider
+    provider?: "git" | "github" | "gitlab" | "bitbucket" | "docker";
 };
 
 const DOKPLOY_URL = process.env.DOKPLOY_URL || "";
@@ -45,6 +47,36 @@ function getHeaders() {
 
 export function isDokployConfigured(): boolean {
     return Boolean(DOKPLOY_URL && DOKPLOY_TOKEN);
+}
+
+export async function getDokployUser(): Promise<any> {
+    if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
+
+    // Try multiple endpoints to find the user
+    const endpoints = [
+        `${DOKPLOY_URL}/api/trpc/user.get`,
+        `${DOKPLOY_URL}/api/trpc/auth.get`,
+        `${DOKPLOY_URL}/api/trpc/user.one` // This one usually requires input, might fail if called without
+    ];
+
+    for (const url of endpoints) {
+        try {
+            console.log(`[Dokploy] Fetching user details from ${url}...`);
+            const res = await fetch(url, { method: "GET", headers: getHeaders() });
+            if (res.ok) {
+                const data = await res.json();
+                const user = data?.result?.data?.json || data?.result?.data;
+                if (user) {
+                    console.log(`[Dokploy] User found via ${url}`);
+                    return user;
+                }
+            }
+        } catch (e) {
+            // ignore
+        }
+    }
+    console.warn("[Dokploy] Could not fetch user details from any known endpoint.");
+    return null;
 }
 
 export async function listDokployProjects(): Promise<DokployProject[]> {
@@ -281,11 +313,45 @@ export async function createDokployApplication(input: CreateApplicationInput): P
 
     console.log(`[Dokploy] Creating app '${input.name}' in project ${input.projectId}...`);
 
-    // Default provider to 'git' if not specified, which works with raw Git URLs
-    const payload = {
-        ...input,
-        provider: input.provider || 'git'
+    // Fetch user to check for connected providers
+    const user = await getDokployUser();
+
+    let payload: any = {
+        name: input.name,
+        projectId: input.projectId,
+        description: input.description || "",
+        environmentId: input.environmentId,
+        buildType: input.buildType || "dockerfile",
+        env: input.env || "",
     };
+
+    // Determine Provider Strategy
+    if (user && user.githubId && input.owner && input.repo) {
+        // Strategy 1: Use connected GitHub App (Best for integration)
+        console.log(`[Dokploy] Detected connected GitHub account (ID: ${user.githubId}). using 'github' provider.`);
+        payload = {
+            ...payload,
+            sourceType: "github",
+            githubRepository: input.repo,
+            githubOwner: input.owner,
+            githubBranch: input.branch || "main",
+            githubId: user.githubId, // The installation ID
+            githubBuildPath: "/"
+        };
+    } else {
+        // Strategy 2: Use generic Git URL (Fallback)
+        console.log(`[Dokploy] Using generic 'git' provider (No GitHub connection detected or missing owner/repo).`);
+        payload = {
+            ...payload,
+            sourceType: "git",
+            gitRepository: input.repository, // Full URL
+            gitBranch: input.branch || "main",
+            gitBuildPath: "/",
+            // gitOwner: input.owner, // might be needed for some git providers but usually URL is enough for generic git
+        };
+    }
+
+    console.log("[Dokploy] Application Create Payload:", JSON.stringify(payload, null, 2));
 
     const res = await fetch(`${DOKPLOY_URL}/api/trpc/application.create`, {
         method: "POST",
