@@ -188,8 +188,42 @@ export async function createDokployProject(name: string, description?: string): 
         throw new Error(`dokploy_create_project_error: ${res.status} - ${errorBody}`);
     }
 
-    const data = await res.json();
-    return data?.result?.data;
+    // If creation succeeds (even if empty response), we must fetch the project to get its ID and Default Environment
+    // Dokploy doesn't always return the object on create.
+    console.log("Project created. Fetching details to get ID and Environment...");
+
+    // 1. Find Project ID by Name
+    const projects = await listDokployProjects();
+    const project = projects.find(p => p.name === name);
+
+    if (!project) {
+        throw new Error(`dokploy_create_project_error: Project '${name}' created but not found in list.`);
+    }
+
+    // 2. Find Environment ID (Required for App Creation)
+    let environmentId = "";
+    try {
+        const envRes = await fetch(`${DOKPLOY_URL}/api/trpc/environment.all?input=${encodeURIComponent(JSON.stringify({ json: { projectId: project.projectId } }))}`, {
+            method: "GET",
+            headers: getHeaders(),
+        });
+
+        if (envRes.ok) {
+            const envData = await envRes.json();
+            const envs = envData?.result?.data?.json || envData?.result?.data;
+            if (Array.isArray(envs) && envs.length > 0) {
+                // Prefer 'production' or just take the first one
+                const prod = envs.find((e: any) => e.name?.toLowerCase() === "production") || envs[0];
+                environmentId = prod.id || prod.environmentId;
+            }
+        }
+    } catch (e) {
+        console.warn("Failed to fetch environments:", e);
+    }
+
+    // Attach environmentId to result for usage in bmad.ts
+    // Provide a valid return even if environmentId is missing (though it shouldn't be)
+    return { ...project, environmentId };
 }
 
 export async function createDokployApplication(input: CreateApplicationInput): Promise<DokployApplication & { webhookUrl?: string }> {
@@ -214,44 +248,9 @@ export async function createDokployApplication(input: CreateApplicationInput): P
         throw new Error(`dokploy_create_app_error: ${res.status} - ${errorBody}`);
     }
 
-    // If creation succeeds (even if empty response), we must fetch the project to get its ID and Default Environment
-    // Dokploy doesn't always return the object on create.
-    console.log("Project created. Fetching details to get ID and Environment...");
-
-    // 1. Find Project ID by Name
-    const projects = await listDokployProjects();
-    const project = projects.find(p => p.name === name);
-
-    if (!project) {
-        throw new Error(`dokploy_create_project_error: Project '${name}' created but not found in list.`);
-    }
-
-    // 2. Find Environment ID (Required for App Creation)
-    // We need to list environments for this project.
-    // Assuming api/trpc/environment.all or similar.
-    // Let's try to fetch environments.
-    let environmentId = "";
-    try {
-        const envRes = await fetch(`${DOKPLOY_URL}/api/trpc/environment.all?input=${encodeURIComponent(JSON.stringify({ json: { projectId: project.projectId } }))}`, {
-            method: "GET",
-            headers: getHeaders(),
-        });
-
-        if (envRes.ok) {
-            const envData = await envRes.json();
-            const envs = envData?.result?.data?.json || envData?.result?.data;
-            if (Array.isArray(envs) && envs.length > 0) {
-                // Prefer 'production' or just take the first one
-                const prod = envs.find((e: any) => e.name?.toLowerCase() === "production") || envs[0];
-                environmentId = prod.id || prod.environmentId;
-            }
-        }
-    } catch (e) {
-        console.warn("Failed to fetch environments:", e);
-    }
-
-    // Attach environmentId to result for usage in bmad.ts
-    return { ...project, environmentId };
+    const data = await res.json();
+    const result = data?.result?.data?.json || data?.result?.data;
+    return result;
 }
 
 export async function deleteDokployProject(projectId: string): Promise<boolean> {
