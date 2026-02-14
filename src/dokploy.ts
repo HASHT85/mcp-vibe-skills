@@ -56,7 +56,9 @@ export async function getDokployUser(): Promise<any> {
     const endpoints = [
         `${DOKPLOY_URL}/api/trpc/user.get`,
         `${DOKPLOY_URL}/api/trpc/auth.get`,
-        `${DOKPLOY_URL}/api/trpc/user.one` // This one usually requires input, might fail if called without
+        `${DOKPLOY_URL}/api/trpc/user.one`,
+        `${DOKPLOY_URL}/api/trpc/settings.get`,
+        `${DOKPLOY_URL}/api/trpc/admin.get`,
     ];
 
     for (const url of endpoints) {
