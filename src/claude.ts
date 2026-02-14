@@ -187,24 +187,76 @@ export class ClaudeClient {
     async generateCode(architecture: ArchitectureDesign, prd: PRD): Promise<CodeGeneration> {
         const system = `You are an Expert Full Stack Developer.
     Generate the initial code structure and key files based on the architecture and PRD.
-    Output MUST be valid JSON matching this schema.
-    Do not include any explanations or conversational text. Output ONLY the JSON object.
-    IMPORTANT: Provide ONLY the essential code files to get the app running. Avoid large placeholder files.
-    {
-      "files": [{ "path": "string (relative)", "content": "string (file content)" }],
-      "instructions": "string (setup instructions)"
-    }`;
+    
+    Output MUST be in XML format as follows:
+    <code_generation>
+        <instructions>Setup instructions here...</instructions>
+        <file path="relative/path/to/file.ext">
+            <![CDATA[
+                ... file content here ...
+            ]]>
+        </file>
+        ... more files ...
+    </code_generation>
+
+    IMPORTANT: 
+    1. Use <![CDATA[ ]]> tags for file content to handle special characters safely.
+    2. Provide ONLY the essential code files to get the app running.
+    3. Do not include any conversational text outside the XML tags.
+    `;
 
         const prompt = `PRD: ${JSON.stringify(prd)}\nArchitecture: ${JSON.stringify(architecture)}`;
         const response = await this.callClaude(system, prompt);
 
         try {
-            return JSON.parse(this.extractJson(response));
+            return this.parseXmlCodeResponse(response);
         } catch (e) {
-            console.error("JSON Parse Error. Raw response length:", response.length);
+            console.error("XML Parse Error. Raw response length:", response.length);
             console.error("Raw response snippet:", response.substring(response.length - 200));
             throw e;
         }
+    }
+
+    private parseXmlCodeResponse(text: string): CodeGeneration {
+        const files: { path: string, content: string }[] = [];
+        let instructions = "";
+
+        // Extract instructions
+        const instrMatch = text.match(/<instructions>([\s\S]*?)<\/instructions>/);
+        if (instrMatch && instrMatch[1]) {
+            instructions = instrMatch[1].trim();
+        }
+
+        // Extract files
+        // Regex to capture file path and content (handling CDATA)
+        const fileRegex = /<file path="(.*?)">([\s\S]*?)<\/file>/g;
+        let match;
+
+        while ((match = fileRegex.exec(text)) !== null) {
+            const path = match[1];
+            let content = match[2].trim();
+
+            // Strip CDATA if present
+            const cdataMatch = content.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
+            if (cdataMatch && cdataMatch[1]) {
+                content = cdataMatch[1];
+            }
+
+            files.push({ path, content });
+        }
+
+        // Fallback: if no files found via XML, try legacy JSON extraction just in case the model ignored instructions
+        if (files.length === 0) {
+            try {
+                const legacyJson = JSON.parse(this.extractJson(text));
+                if (legacyJson.files) return legacyJson;
+            } catch (e) {
+                // Ignore JSON error, throw XML error
+            }
+            throw new Error("No files found in XML response");
+        }
+
+        return { files, instructions };
     }
 
     // 6. Agent QA
