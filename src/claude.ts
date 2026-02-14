@@ -189,6 +189,7 @@ export class ClaudeClient {
     Generate the initial code structure and key files based on the architecture and PRD.
     Output MUST be valid JSON matching this schema.
     Do not include any explanations or conversational text. Output ONLY the JSON object.
+    IMPORTANT: Provide ONLY the essential code files to get the app running. Avoid large placeholder files.
     {
       "files": [{ "path": "string (relative)", "content": "string (file content)" }],
       "instructions": "string (setup instructions)"
@@ -196,7 +197,14 @@ export class ClaudeClient {
 
         const prompt = `PRD: ${JSON.stringify(prd)}\nArchitecture: ${JSON.stringify(architecture)}`;
         const response = await this.callClaude(system, prompt);
-        return JSON.parse(this.extractJson(response));
+
+        try {
+            return JSON.parse(this.extractJson(response));
+        } catch (e) {
+            console.error("JSON Parse Error. Raw response length:", response.length);
+            console.error("Raw response snippet:", response.substring(response.length - 200));
+            throw e;
+        }
     }
 
     // 6. Agent QA
@@ -217,17 +225,40 @@ export class ClaudeClient {
 
     // Helper to handle potential markdown code blocks in response
     private extractJson(text: string): string {
+        let cleanText = text.trim();
+
         // 1. Try to find content within ```json ... ``` blocks
-        const codeBlockMatch = text.match(/```json([\s\S]*?)```/);
-        if (codeBlockMatch && codeBlockMatch[1]) {
-            return codeBlockMatch[1].trim();
+        const jsonBlockMatch = cleanText.match(/```json([\s\S]*?)```/);
+        if (jsonBlockMatch && jsonBlockMatch[1]) {
+            return jsonBlockMatch[1].trim();
         }
-        // 2. Fallback: Find the first { and last }
-        const start = text.indexOf('{');
-        const end = text.lastIndexOf('}');
-        if (start !== -1 && end !== -1) {
-            return text.substring(start, end + 1);
+
+        // 2. Try to find content within generic ``` ... ``` blocks
+        const genericBlockMatch = cleanText.match(/```([\s\S]*?)```/);
+        if (genericBlockMatch && genericBlockMatch[1]) {
+            return genericBlockMatch[1].trim();
         }
-        return text;
+
+        // 3. Fallback: Find the first { and last }
+        const start = cleanText.indexOf('{');
+        const end = cleanText.lastIndexOf('}');
+
+        if (start !== -1 && end !== -1 && end > start) {
+            // Check if it looks like there is garbage after the last }
+            // Sometimes models add "Hope this helps!" after the JSON
+            const candidate = cleanText.substring(start, end + 1);
+
+            // Basic validation - check if it parses. If not, maybe it's truncated?
+            // But if we found a closing }, it's likely complete.
+            return candidate;
+        }
+
+        // 4. Truncation handling (Last resort)
+        // If we found a start { but no end }, it might be truncated.
+        // In this case, we can't easily "fix" it into valid JSON reliably without potentially corrupting data.
+        // It is better to fail and let the retry mechanism (if any) or user know.
+        // However, for "unterminated string", it usually means the response stopped mid-string.
+
+        return cleanText;
     }
 }
