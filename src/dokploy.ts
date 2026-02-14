@@ -52,14 +52,25 @@ export function isDokployConfigured(): boolean {
 export async function getDokployUser(): Promise<any> {
     if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
 
-    // Try multiple endpoints to find the user
-    const endpoints = [
-        `${DOKPLOY_URL}/api/trpc/user.get`,
-        `${DOKPLOY_URL}/api/trpc/auth.get`,
-        `${DOKPLOY_URL}/api/trpc/user.one`,
-        `${DOKPLOY_URL}/api/trpc/settings.get`,
-        `${DOKPLOY_URL}/api/trpc/admin.get`,
-    ];
+    // Endpoint specific for checking GitHub installations
+    const githubUrl = `${DOKPLOY_URL}/api/trpc/github.all`;
+    let githubInstallations = [];
+    try {
+        console.log(`[Dokploy] Fetching GitHub installations from ${githubUrl}...`);
+        const res = await fetch(githubUrl, { method: "GET", headers: getHeaders() });
+        if (res.ok) {
+            const data = await res.json();
+            // TRPC response structure: result.data.json or result.data
+            const installs = data?.result?.data?.json || data?.result?.data;
+            if (Array.isArray(installs)) {
+                console.log(`[Dokploy] Found ${installs.length} GitHub installations.`);
+                console.log("[Dokploy] GitHub Installations:", JSON.stringify(installs, null, 2));
+                githubInstallations = installs;
+            }
+        }
+    } catch (e) {
+        console.warn("[Dokploy] Failed to fetch GitHub installations:", e);
+    }
 
     for (const url of endpoints) {
         try {
@@ -70,8 +81,9 @@ export async function getDokployUser(): Promise<any> {
                 const user = data?.result?.data?.json || data?.result?.data;
                 if (user) {
                     console.log(`[Dokploy] User found via ${url}`);
-                    console.log("[Dokploy] User Details:", JSON.stringify(user, null, 2)); // Added detailed logging
-                    return user;
+                    // Attach installations to user object for downstream use
+                    const enrichedUser = { ...user, githubInstallations };
+                    return enrichedUser;
                 }
             }
         } catch (e) {
@@ -329,16 +341,18 @@ export async function createDokployApplication(input: CreateApplicationInput): P
     };
 
     // Determine Provider Strategy
-    if (user && user.githubId && input.owner && input.repo) {
+    const githubId = user?.githubInstallations?.[0]?.installationId || user?.githubId;
+
+    if (githubId && input.owner && input.repo) {
         // Strategy 1: Use connected GitHub App (Best for integration)
-        console.log(`[Dokploy] Detected connected GitHub account (ID: ${user.githubId}). using 'github' provider.`);
+        console.log(`[Dokploy] Detected connected GitHub account (ID: ${githubId}). using 'github' provider.`);
         payload = {
             ...payload,
             sourceType: "github",
             githubRepository: input.repo,
             githubOwner: input.owner,
             githubBranch: input.branch || "main",
-            githubId: user.githubId, // The installation ID
+            githubId: githubId, // The installation ID
             githubBuildPath: "/"
         };
     } else {
