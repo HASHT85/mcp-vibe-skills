@@ -157,7 +157,6 @@ export async function triggerDeploy(applicationId: string): Promise<boolean> {
     }
 
     return res.ok;
-    return res.ok;
 }
 
 export async function createDokployProject(name: string, description?: string): Promise<DokployProject> {
@@ -211,14 +210,34 @@ export async function createDokployProject(name: string, description?: string): 
         if (envRes.ok) {
             const envData = await envRes.json();
             const envs = envData?.result?.data?.json || envData?.result?.data;
+
             if (Array.isArray(envs) && envs.length > 0) {
                 // Prefer 'production' or just take the first one
                 const prod = envs.find((e: any) => e.name?.toLowerCase() === "production") || envs[0];
                 environmentId = prod.id || prod.environmentId;
+                console.log(`[Dokploy] Found existing environment: ${prod.name} (${environmentId})`);
+            } else {
+                // No environment found? Create 'production'
+                console.log(`[Dokploy] No environment found. Creating 'production' environment...`);
+                const createEnvRes = await fetch(`${DOKPLOY_URL}/api/trpc/environment.create`, {
+                    method: "POST",
+                    headers: getHeaders(),
+                    body: JSON.stringify({ json: { projectId: project.projectId, name: "production", description: "Default environment" } }),
+                });
+
+                if (createEnvRes.ok) {
+                    const createEnvData = await createEnvRes.json();
+                    const newEnv = createEnvData?.result?.data?.json || createEnvData?.result?.data;
+                    environmentId = newEnv?.id || newEnv?.environmentId;
+                    console.log(`[Dokploy] Created 'production' environment: ${environmentId}`);
+                } else {
+                    console.error(`[Dokploy] Failed to create environment: ${createEnvRes.status}`);
+                    try { console.error(await createEnvRes.text()); } catch { }
+                }
             }
         }
     } catch (e) {
-        console.warn("Failed to fetch environments:", e);
+        console.warn("Error managing environments:", e);
     }
 
     // Attach environmentId to result for usage in bmad.ts
@@ -263,14 +282,6 @@ export async function deleteDokployProject(projectId: string): Promise<boolean> 
     });
 
     if (!res.ok) {
-        // It might be project.delete or project.remove. Let's try remove first as it's common in some trpc setups, 
-        // but if it fails we might need to investigate. 
-        // Actually, looking at typical patterns, `remove` or `delete` are used. 
-        // Let's assume `remove` based on some similar open source trpc routers or try `delete` if this fails?
-        // Let's stick to `remove` for now, or `delete`. 
-        // SAFEST BET: `project.remove` is often used for entity removal in tRPC if `delete` is reserved.
-        // Let's check `project.create` was used.
-        // I will try `project.remove`.
         console.warn(`Failed to delete Dokploy project ${projectId}: ${res.status}`);
         return false;
     }
