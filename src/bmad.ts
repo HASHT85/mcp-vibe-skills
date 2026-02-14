@@ -80,6 +80,11 @@ export class BmadEngine {
         return this.pipelines.get(projectId);
     }
 
+    // Delete a pipeline
+    deletePipeline(projectId: string): boolean {
+        return this.pipelines.delete(projectId);
+    }
+
     // Run the next phase of the pipeline
     async next(projectId: string): Promise<BmadState> {
         const state = this.pipelines.get(projectId);
@@ -191,7 +196,10 @@ export class BmadEngine {
                         if (!state.artifacts.github) throw new Error("Missing GitHub artifact for deployment");
 
                         // Create Project
-                        const dokployProject = await createDokployProject(state.artifacts.prd?.title || projectId);
+                        // Sanitize project name for Dokploy (allow only lowercase, numbers, hyphens)
+                        const rawTitle = state.artifacts.prd?.title || projectId;
+                        const safeProjectName = rawTitle.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+                        const dokployProject = await createDokployProject(safeProjectName);
 
                         // Create Application
                         const appSettings = {

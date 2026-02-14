@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, FolderPlus, Box, Loader2, Zap, Cpu, Activity, Plus, Search } from 'lucide-react';
+import { LayoutDashboard, FolderPlus, Box, Loader2, Zap, Cpu, Activity, Plus, Search, Trash2, Lock, LogOut } from 'lucide-react';
 import { BmadPipeline } from './components/BmadPipeline';
-import { createPipeline, getProjects, sendMessage, getPipeline } from './api/client';
+import { createPipeline, getProjects, sendMessage, getPipeline, deleteProject, setAuth, checkAuth } from './api/client';
 
 function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+
   const [activeTab, setActiveTab] = useState('home');
   const [projects, setProjects] = useState<any[]>([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -15,7 +19,22 @@ function App() {
   const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
-    getProjects().then(setProjects).catch(console.error);
+    const auth = checkAuth();
+    setIsLoggedIn(auth);
+    if (auth) {
+      loadProjects();
+    }
+  }, []);
+
+  const loadProjects = () => {
+    getProjects().then(setProjects).catch(err => {
+      if (err.message === 'Unauthorized') setIsLoggedIn(false);
+      console.error(err);
+    });
+  };
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
 
     // Auto-refresh current project if active to see new messages
     const interval = setInterval(() => {
@@ -25,7 +44,28 @@ function App() {
     }, 2000); // Poll every 2s for chat updates
 
     return () => clearInterval(interval);
-  }, [currentProject?.projectId]); // Re-run if projectId changes
+  }, [currentProject?.projectId, isLoggedIn]);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuth(username, password);
+    // Verify by trying to fetch projects
+    getProjects().then(res => {
+      setIsLoggedIn(true);
+      setProjects(res);
+    }).catch(() => {
+      alert("Login Failed: Invalid credentials");
+      localStorage.removeItem('vibe_auth');
+    });
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('vibe_auth');
+    setIsLoggedIn(false);
+    setUsername('');
+    setPassword('');
+    setCurrentProject(null);
+  };
 
   const handleCreate = async () => {
     if (!newProjectDesc) return;
@@ -35,12 +75,29 @@ function App() {
       const state = await createPipeline(projectId, newProjectDesc);
       setCurrentProject(state);
       setActiveTab('detail');
-      getProjects().then(setProjects);
+      loadProjects();
     } catch (err) {
       console.error(err);
       alert('Failed to create project');
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent, projectId: string) => {
+    e.stopPropagation();
+    if (!confirm(`Are you sure you want to delete project ${projectId}? This will also delete the GitHub repository.`)) return;
+
+    try {
+      await deleteProject(projectId);
+      // Remove from local list immediately
+      setProjects(prev => prev.filter(p => p.id !== projectId && p.projectId !== projectId));
+      if (currentProject?.projectId === projectId) {
+        setCurrentProject(null);
+        setActiveTab('home');
+      }
+    } catch (err: any) {
+      alert('Failed to delete project: ' + err.message);
     }
   };
 
@@ -63,6 +120,53 @@ function App() {
       setIsSending(false);
     }
   };
+
+  if (!isLoggedIn) {
+    return (
+      <div className="flex h-screen bg-background text-gray-100 font-sans items-center justify-center overflow-hidden relative">
+        <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[120px] animate-pulse-slow" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-secondary/20 rounded-full blur-[120px] animate-pulse-slow delay-1000" />
+        </div>
+
+        <div className="glass-panel p-10 rounded-2xl border border-white/10 w-full max-w-md shadow-2xl relative z-10 animate-fade-in">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/10 text-neon-blue">
+              <Lock size={32} />
+            </div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-neon-blue to-neon-purple bg-clip-text text-transparent">VibeCraft Access</h1>
+            <p className="text-sm text-gray-400 mt-2">Secure Neural Interface</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-gray-500 mb-1">Identity</label>
+              <input
+                type="text"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-neon-blue outline-none transition-colors"
+                placeholder="username"
+              />
+            </div>
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-gray-500 mb-1">Passcode</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-neon-blue outline-none transition-colors"
+                placeholder="••••••••"
+              />
+            </div>
+            <button type="submit" className="w-full bg-primary hover:bg-primary/80 text-white py-3 rounded-lg font-bold tracking-wide transition-all shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(99,102,241,0.5)] mt-4">
+              AUTHENTICATE
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background text-gray-100 font-sans overflow-hidden">
@@ -94,6 +198,9 @@ function App() {
         </nav>
 
         <div className="p-6">
+          <button onClick={handleLogout} className="w-full flex items-center gap-2 text-gray-400 hover:text-white mb-4 px-2 py-1 transition-colors text-sm">
+            <LogOut size={16} /> Disconnect
+          </button>
           <div className="glass-card p-4 rounded-xl flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
             <div className="text-xs text-gray-400">System Nominal</div>
@@ -137,7 +244,7 @@ function App() {
                 </div>
               ) : (
                 projects.map((p: any, i) => (
-                  <div key={p.id} className="p-6 glass-card rounded-xl flex justify-between items-center group cursor-pointer hover:border-primary/50" onClick={() => { setCurrentProject(p); setActiveTab('detail'); }} style={{ animationDelay: `${i * 100}ms` }}>
+                  <div key={p.id} className="p-6 glass-card rounded-xl flex justify-between items-center group cursor-pointer hover:border-primary/50 relative" onClick={() => { setCurrentProject(p); setActiveTab('detail'); }} style={{ animationDelay: `${i * 100}ms` }}>
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 rounded-lg bg-surface flex items-center justify-center text-gray-400 group-hover:text-white transition-colors">
                         <Box size={20} />
@@ -147,8 +254,18 @@ function App() {
                         <div className="text-xs text-gray-500 font-mono mt-1">{p.templateId || 'CUSTOM_PIPELINE'}</div>
                       </div>
                     </div>
-                    <div className="px-4 py-1.5 rounded-full bg-green-500/10 text-green-400 text-xs border border-green-500/20 font-mono">
-                      RUNNING
+
+                    <div className="flex items-center gap-4">
+                      <div className="px-4 py-1.5 rounded-full bg-green-500/10 text-green-400 text-xs border border-green-500/20 font-mono">
+                        {p.currentPhase || 'RUNNING'}
+                      </div>
+                      <button
+                        onClick={(e) => handleDelete(e, p.id)}
+                        className="p-2 rounded-lg bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors z-20"
+                        title="Delete Project"
+                      >
+                        <Trash2 size={18} />
+                      </button>
                     </div>
                   </div>
                 ))

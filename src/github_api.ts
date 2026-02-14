@@ -45,6 +45,18 @@ export async function createRepo(name: string, description: string) {
     return { owner, name: repo.name, url: repo.html_url, clone_url: repo.clone_url };
 }
 
+export async function deleteRepo(owner: string, repo: string) {
+    const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}`, {
+        method: 'DELETE',
+        headers
+    });
+    if (!res.ok && res.status !== 404) {
+        const err = await res.json();
+        throw new Error(`Failed to delete repo: ${JSON.stringify(err)}`);
+    }
+    return true;
+}
+
 export async function createWebhook(owner: string, repo: string, webhookUrl: string) {
     const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/hooks`, {
         method: 'POST',
