@@ -202,6 +202,7 @@ export async function createDokployProject(name: string, description?: string): 
     // 2. Find Environment ID (Required for App Creation)
     let environmentId = "";
     try {
+        console.log(`[Dokploy] Fetching environments for project ${project.projectId}...`);
         const envRes = await fetch(`${DOKPLOY_URL}/api/trpc/environment.all?input=${encodeURIComponent(JSON.stringify({ json: { projectId: project.projectId } }))}`, {
             method: "GET",
             headers: getHeaders(),
@@ -210,6 +211,7 @@ export async function createDokployProject(name: string, description?: string): 
         if (envRes.ok) {
             const envData = await envRes.json();
             const envs = envData?.result?.data?.json || envData?.result?.data;
+            console.log(`[Dokploy] Environments found: ${Array.isArray(envs) ? envs.length : 'Not an array'}`, JSON.stringify(envs));
 
             if (Array.isArray(envs) && envs.length > 0) {
                 // Prefer 'production' or just take the first one
@@ -232,9 +234,18 @@ export async function createDokployProject(name: string, description?: string): 
                     console.log(`[Dokploy] Created 'production' environment: ${environmentId}`);
                 } else {
                     console.error(`[Dokploy] Failed to create environment: ${createEnvRes.status}`);
-                    try { console.error(await createEnvRes.text()); } catch { }
+                    try {
+                        const errText = await createEnvRes.text();
+                        console.error("Create Env Error Body:", errText);
+                    } catch { }
                 }
             }
+        } else {
+            console.error(`[Dokploy] Failed to fetch environments: ${envRes.status}`);
+            try {
+                const errText = await envRes.text();
+                console.error("Fetch Env Error Body:", errText);
+            } catch { }
         }
     } catch (e) {
         console.warn("Error managing environments:", e);
