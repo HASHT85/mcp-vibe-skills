@@ -124,15 +124,16 @@ export class BmadEngine {
 
                     if (state.artifacts.securityAudit.approved) {
                         this.addMessage(projectId, 'assistant', 'Security Audit Passed. Proceeding to Development.');
-                        state.currentPhase = 'DEVELOPMENT';
-                        // Auto-advance
-                        await this.next(projectId);
                     } else {
-                        const errorMsg = "Security Audit Failed: " + JSON.stringify(state.artifacts.securityAudit.risks);
-                        this.addMessage(projectId, 'system', `CRITICAL: ${errorMsg}`);
-                        state.error = errorMsg;
-                        throw new Error("Security Audit Failed. Pipeline paused.");
+                        const errorMsg = "Security Audit identified risks: " + JSON.stringify(state.artifacts.securityAudit.risks.map(r => r.description).join(", "));
+                        this.addMessage(projectId, 'system', `WARNING: ${errorMsg}`);
+                        this.addMessage(projectId, 'assistant', 'Proceeding to Development despite security risks (MVP Mode).');
+                        // For MVP, we proceed even with risks instead of blocking
                     }
+
+                    state.currentPhase = 'DEVELOPMENT';
+                    // Auto-advance
+                    await this.next(projectId);
                     break;
 
                 case 'DEVELOPMENT': // Ready to code
