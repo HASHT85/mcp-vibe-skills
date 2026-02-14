@@ -213,7 +213,9 @@ export async function createDokployApplication(input: CreateApplicationInput): P
     }
 
     const data = await res.json();
-    return data?.result?.data?.json || data?.result?.data;
+    const result = data?.result?.data?.json || data?.result?.data;
+    console.log("Create Project Response:", JSON.stringify(result, null, 2));
+    return result;
 }
 
 export async function deleteDokployProject(projectId: string): Promise<boolean> {
