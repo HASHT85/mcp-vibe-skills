@@ -30,6 +30,7 @@ export type CreateApplicationInput = {
     buildType?: "dockerfile" | "heroku_buildpacks" | "nixpacks";
     env?: string;
     environmentId: string; // Required by Dokploy
+    provider?: "git" | "github" | "gitlab" | "bitbucket" | "docker"; // Added provider
 };
 
 const DOKPLOY_URL = process.env.DOKPLOY_URL || "";
@@ -280,10 +281,16 @@ export async function createDokployApplication(input: CreateApplicationInput): P
 
     console.log(`[Dokploy] Creating app '${input.name}' in project ${input.projectId}...`);
 
+    // Default provider to 'git' if not specified, which works with raw Git URLs
+    const payload = {
+        ...input,
+        provider: input.provider || 'git'
+    };
+
     const res = await fetch(`${DOKPLOY_URL}/api/trpc/application.create`, {
         method: "POST",
         headers: getHeaders(),
-        body: JSON.stringify({ json: input }),
+        body: JSON.stringify({ json: payload }),
     });
 
     if (!res.ok) {

@@ -210,7 +210,8 @@ export class BmadEngine {
                             branch: "main",
                             buildType: "dockerfile" as const,
                             env: "",
-                            environmentId: dokployProject.environmentId || ""
+                            environmentId: dokployProject.environmentId || "",
+                            provider: 'git' as const // Force 'git' provider to avoid authentication issues
                         };
 
                         if (!appSettings.environmentId) {
