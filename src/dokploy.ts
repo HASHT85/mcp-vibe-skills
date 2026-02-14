@@ -68,6 +68,7 @@ export async function getDokployUser(): Promise<any> {
                 const user = data?.result?.data?.json || data?.result?.data;
                 if (user) {
                     console.log(`[Dokploy] User found via ${url}`);
+                    console.log("[Dokploy] User Details:", JSON.stringify(user, null, 2)); // Added detailed logging
                     return user;
                 }
             }
