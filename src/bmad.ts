@@ -204,12 +204,17 @@ export class BmadEngine {
                         // Create Application
                         const appSettings = {
                             name: "web-app",
-                            projectId: dokployProject.projectId, // DokployProject type uses projectId not id? Let's check type in dokploy.ts. Checked: it has projectId.
+                            projectId: dokployProject.projectId,
                             repository: state.artifacts.github.url,
                             branch: "main",
                             buildType: "dockerfile" as const,
-                            env: ""
+                            env: "",
+                            environmentId: dokployProject.environmentId || ""
                         };
+
+                        if (!appSettings.environmentId) {
+                            throw new Error("Dokploy Project created but no Environment ID found.");
+                        }
 
                         const dokployApp = await createDokployApplication(appSettings);
 
