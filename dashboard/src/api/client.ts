@@ -1,9 +1,12 @@
 const API_BASE = import.meta.env.DEV ? '/api' : 'https://mcp.hach.dev';
 
 // Auth Helper
-const getAuthHeaders = () => {
+const getAuthHeaders = (): Record<string, string> => {
     const auth = localStorage.getItem('vibe_auth');
-    return auth ? { 'Authorization': `Basic ${btoa(auth)}` } : {};
+    if (auth) {
+        return { 'Authorization': `Basic ${btoa(auth)}` };
+    }
+    return {};
 };
 
 export function setAuth(user: string, pass: string) {
@@ -15,12 +18,14 @@ export function checkAuth() {
 }
 
 export async function createPipeline(projectId: string, description: string) {
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+    };
+
     const res = await fetch(`${API_BASE}/pipeline/create`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders()
-        },
+        headers,
         body: JSON.stringify({ projectId, description }),
     });
     if (res.status === 401) throw new Error('Unauthorized');
@@ -58,12 +63,14 @@ export async function deleteProject(projectId: string) {
 }
 
 export async function sendMessage(projectId: string, message: string) {
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+    };
+
     const res = await fetch(`${API_BASE}/pipeline/${projectId}/chat`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders()
-        },
+        headers,
         body: JSON.stringify({ message }),
     });
     if (!res.ok) throw new Error('Failed to send message');
