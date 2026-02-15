@@ -259,7 +259,61 @@ export class ClaudeClient {
         return { files, instructions };
     }
 
-    // 6. Agent QA
+    // 6. Agent Debugger (Fix Code)
+    async fixCode(currentCode: CodeGeneration, errorLogs: string): Promise<{ code: CodeGeneration, summary: string }> {
+        const system = `You are an Expert Software Debugger.
+    Analyze the provided code and the error logs to identify the root cause of the failure.
+    Applying necessary fixes to the code files.
+    
+    Output MUST be in XML format as follows:
+    <fix_response>
+        <summary>Brief description of the fix</summary>
+        <code_generation>
+            <instructions>Keep or update instructions...</instructions>
+            <file path="relative/path/to/file.ext">
+                <![CDATA[
+                    ... file content here ...
+                ]]>
+            </file>
+            ... more files (include ALL files, even unchanged ones, or just changed ones? 
+            BETTER: Return ALL files to replace the state completely) ...
+        </code_generation>
+    </fix_response>
+
+    IMPORTANT: 
+    1. Return the FULL set of files for the application (including unchanged ones) to ensure consistency.
+    2. Use <![CDATA[ ]]> tags for file content.
+    `;
+
+        // We need to construct a prompt with code and errors
+        // To avoid token limits with huge codebases, we might need to be smart, 
+        // but for this MVP we send the whole file structure.
+        const codeContext = currentCode.files.map(f => `File: ${f.path}\nContent:\n${f.content}`).join("\n\n");
+        const prompt = `Current Code:\n${codeContext}\n\nError Logs:\n${errorLogs}`;
+
+        const response = await this.callClaude(system, prompt);
+
+        // Parse XML response
+        let summary = "Auto-fix applied";
+        let newCode: CodeGeneration = currentCode;
+
+        try {
+            const summaryMatch = response.match(/<summary>([\s\S]*?)<\/summary>/);
+            if (summaryMatch && summaryMatch[1]) summary = summaryMatch[1].trim();
+
+            const codeGenMatch = response.match(/<code_generation>([\s\S]*?)<\/code_generation>/);
+            if (codeGenMatch && codeGenMatch[0]) {
+                newCode = this.parseXmlCodeResponse(codeGenMatch[0]);
+            }
+        } catch (e) {
+            console.error("Error parsing fix response:", e);
+            throw new Error("Failed to parse fix response from Claude");
+        }
+
+        return { code: newCode, summary };
+    }
+
+    // 7. Agent QA
     async qaReview(code: CodeGeneration): Promise<QAReport> {
         const system = `You are an Expert QA Engineer.
     Review the generated code for syntax errors, logical bugs, and missing requirements.

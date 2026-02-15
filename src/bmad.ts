@@ -10,6 +10,7 @@ export type BmadPhase =
     | 'DESIGN_REVIEW'
     | 'DEVELOPMENT'
     | 'QA'
+    | 'DEPLOY_MONITORING'
     | 'COMPLETED'
     | 'FAILED';
 
@@ -254,11 +255,81 @@ CMD ["npm", "start"]
                             applicationId: dokployApp.applicationId
                         };
 
-                        state.currentPhase = 'COMPLETED';
+                        state.currentPhase = 'DEPLOY_MONITORING';
+                        // Auto-advance
+                        await this.next(projectId);
 
                     } catch (err: any) {
                         console.error("Deploy Error:", err);
                         state.error = `Deploy Error: ${err.message}`;
+                        state.currentPhase = 'FAILED';
+                    }
+                    break;
+
+                case 'DEPLOY_MONITORING':
+                    this.addMessage(projectId, 'system', 'Starting Phase 6: DEPLOYMENT MONITORING & RECOVERY');
+                    const appId = state.artifacts.deployment?.applicationId;
+                    if (!appId) throw new Error("No application ID to monitor");
+
+                    let attempts = 0;
+                    const MAX_ATTEMPTS = 3;
+                    let deployed = false;
+
+                    while (attempts < MAX_ATTEMPTS && !deployed) {
+                        attempts++;
+                        this.addMessage(projectId, 'system', `Monitoring deployment (Attempt ${attempts}/${MAX_ATTEMPTS})...`);
+
+                        // Wait 10s for build to initialize
+                        await new Promise(r => setTimeout(r, 10000));
+
+                        // Check Status
+                        try {
+                            // We need to dynamically import or use the exported function if we were in the same module structure
+                            // Since we are adding this to bmad.ts, we need to import getApplication, getBuildLogs from dokploy.ts
+                            const { getApplication, getBuildLogs, triggerDeploy } = await import('./dokploy.js');
+                            const { pushFiles } = await import('./github_api.js');
+
+                            const app = await getApplication(appId);
+                            if (app?.applicationStatus === 'running') {
+                                deployed = true;
+                                this.addMessage(projectId, 'assistant', `Deployment Successful! Application is running at ${state.artifacts.deployment?.url}`);
+                                state.currentPhase = 'COMPLETED';
+                            } else if (app?.applicationStatus === 'error' || app?.applicationStatus === 'crashed') {
+                                this.addMessage(projectId, 'system', `Deployment Failed (Status: ${app.applicationStatus}). Fetching logs...`);
+                                const logs = await getBuildLogs(appId);
+
+                                // SELF-CORRECTION LOOP
+                                this.addMessage(projectId, 'assistant', `Analyzing build failure...`);
+
+                                // Ask Claude to fix
+                                const fix = await this.claude.fixCode(state.artifacts.code, logs);
+                                this.addMessage(projectId, 'assistant', `Identified Fix: ${fix.summary}`);
+
+                                // Apply Fix
+                                // Update artifacts
+                                state.artifacts.code = fix.code; // Updated code object
+
+                                // Push to GitHub
+                                const files = fix.code.files.map(f => ({ path: f.path, content: f.content }));
+                                const repo = state.artifacts.github!;
+                                await pushFiles(repo.owner, repo.name, files, `fix: auto-correction for build error (${attempts})`);
+
+                                this.addMessage(projectId, 'system', `Fix pushed to GitHub. Triggering redeploy...`);
+                                await triggerDeploy(appId);
+
+                            } else {
+                                this.addMessage(projectId, 'system', `Current Status: ${app?.applicationStatus || 'unknown'}. Waiting...`);
+                            }
+                        } catch (e: any) {
+                            console.error("Monitoring Error:", e);
+                            this.addMessage(projectId, 'system', `Monitoring Error: ${e.message}`);
+                        }
+
+                        if (!deployed) await new Promise(r => setTimeout(r, 20000)); // Wait before next check
+                    }
+
+                    if (!deployed) {
+                        state.error = "Deployment timed out or failed after max retries.";
                         state.currentPhase = 'FAILED';
                     }
                     break;

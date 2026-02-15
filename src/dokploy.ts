@@ -239,6 +239,74 @@ export async function listDokployApplications(projectId: string): Promise<Dokplo
     return Array.isArray(list) ? list : [];
 }
 
+export async function getApplication(applicationId: string): Promise<DokployApplication | null> {
+    if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
+
+    const input = { json: { applicationId } };
+    const res = await fetch(
+        `${DOKPLOY_URL}/api/trpc/application.one?input=${encodeURIComponent(JSON.stringify(input))}`,
+        { method: "GET", headers: getHeaders() }
+    );
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    let result = data?.result?.data?.json || data?.result?.data;
+    return result || null;
+}
+
+export async function getBuildLogs(applicationId: string): Promise<string> {
+    if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
+
+    // We often need to get the latest deployment for the app first
+    // But Dokploy might have a direct way or we iterate deployments.
+    // Let's assume we fetch application to get current deployment info or just fetch deployments.
+    // Probing `deployment.all` for the app
+    try {
+        const input = { json: { applicationId } };
+        const res = await fetch(
+            `${DOKPLOY_URL}/api/trpc/deployment.all?input=${encodeURIComponent(JSON.stringify(input))}`,
+            { method: "GET", headers: getHeaders() }
+        );
+
+        if (res.ok) {
+            const data = await res.json();
+            const deployments = data?.result?.data?.json || data?.result?.data;
+            if (Array.isArray(deployments) && deployments.length > 0) {
+                // Get latest
+                const latest = deployments[0];
+                return latest.log || "No logs available in deployment object.";
+            }
+        }
+    } catch (e) {
+        console.warn("Error fetching build logs:", e);
+    }
+    return "Could not fetch build logs.";
+}
+
+export async function getApplicationLogs(applicationId: string): Promise<string> {
+    // Runtime logs
+    if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
+
+    // application.readLogs
+    try {
+        const input = { json: { applicationId } };
+        const res = await fetch(
+            `${DOKPLOY_URL}/api/trpc/application.readLogs?input=${encodeURIComponent(JSON.stringify(input))}`,
+            { method: "GET", headers: getHeaders() }
+        );
+        if (res.ok) {
+            const data = await res.json();
+            const logs = data?.result?.data?.json || data?.result?.data;
+            if (Array.isArray(logs)) return logs.join("\n");
+            return logs || "";
+        }
+    } catch (e) {
+        console.warn("Error fetching app logs:", e);
+    }
+    return "";
+}
+
 export async function triggerDeploy(applicationId: string): Promise<boolean> {
     if (!isDokployConfigured()) {
         throw new Error("dokploy_not_configured");
