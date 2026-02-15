@@ -283,6 +283,8 @@ export class ClaudeClient {
     IMPORTANT: 
     1. Return the FULL set of files for the application (including unchanged ones) to ensure consistency.
     2. Use <![CDATA[ ]]> tags for file content.
+    3. If the error is 'ENOENT: no such file or directory, open package.json', check if the 'build' script in package.json refers to a non-existent directory (e.g. 'npm run build --prefix client' when 'client' folder does not exist).
+    4. Fix the 'build' script to match the actual file structure. If there is no client folder, remove the prefix or build the root.
     `;
 
         // We need to construct a prompt with code and errors
