@@ -71,27 +71,37 @@ export async function getDokployUser(): Promise<any> {
     } catch (e) {
         console.warn("[Dokploy] Failed to fetch GitHub installations:", e);
     }
+}
 
-    for (const url of endpoints) {
-        try {
-            console.log(`[Dokploy] Fetching user details from ${url}...`);
-            const res = await fetch(url, { method: "GET", headers: getHeaders() });
-            if (res.ok) {
-                const data = await res.json();
-                const user = data?.result?.data?.json || data?.result?.data;
-                if (user) {
-                    console.log(`[Dokploy] User found via ${url}`);
-                    // Attach installations to user object for downstream use
-                    const enrichedUser = { ...user, githubInstallations };
-                    return enrichedUser;
-                }
+// Try multiple endpoints to find the user
+const endpoints = [
+    `${DOKPLOY_URL}/api/trpc/user.get`,
+    `${DOKPLOY_URL}/api/trpc/auth.get`,
+    `${DOKPLOY_URL}/api/trpc/user.one`,
+    `${DOKPLOY_URL}/api/trpc/settings.get`,
+    `${DOKPLOY_URL}/api/trpc/admin.get`,
+];
+
+for (const url of endpoints) {
+    try {
+        console.log(`[Dokploy] Fetching user details from ${url}...`);
+        const res = await fetch(url, { method: "GET", headers: getHeaders() });
+        if (res.ok) {
+            const data = await res.json();
+            const user = data?.result?.data?.json || data?.result?.data;
+            if (user) {
+                console.log(`[Dokploy] User found via ${url}`);
+                // Attach installations to user object for downstream use
+                const enrichedUser = { ...user, githubInstallations };
+                return enrichedUser;
             }
-        } catch (e) {
-            // ignore
         }
+    } catch (e) {
+        // ignore
     }
-    console.warn("[Dokploy] Could not fetch user details from any known endpoint.");
-    return null;
+}
+console.warn("[Dokploy] Could not fetch user details from any known endpoint.");
+return null;
 }
 
 export async function listDokployProjects(): Promise<DokployProject[]> {
