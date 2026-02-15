@@ -276,6 +276,11 @@ CMD ["npm", "start"]
                     let deployed = false;
 
                     while (attempts < MAX_ATTEMPTS && !deployed) {
+                        if (state.cancel) {
+                            this.addMessage(projectId, 'system', 'Monitoring cancelled by user.');
+                            state.currentPhase = 'FAILED';
+                            break;
+                        }
                         attempts++;
                         this.addMessage(projectId, 'system', `Monitoring deployment (Attempt ${attempts}/${MAX_ATTEMPTS})...`);
 

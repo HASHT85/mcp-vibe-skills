@@ -286,6 +286,7 @@ export class ClaudeClient {
     3. If the error is 'ENOENT: no such file or directory, open package.json', check if the 'build' script in package.json refers to a non-existent directory (e.g. 'npm run build --prefix client' when 'client' folder does not exist).
     4. Fix the 'build' script to match the actual file structure. If there is no client folder, remove the prefix or build the root.
     5. If the error is 'Could not find a required file. Name: index.html', it means 'public/index.html' is missing. You MUST create the 'public' folder and add a valid 'index.html' file.
+    6. If the error is 'failed to calculate checksum ... "/app/dist": not found' (or similar), check if the build output directory is 'build' (common for React) instead of 'dist'. Update the Dockerfile to COPY from the correct directory (e.g. 'COPY --from=builder /app/build ./dist' or './build').
     `;
 
         // We need to construct a prompt with code and errors
