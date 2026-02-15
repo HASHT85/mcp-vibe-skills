@@ -190,6 +190,13 @@ app.post("/pipeline/:projectId/chat", (req: Request, res: Response) => {
     res.json({ success: true });
 });
 
+app.post("/pipeline/:projectId/stop", (req: Request, res: Response) => {
+    const { projectId } = req.params;
+    bmadEngine.stop(projectId);
+    res.json({ success: true });
+});
+
+
 export default app;
 
 // ----------------------------
