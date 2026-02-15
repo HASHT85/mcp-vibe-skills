@@ -53,59 +53,49 @@ export function isDokployConfigured(): boolean {
 export async function getDokployUser(): Promise<any> {
     if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
 
-    // Endpoint specific for checking GitHub installations
-    const githubUrl = `${DOKPLOY_URL}/api/trpc/github.all`;
-    let githubInstallations = [];
-    try {
-        console.log(`[Dokploy] Fetching GitHub installations from ${githubUrl}...`);
-        const res = await fetch(githubUrl, { method: "GET", headers: getHeaders() });
-        if (res.ok) {
-            const data = await res.json();
-            // TRPC response structure: result.data.json or result.data
-            const installs = data?.result?.data?.json || data?.result?.data;
-            if (Array.isArray(installs)) {
-                console.log(`[Dokploy] Found ${installs.length} GitHub installations.`);
-                console.log("[Dokploy] GitHub Installations:", JSON.stringify(installs, null, 2));
-                githubInstallations = installs;
-            } else {
-                console.log("[Dokploy] GitHub installations response format unexpected:", JSON.stringify(data));
-            }
-        } else {
-            console.warn(`[Dokploy] GitHub installations fetch failed: ${res.status} ${res.statusText}`);
-            try { console.warn(await res.text()); } catch (e) { }
-        }
-    } catch (e) {
-        console.warn("[Dokploy] Failed to fetch GitHub installations:", e);
-    }
-
-    // Try multiple endpoints to find the user
+    // Try multiple endpoints to find the user and details
     const endpoints = [
-        `${DOKPLOY_URL}/api/trpc/user.get`,
         `${DOKPLOY_URL}/api/trpc/auth.get`,
-        `${DOKPLOY_URL}/api/trpc/user.one`,
+        `${DOKPLOY_URL}/api/trpc/user.get`,
         `${DOKPLOY_URL}/api/trpc/settings.get`,
-        `${DOKPLOY_URL}/api/trpc/admin.get`,
     ];
 
     for (const url of endpoints) {
         try {
-            console.log(`[Dokploy] Fetching user details from ${url}...`);
+            console.log(`[Dokploy] Fetching details from ${url}...`);
             const res = await fetch(url, { method: "GET", headers: getHeaders() });
             if (res.ok) {
                 const data = await res.json();
-                const user = data?.result?.data?.json || data?.result?.data;
-                if (user) {
-                    console.log(`[Dokploy] User found via ${url}`);
-                    console.log("[Dokploy] User Details (Partial):", JSON.stringify(user).substring(0, 500));
-                    // Attach installations to user object for downstream use
-                    const enrichedUser = { ...user, githubInstallations };
-                    return enrichedUser;
+                const result = data?.result?.data?.json || data?.result?.data;
+                if (result) {
+                    console.log(`[Dokploy] Success via ${url}`);
+                    // LOG EVERYTHING to find the github info
+                    console.log(`[Dokploy] Full Response from ${url}:`, JSON.stringify(result, null, 2));
+
+                    // Check for common patterns
+                    if (result.githubInstallations || result.githubId) {
+                        return result;
+                    }
                 }
+            } else {
+                console.log(`[Dokploy] Failed ${url}: ${res.status}`);
             }
         } catch (e) {
-            // ignore
+            console.warn(`[Dokploy] Error fetching ${url}:`, e);
         }
     }
+
+    // If we didn't return above, just return the last successful user object found, or null
+    // Reuse the searching logic but return the first valid user found if no github info found
+    // For now, let's just return what we find from auth.get as it's usually the most complete
+    try {
+        const res = await fetch(`${DOKPLOY_URL}/api/trpc/auth.get`, { method: "GET", headers: getHeaders() });
+        if (res.ok) {
+            const data = await res.json();
+            return data?.result?.data?.json || data?.result?.data;
+        }
+    } catch (e) { }
+
     console.warn("[Dokploy] Could not fetch user details from any known endpoint.");
     return null;
 }
