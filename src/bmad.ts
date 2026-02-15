@@ -337,6 +337,34 @@ CMD ["npm", "start"]
                                     }
                                 }
 
+                                // AUTO-CORRECTION FOR NPM CI (Missing Lockfile)
+                                if (logs.includes("cipm can only install packages with an existing package-lock.json")) {
+                                    this.addMessage(projectId, 'system', `Detected 'npm ci' failure (missing lockfile). Switching to 'npm install'...`);
+                                    try {
+                                        const { pushFiles } = await import('./github_api.js');
+                                        const { triggerDeploy } = await import('./dokploy.js');
+
+                                        if (state.artifacts.code) {
+                                            const dockerfile = state.artifacts.code.files.find(f => f.path === 'Dockerfile' || f.path === './Dockerfile');
+                                            if (dockerfile) {
+                                                dockerfile.content = dockerfile.content.replace(/RUN npm ci/g, 'RUN npm install');
+
+                                                // Push update
+                                                const repo = state.artifacts.github!;
+                                                await pushFiles(repo.owner, repo.name, [{ path: dockerfile.path, content: dockerfile.content }], `fix: switch to npm install (auto-fix)`);
+
+                                                this.addMessage(projectId, 'system', `Fixed Dockerfile. Retrying deploy...`);
+                                                await triggerDeploy(appId);
+                                                await new Promise(r => setTimeout(r, 5000));
+                                                continue;
+                                            }
+                                        }
+                                    } catch (err: any) {
+                                        console.error("NPM Auto-Fix Failed:", err);
+                                        this.addMessage(projectId, 'system', `NPM Auto-Fix Failed: ${err.message}`);
+                                    }
+                                }
+
                                 // SELF-CORRECTION LOOP (CODE FIXES)
                                 this.addMessage(projectId, 'assistant', `Analyzing build failure...`);
 
