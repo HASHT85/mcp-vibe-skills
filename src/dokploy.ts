@@ -53,51 +53,48 @@ export function isDokployConfigured(): boolean {
 export async function getDokployUser(): Promise<any> {
     if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
 
-    // Try multiple endpoints to find the user and details
-    const endpoints = [
-        `${DOKPLOY_URL}/api/trpc/auth.get`,
-        `${DOKPLOY_URL}/api/trpc/user.get`,
-        `${DOKPLOY_URL}/api/trpc/settings.get`,
-    ];
-
-    for (const url of endpoints) {
-        try {
-            console.log(`[Dokploy] Fetching details from ${url}...`);
-            const res = await fetch(url, { method: "GET", headers: getHeaders() });
-            if (res.ok) {
-                const data = await res.json();
-                const result = data?.result?.data?.json || data?.result?.data;
-                if (result) {
-                    console.log(`[Dokploy] Success via ${url}`);
-                    // LOG EVERYTHING to find the github info
-                    console.log(`[Dokploy] Full Response from ${url}:`, JSON.stringify(result, null, 2));
-
-                    // Check for common patterns
-                    if (result.githubInstallations || result.githubId) {
-                        return result;
-                    }
-                }
-            } else {
-                console.log(`[Dokploy] Failed ${url}: ${res.status}`);
-            }
-        } catch (e) {
-            console.warn(`[Dokploy] Error fetching ${url}:`, e);
-        }
-    }
-
-    // If we didn't return above, just return the last successful user object found, or null
-    // Reuse the searching logic but return the first valid user found if no github info found
-    // For now, let's just return what we find from auth.get as it's usually the most complete
     try {
-        const res = await fetch(`${DOKPLOY_URL}/api/trpc/auth.get`, { method: "GET", headers: getHeaders() });
-        if (res.ok) {
-            const data = await res.json();
-            return data?.result?.data?.json || data?.result?.data;
-        }
-    } catch (e) { }
+        // Step 1: Get basic session info to find the userId
+        console.log(`[Dokploy] Fetching user session from user.get...`);
+        const res = await fetch(`${DOKPLOY_URL}/api/trpc/user.get`, { method: "GET", headers: getHeaders() });
 
-    console.warn("[Dokploy] Could not fetch user details from any known endpoint.");
-    return null;
+        if (!res.ok) {
+            console.warn(`[Dokploy] user.get failed: ${res.status}`);
+            return null;
+        }
+
+        const data = await res.json();
+        const baseUser = data?.result?.data?.json || data?.result?.data;
+
+        if (!baseUser || !baseUser.userId) {
+            console.warn("[Dokploy] No userId found in user.get response.");
+            return baseUser;
+        }
+
+        const userId = baseUser.userId;
+        console.log(`[Dokploy] Found userId: ${userId}. Fetching full profile via user.one...`);
+
+        // Step 2: Fetch full user profile with user.one to get relations (like githubInstallations)
+        const input = { json: { userId } };
+        const oneRes = await fetch(
+            `${DOKPLOY_URL}/api/trpc/user.one?input=${encodeURIComponent(JSON.stringify(input))}`,
+            { method: "GET", headers: getHeaders() }
+        );
+
+        if (oneRes.ok) {
+            const oneData = await oneRes.json();
+            const fullUser = oneData?.result?.data?.json || oneData?.result?.data;
+            console.log(`[Dokploy] Full User Profile (user.one):`, JSON.stringify(fullUser, null, 2));
+            return fullUser || baseUser;
+        } else {
+            console.warn(`[Dokploy] user.one failed: ${oneRes.status}`);
+            return baseUser;
+        }
+
+    } catch (e) {
+        console.warn("[Dokploy] Fetching user failed:", e);
+        return null;
+    }
 }
 
 export async function listDokployProjects(): Promise<DokployProject[]> {
