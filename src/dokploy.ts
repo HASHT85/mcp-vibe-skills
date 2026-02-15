@@ -85,11 +85,41 @@ export async function getDokployUser(): Promise<any> {
             const oneData = await oneRes.json();
             const fullUser = oneData?.result?.data?.json || oneData?.result?.data;
             console.log(`[Dokploy] Full User Profile (user.one):`, JSON.stringify(fullUser, null, 2));
-            return fullUser || baseUser;
-        } else {
-            console.warn(`[Dokploy] user.one failed: ${oneRes.status}`);
-            return baseUser;
+
+            // Check if we found the installation in the profile
+            if (fullUser.githubInstallations || fullUser.githubId) {
+                return fullUser;
+            }
         }
+
+        // Step 3: Experimental probes for GitHub endpoints if not found in user profile
+        const probeEndpoints = [
+            `${DOKPLOY_URL}/api/trpc/github.installations`,
+            `${DOKPLOY_URL}/api/trpc/github.get`,
+            `${DOKPLOY_URL}/api/trpc/git.all`,
+        ];
+
+        for (const url of probeEndpoints) {
+            try {
+                console.log(`[Dokploy] Probing ${url}...`);
+                const res = await fetch(url, { method: "GET", headers: getHeaders() });
+                if (res.ok) {
+                    const data = await res.json();
+                    const result = data?.result?.data?.json || data?.result?.data;
+                    console.log(`[Dokploy] Probe Success ${url}:`, JSON.stringify(result, null, 2));
+                    if (result && (Array.isArray(result) || result.installationId)) {
+                        // If we found something that looks like installations, attach it
+                        return { ...baseUser, githubInstallations: Array.isArray(result) ? result : [result] };
+                    }
+                } else {
+                    console.log(`[Dokploy] Probe Failed ${url}: ${res.status}`);
+                }
+            } catch (e) {
+                console.log(`[Dokploy] Probe Error ${url}:`, e);
+            }
+        }
+
+        return baseUser; // Fallback to basic user if nothing found
 
     } catch (e) {
         console.warn("[Dokploy] Fetching user failed:", e);
