@@ -587,3 +587,26 @@ export async function deleteDokployProject(projectId: string): Promise<boolean> 
     }
     return true;
 }
+
+export async function getLatestDeployment(applicationId: string): Promise<any | null> {
+    if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
+
+    try {
+        const input = { json: { applicationId } };
+        const res = await fetch(
+            `${DOKPLOY_URL}/api/trpc/deployment.all?input=${encodeURIComponent(JSON.stringify(input))}`,
+            { method: "GET", headers: getHeaders() }
+        );
+
+        if (res.ok) {
+            const data = await res.json();
+            const deployments = data?.result?.data?.json || data?.result?.data;
+            if (Array.isArray(deployments) && deployments.length > 0) {
+                return deployments[0]; // Return the full deployment object
+            }
+        }
+    } catch (e) {
+        console.warn("Error fetching latest deployment:", e);
+    }
+    return null;
+}
