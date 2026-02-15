@@ -286,17 +286,22 @@ CMD ["npm", "start"]
                         try {
                             // We need to dynamically import or use the exported function if we were in the same module structure
                             // Since we are adding this to bmad.ts, we need to import getApplication, getBuildLogs from dokploy.ts
-                            const { getApplication, getBuildLogs, triggerDeploy } = await import('./dokploy.js');
+                            const { getApplication, getLatestDeployment, triggerDeploy } = await import('./dokploy.js');
                             const { pushFiles } = await import('./github_api.js');
 
-                            const app = await getApplication(appId);
-                            if (app?.applicationStatus === 'running') {
+                            const deployment = await getLatestDeployment(appId);
+                            const app = await getApplication(appId); // Keep this for backup info
+
+                            const status = deployment?.status || app?.applicationStatus;
+                            console.log(`[Bmad] Deployment Status: ${status} (App Status: ${app?.applicationStatus})`);
+
+                            if (status === 'done') {
                                 deployed = true;
                                 this.addMessage(projectId, 'assistant', `Deployment Successful! Application is running at ${state.artifacts.deployment?.url}`);
                                 state.currentPhase = 'COMPLETED';
-                            } else if (app?.applicationStatus === 'error' || app?.applicationStatus === 'crashed') {
-                                this.addMessage(projectId, 'system', `Deployment Failed (Status: ${app.applicationStatus}). Fetching logs...`);
-                                const logs = await getBuildLogs(appId);
+                            } else if (status === 'error' || status === 'failed' || status === 'crashed') {
+                                this.addMessage(projectId, 'system', `Deployment Failed (Status: ${status}). Fetching logs...`);
+                                const logs = deployment?.log || "No logs available";
 
                                 // SELF-CORRECTION LOOP
                                 this.addMessage(projectId, 'assistant', `Analyzing build failure...`);
@@ -316,18 +321,25 @@ CMD ["npm", "start"]
                                 const repo = state.artifacts.github!;
                                 await pushFiles(repo.owner, repo.name, files, `fix: auto-correction for build error (${attempts})`);
 
-                                this.addMessage(projectId, 'system', `Fix pushed to GitHub. Triggering redeploy...`);
+                                this.addMessage(projectId, 'system', `Fix pushed to GitHub. Waiting a bit...`);
+                                await new Promise(r => setTimeout(r, 5000));
+
+                                this.addMessage(projectId, 'system', `Triggering redeploy...`);
                                 await triggerDeploy(appId);
 
+                                // Reset wait time for next loop
+                                await new Promise(r => setTimeout(r, 5000));
+
                             } else {
-                                this.addMessage(projectId, 'system', `Current Status: ${app?.applicationStatus || 'unknown'}. Waiting...`);
+                                // pending, running, queued
+                                this.addMessage(projectId, 'system', `Deployment in progress (Status: ${status}). Waiting...`);
                             }
                         } catch (e: any) {
                             console.error("Monitoring Error:", e);
                             this.addMessage(projectId, 'system', `Monitoring Error: ${e.message}`);
                         }
 
-                        if (!deployed) await new Promise(r => setTimeout(r, 20000)); // Wait before next check
+                        if (!deployed) await new Promise(r => setTimeout(r, 10000)); // Wait before next check
                     }
 
                     if (!deployed) {

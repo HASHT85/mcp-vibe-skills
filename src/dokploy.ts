@@ -506,7 +506,8 @@ export async function createDokployApplication(input: CreateApplicationInput): P
                 buildPath: "/",
                 githubId,
                 enableSubmodules: false,
-                triggerType: "push"
+                triggerType: "push",
+                buildType: "dockerfile", // Enforce Dockerfile build type
             };
 
             console.log(`[Dokploy] Linking GitHub Repo...`);
@@ -523,7 +524,7 @@ export async function createDokployApplication(input: CreateApplicationInput): P
                 console.log(`[Dokploy] GitHub Repo linked successfully.`);
 
                 // Enable Auto-Deploy
-                console.log(`[Dokploy] Enabling Auto-Deploy...`);
+                console.log(`[Dokploy] Enabling Auto-Deploy & Enforcing Dockerfile...`);
                 await fetch(`${DOKPLOY_URL}/api/trpc/application.update`, {
                     method: "POST",
                     headers: getHeaders(),
@@ -532,6 +533,7 @@ export async function createDokployApplication(input: CreateApplicationInput): P
                             applicationId,
                             sourceType: "github",
                             autoDeploy: true,
+                            buildType: "dockerfile", // Force Dockerfile build type again
                             cleanCache: false
                         }
                     })
@@ -553,7 +555,8 @@ export async function createDokployApplication(input: CreateApplicationInput): P
             branch: input.branch || "main",
             buildPath: "/",
             sourceType: "git",
-            provider: "git"
+            provider: "git",
+            buildType: "dockerfile", // Enforce Dockerfile build type
         };
 
         // For generic git, usually update application is enough or there might be a saveGitProvider
