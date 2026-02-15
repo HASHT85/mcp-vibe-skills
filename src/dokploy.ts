@@ -50,6 +50,25 @@ export function isDokployConfigured(): boolean {
     return Boolean(DOKPLOY_URL && DOKPLOY_TOKEN);
 }
 
+export async function getGithubProviders(): Promise<any[]> {
+    if (!isDokployConfigured()) return [];
+    try {
+        // Try the TRPC endpoint first
+        const res = await fetch(`${DOKPLOY_URL}/api/trpc/github.githubProviders`, {
+            method: "GET",
+            headers: getHeaders()
+        });
+        if (res.ok) {
+            const data = await res.json();
+            const list = data?.result?.data?.json || data?.result?.data;
+            if (Array.isArray(list)) return list;
+        }
+    } catch (e) {
+        console.warn("Error fetching github providers:", e);
+    }
+    return [];
+}
+
 export async function getDokployUser(): Promise<any> {
     if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
 
@@ -225,6 +244,7 @@ export async function triggerDeploy(applicationId: string): Promise<boolean> {
         throw new Error("dokploy_not_configured");
     }
 
+    console.log(`[Dokploy] Triggering deploy for app ${applicationId}...`);
     const res = await fetch(`${DOKPLOY_URL}/api/trpc/application.deploy`, {
         method: "POST",
         headers: getHeaders(),
@@ -239,7 +259,8 @@ export async function triggerDeploy(applicationId: string): Promise<boolean> {
             errorBody = "[Could not read response body]";
         }
         console.error(`Dokploy Deploy Failed (Status ${res.status}):`, errorBody);
-        // We generally return boolean, but logging is crucial here.
+    } else {
+        console.log(`[Dokploy] Deploy triggered successfully.`);
     }
 
     return res.ok;
@@ -365,47 +386,13 @@ export async function createDokployApplication(input: CreateApplicationInput): P
 
     console.log(`[Dokploy] Creating app '${input.name}' in project ${input.projectId}...`);
 
-    // Fetch user to check for connected providers
-    const user = await getDokployUser();
-
-    let payload: any = {
+    // 1. Create the Application first (Generic)
+    const payload: any = {
         name: input.name,
         projectId: input.projectId,
         description: input.description || "",
         environmentId: input.environmentId,
-        buildType: input.buildType || "dockerfile",
-        env: input.env || "",
     };
-
-    // Determine Provider Strategy
-    const githubId = user?.githubInstallations?.[0]?.installationId || user?.githubId;
-
-    if (githubId && input.owner && input.repo) {
-        // Strategy 1: Use connected GitHub App (Best for integration)
-        console.log(`[Dokploy] Detected connected GitHub account (ID: ${githubId}). using 'github' provider.`);
-        payload = {
-            ...payload,
-            sourceType: "github",
-            provider: "github", // Send both to be safe
-            githubRepository: input.repo,
-            githubOwner: input.owner,
-            githubBranch: input.branch || "main",
-            githubId: githubId, // The installation ID
-            githubBuildPath: "/"
-        };
-    } else {
-        // Strategy 2: Use generic Git URL (Fallback)
-        console.log(`[Dokploy] Using generic 'git' provider (No GitHub connection detected or missing owner/repo).`);
-        payload = {
-            ...payload,
-            sourceType: "git",
-            provider: "git", // Send both to be safe
-            gitRepository: input.repository, // Full URL
-            gitBranch: input.branch || "main",
-            gitBuildPath: "/",
-            // gitOwner: input.owner, // might be needed for some git providers but usually URL is enough for generic git
-        };
-    }
 
     console.log("[Dokploy] Application Create Payload:", JSON.stringify(payload, null, 2));
 
@@ -417,18 +404,100 @@ export async function createDokployApplication(input: CreateApplicationInput): P
 
     if (!res.ok) {
         let errorBody = "";
-        try {
-            errorBody = await res.text();
-        } catch (e) {
-            errorBody = "[Could not read response body]";
-        }
+        try { errorBody = await res.text(); } catch (e) { }
         console.error(`Dokploy Create App Failed (Status ${res.status}):`, errorBody);
         throw new Error(`dokploy_create_app_error: ${res.status} - ${errorBody}`);
     }
 
     const data = await res.json();
-    const result = data?.result?.data?.json || data?.result?.data;
-    return result;
+    const app = data?.result?.data?.json || data?.result?.data;
+    const applicationId = app.applicationId;
+    console.log(`[Dokploy] Application created. ID: ${applicationId}`);
+
+    // 2. Decide Provider & Link
+    if (input.owner && input.repo) {
+        // Strategy: GitHub Provider
+        console.log(`[Dokploy] Configuring GitHub provider for ${input.owner}/${input.repo}...`);
+
+        // Fetch Github Provider ID (Installation ID)
+        const providers = await getGithubProviders();
+        console.log(`[Dokploy] Available GitHub Providers:`, JSON.stringify(providers, null, 2));
+
+        const githubId = providers[0]?.githubId || providers[0]?.id;
+
+        if (githubId) {
+            console.log(`[Dokploy] Using GitHub ID: ${githubId}`);
+
+            // Link Repo
+            const linkPayload = {
+                applicationId,
+                owner: input.owner,
+                repository: input.repo,
+                branch: input.branch || "main",
+                buildPath: "/",
+                githubId,
+                enableSubmodules: false,
+                triggerType: "push"
+            };
+
+            console.log(`[Dokploy] Linking GitHub Repo...`);
+            const linkRes = await fetch(`${DOKPLOY_URL}/api/trpc/application.saveGithubProvider`, {
+                method: "POST",
+                headers: getHeaders(),
+                body: JSON.stringify({ json: linkPayload })
+            });
+
+            if (!linkRes.ok) {
+                console.error(`[Dokploy] Failed to link GitHub repo: ${linkRes.status}`);
+                try { console.error(await linkRes.text()); } catch { }
+            } else {
+                console.log(`[Dokploy] GitHub Repo linked successfully.`);
+
+                // Enable Auto-Deploy
+                console.log(`[Dokploy] Enabling Auto-Deploy...`);
+                await fetch(`${DOKPLOY_URL}/api/trpc/application.update`, {
+                    method: "POST",
+                    headers: getHeaders(),
+                    body: JSON.stringify({
+                        json: {
+                            applicationId,
+                            sourceType: "github",
+                            autoDeploy: true,
+                            cleanCache: false
+                        }
+                    })
+                });
+
+                // Trigger Deploy
+                console.log(`[Dokploy] Triggering initial deploy...`);
+                await triggerDeploy(applicationId);
+            }
+        } else {
+            console.warn(`[Dokploy] No GitHub provider found. Skipping GitHub link.`);
+        }
+    } else if (input.repository) {
+        // Strategy: Generic Git
+        console.log(`[Dokploy] Configuring Generic Git provider...`);
+        const linkPayload = {
+            applicationId,
+            repository: input.repository,
+            branch: input.branch || "main",
+            buildPath: "/",
+            sourceType: "git",
+            provider: "git"
+        };
+
+        // For generic git, usually update application is enough or there might be a saveGitProvider
+        // But based on initial code, it seemed update/create keys work. 
+        // Let's use application.update to set generic git details if saveGithubProvider is only for github.
+        await fetch(`${DOKPLOY_URL}/api/trpc/application.update`, {
+            method: "POST",
+            headers: getHeaders(),
+            body: JSON.stringify({ json: linkPayload })
+        });
+    }
+
+    return app;
 }
 
 export async function deleteDokployProject(projectId: string): Promise<boolean> {
