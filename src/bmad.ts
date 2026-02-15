@@ -272,14 +272,17 @@ CMD ["npm", "start"]
                     if (!appId) throw new Error("No application ID to monitor");
 
                     let attempts = 0;
-                    const MAX_ATTEMPTS = 3;
+                    if (!appId) throw new Error("No application ID to monitor");
+
+                    let attempts = 0;
+                    const MAX_ATTEMPTS = 30; // Increase to ~5 mins (30 * 10s)
                     let deployed = false;
 
                     while (attempts < MAX_ATTEMPTS && !deployed) {
                         attempts++;
                         this.addMessage(projectId, 'system', `Monitoring deployment (Attempt ${attempts}/${MAX_ATTEMPTS})...`);
 
-                        // Wait 10s for build to initialize
+                        // Wait 10s for build to initialize/progress
                         await new Promise(r => setTimeout(r, 10000));
 
                         // Check Status
