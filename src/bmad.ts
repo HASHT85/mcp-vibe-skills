@@ -303,7 +303,28 @@ CMD ["npm", "start"]
                                 this.addMessage(projectId, 'system', `Deployment Failed (Status: ${status}). Fetching logs...`);
                                 const logs = deployment?.log || "No logs available from Dokploy. The deployment likely failed very early (e.g. cloning or initialization). Check configuration.";
 
-                                // SELF-CORRECTION LOOP
+                                // AUTO-CORRECTION FOR INFRASTRUCTURE/CONFIG
+                                if (logs.includes("failed to read dockerfile") || logs.includes("is a directory") || logs.includes("no such file or directory")) {
+                                    this.addMessage(projectId, 'system', `Detected Dockerfile configuration error. Attempting auto-fix...`);
+                                    try {
+                                        const { updateApplicationBuildSettings } = await import('./dokploy.js');
+                                        await updateApplicationBuildSettings(appId, {
+                                            buildPath: "/Dockerfile",
+                                            dockerPath: "./Dockerfile",
+                                            dockerContextPath: "."
+                                        });
+                                        this.addMessage(projectId, 'system', `Configuration updated. Retrying deploy...`);
+                                        await triggerDeploy(appId);
+                                        // Wait and skip to next loop iteration
+                                        await new Promise(r => setTimeout(r, 5000));
+                                        continue;
+                                    } catch (err: any) {
+                                        console.error("Config Auto-Fix Failed:", err);
+                                        this.addMessage(projectId, 'system', `Config Auto-Fix Failed: ${err.message}`);
+                                    }
+                                }
+
+                                // SELF-CORRECTION LOOP (CODE FIXES)
                                 this.addMessage(projectId, 'assistant', `Analyzing build failure...`);
 
                                 if (!state.artifacts.code) throw new Error("No code artifact available to fix");

@@ -503,11 +503,11 @@ export async function createDokployApplication(input: CreateApplicationInput): P
                 owner: input.owner,
                 repository: input.repo,
                 branch: input.branch || "main",
-                buildPath: ".",
+                buildPath: "/Dockerfile", // Fix: Point to file, not dir
                 githubId,
                 enableSubmodules: false,
                 triggerType: "push",
-                buildType: "dockerfile", // Enforce Dockerfile build type
+                buildType: "dockerfile",
             };
 
             console.log(`[Dokploy] Linking GitHub Repo...`);
@@ -533,7 +533,9 @@ export async function createDokployApplication(input: CreateApplicationInput): P
                             applicationId,
                             sourceType: "github",
                             autoDeploy: true,
-                            buildType: "dockerfile", // Force Dockerfile build type again
+                            buildType: "dockerfile",
+                            contextPath: ".",
+                            dockerPath: "./Dockerfile",
                             cleanCache: false
                         }
                     })
@@ -553,10 +555,10 @@ export async function createDokployApplication(input: CreateApplicationInput): P
             applicationId,
             repository: input.repository,
             branch: input.branch || "main",
-            buildPath: "/",
+            buildPath: "/Dockerfile",
             sourceType: "git",
             provider: "git",
-            buildType: "dockerfile", // Enforce Dockerfile build type
+            buildType: "dockerfile",
         };
 
         // For generic git, usually update application is enough or there might be a saveGitProvider
@@ -570,6 +572,16 @@ export async function createDokployApplication(input: CreateApplicationInput): P
     }
 
     return app;
+}
+
+export async function updateApplicationBuildSettings(applicationId: string, settings: any) {
+    if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
+    console.log(`[Dokploy] Updating build settings for ${applicationId}...`, JSON.stringify(settings));
+    await fetch(`${DOKPLOY_URL}/api/trpc/application.update`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ json: { applicationId, ...settings } })
+    });
 }
 
 export async function deleteDokployProject(projectId: string): Promise<boolean> {
