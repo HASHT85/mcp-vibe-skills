@@ -169,6 +169,27 @@ export class BmadEngine {
                             files.push({ path: 'README.md', content: `# ${state.artifacts.prd.title}\n\n${state.artifacts.prd.overview}` });
                         }
 
+                        // Inject Dockerfile if missing to ensure Dokploy build works
+                        if (!files.find(f => f.path === 'Dockerfile')) {
+                            const dockerfileContent = `
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+FROM node:18-alpine
+WORKDIR /app
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+CMD ["npm", "start"]
+`;
+                            files.push({ path: 'Dockerfile', content: dockerfileContent });
+                            this.addMessage(projectId, 'system', 'Injected default Dockerfile.');
+                        }
+
                         this.addMessage(projectId, 'system', 'Pushing code to GitHub...');
                         await pushFiles(repo.owner, repo.name, files, "feat: initial commit by VibeCraft AI");
                         this.addMessage(projectId, 'assistant', `Request completed. Repo available at: ${repo.url}`);

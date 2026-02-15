@@ -392,6 +392,7 @@ export async function createDokployApplication(input: CreateApplicationInput): P
         projectId: input.projectId,
         description: input.description || "",
         environmentId: input.environmentId,
+        buildType: input.buildType || "dockerfile",
     };
 
     console.log("[Dokploy] Application Create Payload:", JSON.stringify(payload, null, 2));
