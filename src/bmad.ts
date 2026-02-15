@@ -337,16 +337,22 @@ CMD ["npm", "start"]
                                     }
                                 }
 
+                                // Sanitize Logs (remove ANSI codes)
+                                const cleanLogs = logs.replace(/\x1b\[[0-9;]*m/g, '');
+
                                 // AUTO-CORRECTION FOR NPM CI (Missing Lockfile)
-                                if (logs.includes("cipm can only install packages with an existing package-lock.json")) {
-                                    this.addMessage(projectId, 'system', `Detected 'npm ci' failure (missing lockfile). Switching to 'npm install'...`);
+                                // Only trigger if npm ci error is found OR if npm ci is present in the file content AND build failed
+                                if (cleanLogs.includes("cipm can only install packages") || cleanLogs.includes("npm ci")) {
+                                    this.addMessage(projectId, 'system', `Detected potential 'npm ci' issue. Checking Dockerfile...`);
                                     try {
                                         const { pushFiles } = await import('./github_api.js');
                                         const { triggerDeploy } = await import('./dokploy.js');
 
                                         if (state.artifacts.code) {
                                             const dockerfile = state.artifacts.code.files.find(f => f.path === 'Dockerfile' || f.path === './Dockerfile');
-                                            if (dockerfile) {
+                                            if (dockerfile && dockerfile.content.includes('npm ci')) {
+                                                this.addMessage(projectId, 'system', `Replacing 'npm ci' with 'npm install' to fix missing lockfile issue.`);
+
                                                 dockerfile.content = dockerfile.content.replace(/RUN npm ci/g, 'RUN npm install');
 
                                                 // Push update
