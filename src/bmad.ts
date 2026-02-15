@@ -272,9 +272,6 @@ CMD ["npm", "start"]
                     if (!appId) throw new Error("No application ID to monitor");
 
                     let attempts = 0;
-                    if (!appId) throw new Error("No application ID to monitor");
-
-                    let attempts = 0;
                     const MAX_ATTEMPTS = 30; // Increase to ~5 mins (30 * 10s)
                     let deployed = false;
 
