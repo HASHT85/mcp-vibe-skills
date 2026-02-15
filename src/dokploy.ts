@@ -503,7 +503,7 @@ export async function createDokployApplication(input: CreateApplicationInput): P
                 owner: input.owner,
                 repository: input.repo,
                 branch: input.branch || "main",
-                buildPath: "/",
+                buildPath: ".",
                 githubId,
                 enableSubmodules: false,
                 triggerType: "push",

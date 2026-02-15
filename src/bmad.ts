@@ -301,7 +301,7 @@ CMD ["npm", "start"]
                                 state.currentPhase = 'COMPLETED';
                             } else if (status === 'error' || status === 'failed' || status === 'crashed') {
                                 this.addMessage(projectId, 'system', `Deployment Failed (Status: ${status}). Fetching logs...`);
-                                const logs = deployment?.log || "No logs available";
+                                const logs = deployment?.log || "No logs available from Dokploy. The deployment likely failed very early (e.g. cloning or initialization). Check configuration.";
 
                                 // SELF-CORRECTION LOOP
                                 this.addMessage(projectId, 'assistant', `Analyzing build failure...`);
