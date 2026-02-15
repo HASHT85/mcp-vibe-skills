@@ -30,6 +30,7 @@ export interface BmadState {
     };
     error?: string;
     messages: { role: 'user' | 'assistant' | 'system'; content: string; timestamp: string }[];
+    cancel?: boolean;
 }
 
 export class BmadEngine {
@@ -81,9 +82,16 @@ export class BmadEngine {
         return this.pipelines.get(projectId);
     }
 
-    // Delete a pipeline
     deletePipeline(projectId: string): boolean {
         return this.pipelines.delete(projectId);
+    }
+
+    stop(projectId: string) {
+        const state = this.pipelines.get(projectId);
+        if (state) {
+            state.cancel = true;
+            this.addMessage(projectId, 'system', 'Pipeline stopped by user.');
+        }
     }
 
     // Run the next phase of the pipeline
