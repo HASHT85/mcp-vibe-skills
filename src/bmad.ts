@@ -301,6 +301,8 @@ CMD ["npm", "start"]
                                 // SELF-CORRECTION LOOP
                                 this.addMessage(projectId, 'assistant', `Analyzing build failure...`);
 
+                                if (!state.artifacts.code) throw new Error("No code artifact available to fix");
+
                                 // Ask Claude to fix
                                 const fix = await this.claude.fixCode(state.artifacts.code, logs);
                                 this.addMessage(projectId, 'assistant', `Identified Fix: ${fix.summary}`);
