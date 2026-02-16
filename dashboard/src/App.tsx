@@ -6,10 +6,10 @@ import {
   Trash2, LayoutGrid,
 } from 'lucide-react';
 import {
-  checkAuth, setAuth, listPipelines, launchIdea, getPipelineStatus,
+  checkAuth, setAuth, listPipelines, launchIdea,
   pausePipeline, resumePipeline, deletePipeline, connectAllSSE,
-  type Pipeline, type PipelineEvent, type PipelineAgent,
 } from './api/client';
+import type { Pipeline, PipelineEvent, PipelineAgent } from './api/client';
 import './index.css';
 
 // ─── App ───
