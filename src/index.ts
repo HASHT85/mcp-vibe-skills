@@ -16,7 +16,7 @@ import {
     triggerDeploy,
 } from "./dokploy.js";
 
-import { BmadEngine } from './bmad.js';
+import { getOrchestrator, type PipelineEvent } from "./orchestrator.js";
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -29,11 +29,6 @@ const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "vibe123";
 
 const authMiddleware = (req: Request, res: Response, next: Function) => {
-    // Allow public read-only access if needed, or protect everything.
-    // User asked to protect the site because "everyone can use it".
-    // Let's protect sensitive actions (POST, DELETE) and Dashboard view.
-
-    // Check Authorization header
     const authHeader = req.headers.authorization;
     if (!authHeader) {
         res.setHeader('WWW-Authenticate', 'Basic realm="VibeCraft Admin"');
@@ -62,48 +57,168 @@ app.use('/dokploy', authMiddleware);
 const agentsStore = new AgentsStore(storePath);
 const projectsStore = new ProjectsStore(storePath);
 
-// Initialize BMAD Engine
-const bmadEngine = BmadEngine.getInstance();
+// Initialize Orchestrator
+const orchestrator = getOrchestrator();
 
 // Health
 app.get("/", (_req: Request, res: Response) => res.json({ service: "mcp-vibe-skills", status: "running" }));
 app.get("/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
-// ----------------------------
-// Projects & Dashboard Data
-// ----------------------------
+// ─────────────────────────────────────
+// Pipeline (New Orchestrator)
+// ─────────────────────────────────────
 
-app.get("/projects", async (req: Request, res: Response) => {
+// Launch a new idea → creates full pipeline
+app.post("/pipeline/launch", async (req: Request, res: Response) => {
     try {
-        const projects = [];
+        const description = String(req.body?.description ?? "").trim();
+        const name = req.body?.name ? String(req.body.name).trim() : undefined;
 
-        // 1. Get Local Pipelines (Active in memory)
-        const pipelines = bmadEngine.listPipelines();
+        if (!description) {
+            return res.status(400).json({ error: "missing_description" });
+        }
+
+        const pipeline = await orchestrator.launchIdea(description, name);
+        res.json({ pipeline });
+    } catch (err: any) {
+        console.error("Pipeline launch error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// List all pipelines
+app.get("/pipeline/list", (_req: Request, res: Response) => {
+    const pipelines = orchestrator.listPipelines();
+    res.json({ pipelines });
+});
+
+// Get pipeline status
+app.get("/pipeline/:id/status", (req: Request, res: Response) => {
+    const pipeline = orchestrator.getPipeline(req.params.id);
+    if (!pipeline) return res.status(404).json({ error: "pipeline_not_found" });
+    res.json({ pipeline });
+});
+
+// SSE stream for pipeline events
+app.get("/pipeline/:id/events", (req: Request, res: Response) => {
+    const pipeline = orchestrator.getPipeline(req.params.id);
+    if (!pipeline) return res.status(404).json({ error: "pipeline_not_found" });
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+
+    // Send existing events
+    for (const event of pipeline.events) {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+    }
+
+    // Listen for new events
+    const onEvent = (event: PipelineEvent) => {
+        if (event.pipelineId === req.params.id) {
+            res.write(`data: ${JSON.stringify(event)}\n\n`);
+        }
+    };
+
+    const onPhaseChange = (data: { pipelineId: string; phase: string }) => {
+        if (data.pipelineId === req.params.id) {
+            res.write(`data: ${JSON.stringify({ type: "phase-change", ...data })}\n\n`);
+        }
+    };
+
+    orchestrator.on("event", onEvent);
+    orchestrator.on("phase-change", onPhaseChange);
+
+    req.on("close", () => {
+        orchestrator.off("event", onEvent);
+        orchestrator.off("phase-change", onPhaseChange);
+    });
+});
+
+// SSE stream for ALL pipeline events (cross-project live feed)
+app.get("/pipeline/events/all", (_req: Request, res: Response) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+
+    // Send recent events from all pipelines
+    const pipelines = orchestrator.listPipelines();
+    const allEvents = pipelines
+        .flatMap(p => p.events)
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+        .slice(-50);
+
+    for (const event of allEvents) {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+    }
+
+    const onEvent = (event: PipelineEvent) => {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+
+    orchestrator.on("event", onEvent);
+    _req.on("close", () => orchestrator.off("event", onEvent));
+});
+
+// Pause/Resume pipeline
+app.post("/pipeline/:id/pause", async (req: Request, res: Response) => {
+    const ok = await orchestrator.pausePipeline(req.params.id);
+    res.json({ ok });
+});
+
+app.post("/pipeline/:id/resume", async (req: Request, res: Response) => {
+    const ok = await orchestrator.resumePipeline(req.params.id);
+    res.json({ ok });
+});
+
+// Delete pipeline
+app.delete("/pipeline/:id", async (req: Request, res: Response) => {
+    const ok = await orchestrator.deletePipeline(req.params.id);
+    res.json({ ok });
+});
+
+// ─────────────────────────────────────
+// Projects & Dashboard Data
+// ─────────────────────────────────────
+
+app.get("/projects", async (_req: Request, res: Response) => {
+    try {
+        const projects: any[] = [];
+
+        // 1. Get Orchestrator Pipelines
+        const pipelines = orchestrator.listPipelines();
         for (const p of pipelines) {
             projects.push({
-                id: p.projectId,
-                name: p.projectId,
-                description: p.input,
-                templateId: 'custom',
-                currentPhase: p.currentPhase,
-                createdAt: new Date().toISOString(),
-                type: 'bmad'
+                id: p.id,
+                name: p.name,
+                description: p.description,
+                phase: p.phase,
+                progress: p.progress,
+                agents: p.agents,
+                github: p.github,
+                dokploy: p.dokploy,
+                createdAt: p.createdAt,
+                type: 'pipeline'
             });
         }
 
-        // 2. Get Dokploy Projects (Deployed)
+        // 2. Get Dokploy Projects (Deployed, not managed by orchestrator)
         if (isDokployConfigured()) {
             try {
                 const dokployProjs = await listDokployProjects();
                 for (const dp of dokployProjs) {
-                    // Avoid duplicates if BMAD pipeline has same ID
                     if (!projects.find(p => p.id === dp.projectId || p.name === dp.name)) {
                         projects.push({
                             id: dp.projectId,
                             name: dp.name,
                             description: dp.description || "Managed by Dokploy",
-                            templateId: 'dokploy',
-                            currentPhase: 'COMPLETED',
+                            phase: 'COMPLETED',
+                            progress: 100,
+                            agents: [],
                             createdAt: dp.createdAt,
                             type: 'dokploy'
                         });
@@ -111,26 +226,7 @@ app.get("/projects", async (req: Request, res: Response) => {
                 }
             } catch (e: any) {
                 console.warn("Error fetching Dokploy projects:", e);
-                projects.push({
-                    id: 'error-dokploy',
-                    name: '⚠️ Dokploy Sync Error',
-                    description: String(e.message || e),
-                    templateId: 'error',
-                    currentPhase: 'FAILED',
-                    createdAt: new Date().toISOString(),
-                    type: 'error'
-                });
             }
-        } else {
-            projects.push({
-                id: 'dokploy-not-configured',
-                name: '⚠️ Dokploy Not Configured',
-                description: 'Add DOKPLOY_URL and DOKPLOY_TOKEN env vars to backend to enable sync.',
-                templateId: 'warning',
-                currentPhase: 'IDLE',
-                createdAt: new Date().toISOString(),
-                type: 'warning'
-            });
         }
 
         res.json({ projects });
@@ -140,68 +236,42 @@ app.get("/projects", async (req: Request, res: Response) => {
     }
 });
 
-// ----------------------------
-// Pipeline (BMAD)
-// ----------------------------
+// Delete project (+ GitHub repo + Dokploy)
+app.delete("/projects/:id", async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const pipeline = orchestrator.getPipeline(id);
 
-app.post("/pipeline/create", async (req: Request, res: Response) => {
-    const projectId = req.body?.projectId ? String(req.body.projectId) : undefined;
-    const description = req.body?.description ? String(req.body.description) : undefined;
+    if (pipeline) {
+        // Delete GitHub repo
+        if (pipeline.github) {
+            try {
+                const { deleteRepo } = await import('./github_api.js');
+                await deleteRepo(pipeline.github.owner, pipeline.github.repo);
+            } catch (err) {
+                console.error("Failed to delete GitHub repo:", err);
+            }
+        }
 
-    if (!projectId || !description) {
-        return res.status(400).json({ error: "missing_fields", required: ["projectId", "description"] });
+        // Delete Dokploy project
+        if (pipeline.dokploy?.projectId) {
+            try {
+                const { deleteDokployProject } = await import('./dokploy.js');
+                await deleteDokployProject(pipeline.dokploy.projectId);
+            } catch (err) {
+                console.error("Failed to delete Dokploy project:", err);
+            }
+        }
+
+        await orchestrator.deletePipeline(id);
+        return res.json({ success: true, id });
     }
 
-    try {
-        // Create and start pipeline
-        const state = bmadEngine.createPipeline(projectId, description);
-        // Start async logic (don't await confirmation for long tasks in real app, but here it's fine for initial kick-off)
-        bmadEngine.next(projectId).catch(err => console.error("Async Pipeline Error:", err));
-
-        res.json(state);
-    } catch (err: any) {
-        console.error("Pipeline Init Error:", err);
-        res.status(500).json({ error: err.message });
-    }
+    res.status(404).json({ error: "project_not_found" });
 });
 
-app.get("/pipeline/:projectId", (req: Request, res: Response) => {
-    const { projectId } = req.params;
-    const state = bmadEngine.getPipeline(projectId);
-    if (!state) return res.status(404).json({ error: "pipeline_not_found" });
-    res.json(state);
-});
-
-// Chat Interaction
-app.post("/pipeline/:projectId/chat", (req: Request, res: Response) => {
-    const { projectId } = req.params;
-    const { message } = req.body;
-
-    if (!message) return res.status(400).json({ error: "message_required" });
-
-    // 1. Add User Message
-    bmadEngine.addMessage(projectId, 'user', message);
-
-    // 2. Simulate Response (in a real app, this would call Claude/LLM)
-    setTimeout(() => {
-        bmadEngine.addMessage(projectId, 'assistant', `Reçu : "${message}". (Simulation: Je suis un agent IA, je vais traiter cette demande.)`);
-    }, 1000);
-
-    res.json({ success: true });
-});
-
-app.post("/pipeline/:projectId/stop", (req: Request, res: Response) => {
-    const { projectId } = req.params;
-    bmadEngine.stop(projectId);
-    res.json({ success: true });
-});
-
-
-export default app;
-
-// ----------------------------
+// ─────────────────────────────────────
 // skills.sh HTTP API
-// ----------------------------
+// ─────────────────────────────────────
 
 app.get("/skills/trending", async (req: Request, res: Response) => {
     const limit = req.query.limit ? Number(req.query.limit) : 10;
@@ -224,9 +294,9 @@ app.get("/skills/get", async (req: Request, res: Response) => {
     res.json(detail);
 });
 
-// ----------------------------
+// ─────────────────────────────────────
 // Profiles + Templates
-// ----------------------------
+// ─────────────────────────────────────
 
 app.get("/profiles", (_req: Request, res: Response) => {
     res.json({ profiles: PROFILES });
@@ -236,9 +306,9 @@ app.get("/templates", (_req: Request, res: Response) => {
     res.json({ templates: TEMPLATES });
 });
 
-// ----------------------------
+// ─────────────────────────────────────
 // Agents
-// ----------------------------
+// ─────────────────────────────────────
 
 app.get("/agents", async (_req: Request, res: Response) => {
     const agents = await agentsStore.listAgents();
@@ -299,13 +369,7 @@ app.post("/agents/:id/skills", async (req: Request, res: Response) => {
         }
 
         const assigned = await agentsStore.assignSkill(req.params.id, {
-            owner,
-            repo,
-            skill,
-            href,
-            title,
-            installs,
-            installs_display,
+            owner, repo, skill, href, title, installs, installs_display,
         });
 
         res.json({ agentId: req.params.id, assigned });
@@ -328,125 +392,9 @@ app.delete("/agents/:id/skills", async (req: Request, res: Response) => {
     }
 });
 
-// ----------------------------
-// Projects
-// ----------------------------
-
-app.get("/projects", async (_req: Request, res: Response) => {
-    const items = await projectsStore.listProjects();
-    res.json({ projects: items });
-});
-
-app.get("/projects/:id", async (req: Request, res: Response) => {
-    const project = await projectsStore.getProject(req.params.id);
-    if (!project) return res.status(404).json({ error: "project_not_found" });
-
-    const links = await projectsStore.listProjectAgents(req.params.id);
-    res.json({ project, agents: links });
-});
-
-app.post("/projects", async (req: Request, res: Response) => {
-    try {
-        const name = String(req.body?.name ?? "").trim();
-        const templateId = String(req.body?.templateId ?? "").trim();
-        const meta = (req.body?.meta ?? undefined) as Record<string, unknown> | undefined;
-
-        if (!name) return res.status(400).json({ error: "missing_name" });
-        if (!templateId) return res.status(400).json({ error: "missing_templateId" });
-
-        const out = await projectsStore.createProjectFromTemplate({ name, templateId, meta });
-        res.json(out);
-    } catch (e: any) {
-        const msg = String(e?.message || "internal_error");
-        if (msg === "template_not_found") return res.status(400).json({ error: "template_not_found" });
-        return res.status(500).json({ error: "internal_error" });
-    }
-});
-
-app.post("/projects/:id/agents", async (req: Request, res: Response) => {
-    try {
-        const projectId = req.params.id;
-        const name = String(req.body?.name ?? "").trim();
-        const profileId = req.body?.profileId ? String(req.body.profileId) : undefined;
-        const meta = (req.body?.meta ?? undefined) as Record<string, unknown> | undefined;
-        const role = req.body?.role ? String(req.body.role) : undefined;
-
-        if (!name) return res.status(400).json({ error: "missing_name" });
-
-        const out = await projectsStore.addAgentToProject({ projectId, name, profileId, meta, role });
-        res.json(out);
-    } catch (e: any) {
-        const msg = String(e?.message || "internal_error");
-        if (msg === "project_not_found") return res.status(404).json({ error: "project_not_found" });
-        return res.status(500).json({ error: "internal_error" });
-    }
-});
-
-// Delete Project & Repo
-app.delete("/projects/:id", async (req: Request, res: Response) => {
-    const { id } = req.params;
-    // 1. Check local pipeline
-    const pipeline = bmadEngine.getPipeline(id);
-
-    if (pipeline) {
-        // Try to delete GitHub repo if exists
-        if (pipeline.artifacts?.github) {
-            try {
-                const { owner, name } = pipeline.artifacts.github;
-                console.log(`Deleting GitHub repo: ${owner}/${name}`);
-                await import('./github_api.js').then(m => m.deleteRepo(owner, name));
-            } catch (err) {
-                console.error("Failed to delete GitHub repo:", err);
-                // Continue deleting local project even if remote fails
-            }
-        }
-
-        // Try to delete Dokploy project if exists
-        if (pipeline.artifacts?.deployment?.projectId) {
-            try {
-                const dokployProjectId = pipeline.artifacts.deployment.projectId;
-                console.log(`Deleting Dokploy project: ${dokployProjectId}`);
-                await import('./dokploy.js').then(m => m.deleteDokployProject(dokployProjectId));
-            } catch (err) {
-                console.error("Failed to delete Dokploy project:", err);
-            }
-        }
-
-        bmadEngine.deletePipeline(id);
-        return res.json({ success: true, id });
-    }
-
-    res.status(404).json({ error: "project_not_found" });
-});
-
-app.get("/projects/:id/full", async (req: Request, res: Response) => {
-    const project = await projectsStore.getProject(req.params.id);
-    if (!project) return res.status(404).json({ error: "project_not_found" });
-
-    const links = await projectsStore.listProjectAgents(req.params.id);
-
-    const agentsWithSkills = await Promise.all(
-        links.map(async (l: any) => {
-            const skills = await agentsStore.listSkills(l.agentId).catch(() => []);
-            return {
-                agentId: l.agentId,
-                role: l.role ?? null,
-                skills,
-            };
-        })
-    );
-
-    res.json({
-        project,
-        agents: links,
-        agentsWithSkills,
-    });
-});
-
-
-// ----------------------------
+// ─────────────────────────────────────
 // Dokploy Integration
-// ----------------------------
+// ─────────────────────────────────────
 
 app.get("/dokploy/status", (_req: Request, res: Response) => {
     res.json({ configured: isDokployConfigured() });
@@ -485,19 +433,15 @@ app.post("/dokploy/deploy/:applicationId", async (req: Request, res: Response) =
             return res.status(503).json({ error: "dokploy_not_configured" });
         }
         const ok = await triggerDeploy(req.params.applicationId);
-        if (ok) {
-            await agentsStore.listEvents(1); // Force load to emit event
-            // Emit event manually
-        }
         res.json({ ok, applicationId: req.params.applicationId });
     } catch (e: any) {
         res.status(500).json({ error: String(e?.message || "dokploy_error") });
     }
 });
 
-// ----------------------------
+// ─────────────────────────────────────
 // Events
-// ----------------------------
+// ─────────────────────────────────────
 
 app.get("/events", async (req: Request, res: Response) => {
     const limit = req.query.limit ? Number(req.query.limit) : 200;
@@ -508,5 +452,9 @@ app.get("/events", async (req: Request, res: Response) => {
 // Start HTTP server
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, "0.0.0.0", () => {
-    console.log(`HTTP server listening on ${PORT}`);
+    console.log(`🚀 VibeCraft HQ listening on port ${PORT}`);
+    console.log(`   Dokploy: ${isDokployConfigured() ? "✓ configured" : "✗ not configured"}`);
+    console.log(`   GitHub: ${process.env.GITHUB_TOKEN ? "✓ configured" : "✗ not configured"}`);
 });
+
+export default app;

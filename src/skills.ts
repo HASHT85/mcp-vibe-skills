@@ -117,3 +117,72 @@ export async function searchSkills(q: string, limit = 20): Promise<SkillItem[]> 
         )
         .slice(0, Math.min(limit, 50));
 }
+
+// ─── Context-Aware Skills Lookup (used by Orchestrator) ───
+
+export type SkillContent = {
+    title: string;
+    href: string;
+    owner: string;
+    repo: string;
+    skill: string;
+    content?: string;
+};
+
+/**
+ * Find relevant skills from skills.sh based on context keywords.
+ * Returns skills with their full content for injection into agent prompts.
+ */
+export async function findSkillsForContext(
+    keywords: string[],
+    limit = 5
+): Promise<SkillContent[]> {
+    if (!keywords.length) return [];
+
+    try {
+        // Search for each keyword and merge results
+        const allResults: SkillItem[] = [];
+        for (const kw of keywords.slice(0, 5)) {
+            const results = await searchSkills(kw, 10);
+            allResults.push(...results);
+        }
+
+        // Deduplicate
+        const uniq = new Map<string, SkillItem>();
+        for (const item of allResults) uniq.set(item.href, item);
+
+        const topSkills = Array.from(uniq.values()).slice(0, limit);
+
+        // Fetch detail for each skill
+        const { fetchSkillDetail } = await import("./skills_get.js");
+        const results: SkillContent[] = [];
+
+        for (const sk of topSkills) {
+            try {
+                const detail = await fetchSkillDetail(sk.owner, sk.repo, sk.skill);
+                results.push({
+                    title: detail.title || sk.title,
+                    href: sk.href,
+                    owner: sk.owner,
+                    repo: sk.repo,
+                    skill: sk.skill,
+                    content: detail.sections?.map(s => `## ${s.heading}\n${s.content}`).join("\n\n"),
+                });
+            } catch {
+                // Skip skills that fail to fetch
+                results.push({
+                    title: sk.title,
+                    href: sk.href,
+                    owner: sk.owner,
+                    repo: sk.repo,
+                    skill: sk.skill,
+                });
+            }
+        }
+
+        return results;
+    } catch (err) {
+        console.warn("[Skills] findSkillsForContext error:", err);
+        return [];
+    }
+}
