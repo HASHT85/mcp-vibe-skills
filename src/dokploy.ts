@@ -622,3 +622,54 @@ export async function getLatestDeployment(applicationId: string): Promise<any | 
     }
     return null;
 }
+
+/**
+ * Create a domain for an application in Dokploy
+ * Uses DOKPLOY_BASE_DOMAIN env var (e.g., "hach.dev") to generate subdomains
+ */
+export async function createDomain(
+    applicationId: string,
+    slug: string
+): Promise<{ domainId?: string; host: string } | null> {
+    if (!isDokployConfigured()) return null;
+
+    const baseDomain = process.env.DOKPLOY_BASE_DOMAIN;
+    if (!baseDomain) {
+        console.warn("[Dokploy] DOKPLOY_BASE_DOMAIN not set, skipping domain creation");
+        return null;
+    }
+
+    const host = `${slug}.${baseDomain}`;
+    console.log(`[Dokploy] Creating domain ${host} for application ${applicationId}...`);
+
+    try {
+        const res = await fetch(`${DOKPLOY_URL}/api/trpc/domain.create`, {
+            method: "POST",
+            headers: getHeaders(),
+            body: JSON.stringify({
+                json: {
+                    applicationId,
+                    host,
+                    https: true,
+                    certificateType: "letsencrypt",
+                    path: "/",
+                    port: 80,
+                }
+            }),
+        });
+
+        if (!res.ok) {
+            const text = await res.text();
+            console.error(`[Dokploy] Domain creation failed (${res.status}): ${text}`);
+            return null;
+        }
+
+        const data = await res.json();
+        const domainId = data?.result?.data?.json?.domainId;
+        console.log(`[Dokploy] ✓ Domain created: https://${host} (id: ${domainId || "unknown"})`);
+        return { domainId, host };
+    } catch (err: any) {
+        console.error(`[Dokploy] Domain creation error: ${err.message}`);
+        return null;
+    }
+}

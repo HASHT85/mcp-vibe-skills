@@ -15,6 +15,7 @@ import {
     isDokployConfigured,
     createDokployProject,
     createDokployApplication,
+    createDomain,
     triggerDeploy,
     getBuildLogs,
     getLatestDeployment,
@@ -452,6 +453,13 @@ Le projet doit builder et démarrer avec: docker build . && docker run -p 3000:3
                     projectId: dokProject.projectId,
                     applicationId: app.applicationId,
                 };
+
+                // Create domain for the application
+                const domain = await createDomain(app.applicationId, repoName);
+                if (domain) {
+                    p.dokploy.url = `https://${domain.host}`;
+                    this.addEvent(id, "Dokploy", "🌐", `Domain créé → https://${domain.host}`, "success");
+                }
 
                 this.addEvent(id, "Dokploy", "🚀", `Déployé dans Dokploy → ${repoName}`, "deploy");
             } catch (err: any) {
