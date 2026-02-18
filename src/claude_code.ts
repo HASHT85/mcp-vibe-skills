@@ -32,6 +32,7 @@ export type AgentOptions = {
     allowedTools?: string[];
     maxTurns?: number;
     appendPrompt?: string;  // Appended context (skills, PRD, etc.)
+    timeoutMs?: number;     // Default: 5 minutes
 };
 
 // ─── Event Emitter for live streaming ───
@@ -41,9 +42,23 @@ agentEvents.setMaxListeners(50);
 
 // ─── Main Runner ───
 
+const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
 export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult> {
     const startTime = Date.now();
     const actions: AgentAction[] = [];
+    const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
+
+    // Pre-flight check: is ANTHROPIC_API_KEY set?
+    if (!process.env.ANTHROPIC_API_KEY) {
+        console.error("[ClaudeCode] ❌ ANTHROPIC_API_KEY is not set!");
+        return {
+            success: false,
+            actions: [],
+            error: "ANTHROPIC_API_KEY environment variable is not set. Claude Code cannot authenticate.",
+            durationMs: Date.now() - startTime,
+        };
+    }
 
     return new Promise((resolve) => {
         const args: string[] = [
@@ -75,9 +90,20 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
         args.push(fullPrompt);
 
         console.log(`[ClaudeCode] Spawning agent in ${options.cwd}`);
-        console.log(`[ClaudeCode] Args: claude ${args.slice(0, 5).join(" ")}...`);
+        console.log(`[ClaudeCode] Timeout: ${timeoutMs / 1000}s`);
+        console.log(`[ClaudeCode] API Key: ${process.env.ANTHROPIC_API_KEY ? "✓ set (" + process.env.ANTHROPIC_API_KEY.slice(0, 8) + "...)" : "✗ MISSING"}`);
 
         let proc: ChildProcess;
+        let resolved = false;
+
+        function finish(result: AgentResult) {
+            if (resolved) return;
+            resolved = true;
+            console.log(`[ClaudeCode] Agent finished in ${result.durationMs}ms - success: ${result.success}`);
+            if (result.error) console.error(`[ClaudeCode] Error: ${result.error}`);
+            resolve(result);
+        }
+
         try {
             proc = spawn("claude", args, {
                 cwd: options.cwd,
@@ -88,7 +114,8 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
                 stdio: ["pipe", "pipe", "pipe"],
             });
         } catch (err: any) {
-            resolve({
+            console.error(`[ClaudeCode] ❌ Failed to spawn claude:`, err);
+            finish({
                 success: false,
                 actions: [],
                 error: `Failed to spawn claude: ${err.message}`,
@@ -97,10 +124,29 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
             return;
         }
 
+        console.log(`[ClaudeCode] Process spawned, PID: ${proc.pid}`);
+
+        // ─── Timeout ───
+        const timeoutHandle = setTimeout(() => {
+            console.error(`[ClaudeCode] ⏱️ TIMEOUT after ${timeoutMs / 1000}s — killing process`);
+            proc.kill("SIGTERM");
+            setTimeout(() => {
+                if (!resolved) proc.kill("SIGKILL");
+            }, 5000);
+
+            finish({
+                success: false,
+                actions,
+                error: `Process timed out after ${timeoutMs / 1000}s`,
+                durationMs: Date.now() - startTime,
+            });
+        }, timeoutMs);
+
         let buffer = "";
 
         proc.stdout?.on("data", (chunk: Buffer) => {
-            buffer += chunk.toString();
+            const text = chunk.toString();
+            buffer += text;
 
             // Parse NDJSON (newline-delimited JSON)
             const lines = buffer.split("\n");
@@ -115,19 +161,31 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
                         actions.push(action);
                         // Emit live event
                         agentEvents.emit("action", action);
+                        console.log(`[ClaudeCode] 📤 ${action.type}: ${(action.content || "").substring(0, 100)}`);
                     }
                 } catch {
                     // Skip unparseable lines
+                    console.log(`[ClaudeCode] Unparseable stdout: ${line.substring(0, 100)}`);
                 }
             }
         });
 
         let stderr = "";
         proc.stderr?.on("data", (chunk: Buffer) => {
-            stderr += chunk.toString();
+            const text = chunk.toString();
+            stderr += text;
+            // LOG stderr in real-time — this is where errors show up
+            console.error(`[ClaudeCode] stderr: ${text.trim()}`);
         });
 
         proc.on("close", (code) => {
+            clearTimeout(timeoutHandle);
+
+            console.log(`[ClaudeCode] Process exited with code ${code}`);
+            if (stderr) {
+                console.error(`[ClaudeCode] Full stderr:\n${stderr}`);
+            }
+
             // Process remaining buffer
             if (buffer.trim()) {
                 try {
@@ -142,7 +200,7 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
                 .map(a => a.content)
                 .join("\n");
 
-            resolve({
+            finish({
                 success: code === 0,
                 actions,
                 finalResult: finalResult || undefined,
@@ -152,7 +210,9 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
         });
 
         proc.on("error", (err) => {
-            resolve({
+            clearTimeout(timeoutHandle);
+            console.error(`[ClaudeCode] ❌ Process error:`, err);
+            finish({
                 success: false,
                 actions,
                 error: `Process error: ${err.message}`,
@@ -203,13 +263,24 @@ function parseStreamEvent(event: any): AgentAction | null {
 
 export async function gitClone(repoUrl: string, targetDir: string): Promise<boolean> {
     return new Promise((resolve) => {
+        console.log(`[Git] Cloning ${repoUrl} → ${targetDir}`);
         const proc = spawn("git", ["clone", repoUrl, targetDir], {
             env: { ...process.env, HOME: "/root" },
             stdio: ["pipe", "pipe", "pipe"],
         });
 
-        proc.on("close", (code) => resolve(code === 0));
-        proc.on("error", () => resolve(false));
+        let stderr = "";
+        proc.stderr?.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+
+        proc.on("close", (code) => {
+            if (code !== 0) console.error(`[Git] Clone failed: ${stderr}`);
+            else console.log(`[Git] Clone OK`);
+            resolve(code === 0);
+        });
+        proc.on("error", (err) => {
+            console.error(`[Git] Clone error:`, err);
+            resolve(false);
+        });
     });
 }
 
@@ -225,16 +296,28 @@ export async function gitPush(cwd: string, message: string): Promise<boolean> {
         function runNext() {
             if (idx >= commands.length) { resolve(true); return; }
             const [cmd, args] = commands[idx++];
+            console.log(`[Git] ${cmd} ${args.join(" ")}`);
             const proc = spawn(cmd, [...args], {
                 cwd,
                 env: { ...process.env, HOME: "/root" },
                 stdio: ["pipe", "pipe", "pipe"],
             });
+
+            let stderr = "";
+            proc.stderr?.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+
             proc.on("close", (code) => {
-                if (code !== 0 && idx <= 2) { resolve(false); return; } // allow push to fail softly
+                if (code !== 0 && idx <= 2) {
+                    console.error(`[Git] ${cmd} ${args[0]} failed: ${stderr}`);
+                    resolve(false);
+                    return;
+                }
                 runNext();
             });
-            proc.on("error", () => resolve(false));
+            proc.on("error", (err) => {
+                console.error(`[Git] Error:`, err);
+                resolve(false);
+            });
         }
         runNext();
     });
@@ -252,6 +335,7 @@ export async function gitInit(cwd: string, remoteUrl: string): Promise<boolean> 
         function runNext() {
             if (idx >= commands.length) { resolve(true); return; }
             const [cmd, args] = commands[idx++];
+            console.log(`[Git] ${cmd} ${args.join(" ")}`);
             const proc = spawn(cmd, [...args], {
                 cwd,
                 env: { ...process.env, HOME: "/root" },
