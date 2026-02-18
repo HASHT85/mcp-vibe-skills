@@ -269,10 +269,13 @@ Réponds en JSON avec cette structure:
 
         if (result.success && result.finalResult) {
             p.artifacts.analysis = this.tryParseJson(result.finalResult);
+            this.setAgentStatus(id, "Analyst", "done", "PRD créé");
+            this.addEvent(id, "Analyst", "🔍", "✓ PRD créé avec analyse complète", "success");
+        } else {
+            this.setAgentStatus(id, "Analyst", "error", result.error || "Échec");
+            this.addEvent(id, "Analyst", "🔍", `✗ Analyse échouée: ${result.error}`, "error");
+            throw new Error(`Analysis failed: ${result.error}`);
         }
-
-        this.setAgentStatus(id, "Analyst", "done", "PRD créé");
-        this.addEvent(id, "Analyst", "🔍", "✓ PRD créé avec analyse complète", "success");
         await this.saveState();
     }
 
@@ -325,10 +328,13 @@ Réponds en JSON:
         if (result.success && result.finalResult) {
             p.artifacts.architecture = this.tryParseJson(result.finalResult);
             p.artifacts.skills = skills.map(s => ({ title: s.title, href: s.href }));
+            this.setAgentStatus(id, "Architect", "done", "Architecture définie");
+            this.addEvent(id, "Architect", "📐", "✓ Architecture technique définie", "success");
+        } else {
+            this.setAgentStatus(id, "Architect", "error", result.error || "Échec");
+            this.addEvent(id, "Architect", "📐", `✗ Architecture échouée: ${result.error}`, "error");
+            throw new Error(`Architecture failed: ${result.error}`);
         }
-
-        this.setAgentStatus(id, "Architect", "done", "Architecture définie");
-        this.addEvent(id, "Architect", "📐", "✓ Architecture technique définie", "success");
         await this.saveState();
     }
 

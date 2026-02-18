@@ -1,10 +1,13 @@
 /**
- * Claude Code Agent SDK Wrapper
- * Spawns Claude Code CLI in print mode for programmatic agent execution.
- * Runs inside Docker container on VPS.
+ * Claude Agent — Direct Anthropic SDK
+ * Uses @anthropic-ai/sdk Messages API with tool use for agentic coding.
+ * Replaces the Claude Code CLI which hangs in Docker containers.
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
+import Anthropic from "@anthropic-ai/sdk";
+import { spawn } from "node:child_process";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { EventEmitter } from "node:events";
 
 // ─── Types ───
@@ -31,8 +34,8 @@ export type AgentOptions = {
     cwd: string;
     allowedTools?: string[];
     maxTurns?: number;
-    appendPrompt?: string;  // Appended context (skills, PRD, etc.)
-    timeoutMs?: number;     // Default: 5 minutes
+    appendPrompt?: string;
+    timeoutMs?: number;
 };
 
 // ─── Event Emitter for live streaming ───
@@ -40,230 +43,273 @@ export type AgentOptions = {
 export const agentEvents = new EventEmitter();
 agentEvents.setMaxListeners(50);
 
-// ─── Main Runner ───
+// ─── Tool Definitions ───
 
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const TOOLS: Anthropic.Messages.Tool[] = [
+    {
+        name: "read_file",
+        description: "Read the contents of a file at the given path.",
+        input_schema: {
+            type: "object" as const,
+            properties: {
+                path: { type: "string", description: "Path to the file to read" },
+            },
+            required: ["path"],
+        },
+    },
+    {
+        name: "write_file",
+        description: "Write content to a file. Creates parent directories if needed.",
+        input_schema: {
+            type: "object" as const,
+            properties: {
+                path: { type: "string", description: "Path to write to" },
+                content: { type: "string", description: "Content to write" },
+            },
+            required: ["path", "content"],
+        },
+    },
+    {
+        name: "list_dir",
+        description: "List files and directories in the given path.",
+        input_schema: {
+            type: "object" as const,
+            properties: {
+                path: { type: "string", description: "Directory path to list" },
+            },
+            required: ["path"],
+        },
+    },
+    {
+        name: "bash",
+        description: "Run a bash command and return its output. Use for npm install, building, testing, etc.",
+        input_schema: {
+            type: "object" as const,
+            properties: {
+                command: { type: "string", description: "The bash command to run" },
+            },
+            required: ["command"],
+        },
+    },
+];
 
-export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult> {
-    const startTime = Date.now();
-    const actions: AgentAction[] = [];
-    const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
+// ─── Tool Executor ───
 
-    // Pre-flight check: is ANTHROPIC_API_KEY set?
-    if (!process.env.ANTHROPIC_API_KEY) {
-        console.error("[ClaudeCode] ❌ ANTHROPIC_API_KEY is not set!");
-        return {
-            success: false,
-            actions: [],
-            error: "ANTHROPIC_API_KEY environment variable is not set. Claude Code cannot authenticate.",
-            durationMs: Date.now() - startTime,
-        };
-    }
-
-    return new Promise((resolve) => {
-        const args: string[] = [
-            "-p",  // Print mode (non-interactive)
-            "--output-format", "stream-json",
-            "--dangerously-skip-permissions",
-        ];
-
-        // System prompt
-        if (options.systemPrompt) {
-            args.push("--system-prompt", options.systemPrompt);
-        }
-
-        // Allowed tools
-        if (options.allowedTools && options.allowedTools.length > 0) {
-            args.push("--allowedTools", options.allowedTools.join(","));
-        }
-
-        // Max turns
-        if (options.maxTurns) {
-            args.push("--max-turns", String(options.maxTurns));
-        }
-
-        // Build full prompt with context
-        let fullPrompt = options.prompt;
-        if (options.appendPrompt) {
-            fullPrompt += "\n\n--- CONTEXT ---\n" + options.appendPrompt;
-        }
-        args.push(fullPrompt);
-
-        console.log(`[ClaudeCode] Spawning agent in ${options.cwd}`);
-        console.log(`[ClaudeCode] Timeout: ${timeoutMs / 1000}s`);
-        console.log(`[ClaudeCode] API Key: ${process.env.ANTHROPIC_API_KEY ? "✓ set (" + process.env.ANTHROPIC_API_KEY.slice(0, 8) + "...)" : "✗ MISSING"}`);
-
-        let proc: ChildProcess;
-        let resolved = false;
-
-        function finish(result: AgentResult) {
-            if (resolved) return;
-            resolved = true;
-            console.log(`[ClaudeCode] Agent finished in ${result.durationMs}ms - success: ${result.success}`);
-            if (result.error) console.error(`[ClaudeCode] Error: ${result.error}`);
-            resolve(result);
-        }
-
-        try {
-            proc = spawn("claude", args, {
-                cwd: options.cwd,
-                env: {
-                    ...process.env,
-                    HOME: "/root",  // Required for Claude Code in Docker
-                },
-                stdio: ["pipe", "pipe", "pipe"],
-            });
-        } catch (err: any) {
-            console.error(`[ClaudeCode] ❌ Failed to spawn claude:`, err);
-            finish({
-                success: false,
-                actions: [],
-                error: `Failed to spawn claude: ${err.message}`,
-                durationMs: Date.now() - startTime,
-            });
-            return;
-        }
-
-        console.log(`[ClaudeCode] Process spawned, PID: ${proc.pid}`);
-
-        // ─── Timeout ───
-        const timeoutHandle = setTimeout(() => {
-            console.error(`[ClaudeCode] ⏱️ TIMEOUT after ${timeoutMs / 1000}s — killing process`);
-            proc.kill("SIGTERM");
-            setTimeout(() => {
-                if (!resolved) proc.kill("SIGKILL");
-            }, 5000);
-
-            finish({
-                success: false,
-                actions,
-                error: `Process timed out after ${timeoutMs / 1000}s`,
-                durationMs: Date.now() - startTime,
-            });
-        }, timeoutMs);
-
-        let buffer = "";
-
-        proc.stdout?.on("data", (chunk: Buffer) => {
-            const text = chunk.toString();
-            buffer += text;
-
-            // Parse NDJSON (newline-delimited JSON)
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";  // Keep incomplete line in buffer
-
-            for (const line of lines) {
-                if (!line.trim()) continue;
-                try {
-                    const event = JSON.parse(line);
-                    const action = parseStreamEvent(event);
-                    if (action) {
-                        actions.push(action);
-                        // Emit live event
-                        agentEvents.emit("action", action);
-                        console.log(`[ClaudeCode] 📤 ${action.type}: ${(action.content || "").substring(0, 100)}`);
-                    }
-                } catch {
-                    // Skip unparseable lines
-                    console.log(`[ClaudeCode] Unparseable stdout: ${line.substring(0, 100)}`);
-                }
+async function executeTool(name: string, input: Record<string, any>, cwd: string): Promise<string> {
+    try {
+        switch (name) {
+            case "read_file": {
+                const filePath = path.resolve(cwd, input.path);
+                const content = await fs.readFile(filePath, "utf-8");
+                return content;
             }
+            case "write_file": {
+                const filePath = path.resolve(cwd, input.path);
+                await fs.mkdir(path.dirname(filePath), { recursive: true });
+                await fs.writeFile(filePath, input.content, "utf-8");
+                return `File written: ${input.path}`;
+            }
+            case "list_dir": {
+                const dirPath = path.resolve(cwd, input.path || ".");
+                const entries = await fs.readdir(dirPath, { withFileTypes: true });
+                return entries
+                    .map(e => `${e.isDirectory() ? "📁" : "📄"} ${e.name}`)
+                    .join("\n");
+            }
+            case "bash": {
+                return await runBash(input.command, cwd);
+            }
+            default:
+                return `Unknown tool: ${name}`;
+        }
+    } catch (err: any) {
+        return `Error: ${err.message}`;
+    }
+}
+
+function runBash(command: string, cwd: string): Promise<string> {
+    return new Promise((resolve) => {
+        const proc = spawn("bash", ["-c", command], {
+            cwd,
+            env: { ...process.env, HOME: "/root" },
+            stdio: ["pipe", "pipe", "pipe"],
         });
 
+        let stdout = "";
         let stderr = "";
-        proc.stderr?.on("data", (chunk: Buffer) => {
-            const text = chunk.toString();
-            stderr += text;
-            // LOG stderr in real-time — this is where errors show up
-            console.error(`[ClaudeCode] stderr: ${text.trim()}`);
-        });
+        proc.stdout.on("data", (d) => { stdout += d.toString(); });
+        proc.stderr.on("data", (d) => { stderr += d.toString(); });
+
+        // Timeout for bash commands: 60s
+        const timeout = setTimeout(() => {
+            proc.kill("SIGTERM");
+            resolve(`Command timed out after 60s.\nStdout: ${stdout}\nStderr: ${stderr}`);
+        }, 60000);
 
         proc.on("close", (code) => {
-            clearTimeout(timeoutHandle);
-
-            console.log(`[ClaudeCode] Process exited with code ${code}`);
-            if (stderr) {
-                console.error(`[ClaudeCode] Full stderr:\n${stderr}`);
-            }
-
-            // Process remaining buffer
-            if (buffer.trim()) {
-                try {
-                    const event = JSON.parse(buffer);
-                    const action = parseStreamEvent(event);
-                    if (action) actions.push(action);
-                } catch { /* ignore */ }
-            }
-
-            const finalResult = actions
-                .filter(a => a.type === "result" || a.type === "text")
-                .map(a => a.content)
-                .join("\n");
-
-            finish({
-                success: code === 0,
-                actions,
-                finalResult: finalResult || undefined,
-                error: code !== 0 ? (stderr || `Process exited with code ${code}`) : undefined,
-                durationMs: Date.now() - startTime,
-            });
+            clearTimeout(timeout);
+            const output = stdout + (stderr ? `\nStderr: ${stderr}` : "");
+            resolve(code === 0 ? output : `Exit code ${code}\n${output}`);
         });
-
         proc.on("error", (err) => {
-            clearTimeout(timeoutHandle);
-            console.error(`[ClaudeCode] ❌ Process error:`, err);
-            finish({
-                success: false,
-                actions,
-                error: `Process error: ${err.message}`,
-                durationMs: Date.now() - startTime,
-            });
+            clearTimeout(timeout);
+            resolve(`Spawn error: ${err.message}`);
         });
     });
 }
 
-// ─── Stream Event Parser ───
+// ─── Main Agent Runner ───
 
-function parseStreamEvent(event: any): AgentAction | null {
-    const now = new Date().toISOString();
+const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+const MODEL = "claude-sonnet-4-20250514";
 
-    if (event.type === "assistant" && event.message) {
-        // Text content from assistant
-        const textBlock = event.message.content?.find((c: any) => c.type === "text");
-        if (textBlock) {
-            return { type: "text", content: textBlock.text, timestamp: now };
+export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult> {
+    const startTime = Date.now();
+    const actions: AgentAction[] = [];
+    const maxTurns = options.maxTurns || 10;
+    const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
+
+    // Pre-flight check
+    if (!process.env.ANTHROPIC_API_KEY) {
+        console.error("[Agent] ❌ ANTHROPIC_API_KEY is not set!");
+        return {
+            success: false,
+            actions: [],
+            error: "ANTHROPIC_API_KEY is not set.",
+            durationMs: Date.now() - startTime,
+        };
+    }
+
+    console.log(`[Agent] Starting in ${options.cwd}`);
+    console.log(`[Agent] Max turns: ${maxTurns}, Timeout: ${timeoutMs / 1000}s`);
+
+    const client = new Anthropic();
+
+    // Build full prompt
+    let fullPrompt = options.prompt;
+    if (options.appendPrompt) {
+        fullPrompt += "\n\n--- CONTEXT ---\n" + options.appendPrompt;
+    }
+
+    const systemPrompt = options.systemPrompt || "You are a senior software engineer. Write clean, working code.";
+
+    // Conversation loop
+    const messages: Anthropic.Messages.MessageParam[] = [
+        { role: "user", content: fullPrompt },
+    ];
+
+    try {
+        for (let turn = 0; turn < maxTurns; turn++) {
+            // Check timeout
+            if (Date.now() - startTime > timeoutMs) {
+                console.log(`[Agent] ⏱️ Timeout after ${turn} turns`);
+                break;
+            }
+
+            console.log(`[Agent] Turn ${turn + 1}/${maxTurns}`);
+
+            const response = await client.messages.create({
+                model: MODEL,
+                max_tokens: 4096,
+                system: systemPrompt,
+                tools: TOOLS,
+                messages,
+            });
+
+            console.log(`[Agent] Response: stop_reason=${response.stop_reason}, ${response.content.length} blocks`);
+
+            // Process response content
+            const assistantContent: Anthropic.Messages.ContentBlock[] = response.content;
+            const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
+
+            for (const block of assistantContent) {
+                if (block.type === "text") {
+                    const action: AgentAction = {
+                        type: "text",
+                        content: block.text,
+                        timestamp: new Date().toISOString(),
+                    };
+                    actions.push(action);
+                    agentEvents.emit("action", action);
+                    console.log(`[Agent] 📝 Text: ${block.text.substring(0, 120)}...`);
+                } else if (block.type === "tool_use") {
+                    const action: AgentAction = {
+                        type: "tool_use",
+                        tool: block.name,
+                        input: block.input as Record<string, unknown>,
+                        content: `Tool: ${block.name}`,
+                        timestamp: new Date().toISOString(),
+                    };
+                    actions.push(action);
+                    agentEvents.emit("action", action);
+                    console.log(`[Agent] 🔧 Tool: ${block.name} → ${JSON.stringify(block.input).substring(0, 100)}`);
+
+                    // Execute tool
+                    const result = await executeTool(block.name, block.input as Record<string, any>, options.cwd);
+
+                    const resultAction: AgentAction = {
+                        type: "tool_result",
+                        tool: block.name,
+                        content: result.substring(0, 500),
+                        timestamp: new Date().toISOString(),
+                    };
+                    actions.push(resultAction);
+                    agentEvents.emit("action", resultAction);
+
+                    toolResults.push({
+                        type: "tool_result",
+                        tool_use_id: block.id,
+                        content: result.substring(0, 10000), // Limit result size
+                    });
+                }
+            }
+
+            // If no tool use, we're done
+            if (response.stop_reason === "end_turn") {
+                console.log(`[Agent] ✅ Completed after ${turn + 1} turns`);
+                break;
+            }
+
+            // If there were tool calls, send results back
+            if (toolResults.length > 0) {
+                messages.push({ role: "assistant", content: assistantContent });
+                messages.push({ role: "user", content: toolResults });
+            } else {
+                break;
+            }
         }
 
-        // Tool use
-        const toolBlock = event.message.content?.find((c: any) => c.type === "tool_use");
-        if (toolBlock) {
-            return {
-                type: "tool_use",
-                tool: toolBlock.name,
-                input: toolBlock.input,
-                content: `Using tool: ${toolBlock.name}`,
-                timestamp: now,
-            };
-        }
-    }
+        const finalResult = actions
+            .filter(a => a.type === "text" || a.type === "result")
+            .map(a => a.content)
+            .join("\n");
 
-    if (event.type === "result") {
-        const resultText = event.result?.map((r: any) => r.text || "").join("") || "";
-        return { type: "result", content: resultText, timestamp: now };
-    }
+        const result: AgentResult = {
+            success: true,
+            actions,
+            finalResult: finalResult || undefined,
+            durationMs: Date.now() - startTime,
+        };
 
-    if (event.type === "error") {
-        return { type: "error", content: event.error?.message || "Unknown error", timestamp: now };
-    }
+        console.log(`[Agent] Done in ${result.durationMs}ms, ${actions.length} actions`);
+        return result;
 
-    return null;
+    } catch (err: any) {
+        console.error(`[Agent] ❌ Error:`, err.message);
+        return {
+            success: false,
+            actions,
+            error: err.message,
+            durationMs: Date.now() - startTime,
+        };
+    }
 }
 
 // ─── Git Helpers (used by orchestrator) ───
 
 export async function gitClone(repoUrl: string, targetDir: string): Promise<boolean> {
     return new Promise((resolve) => {
-        console.log(`[Git] Cloning ${repoUrl} → ${targetDir}`);
+        console.log(`[Git] Cloning → ${targetDir}`);
         const proc = spawn("git", ["clone", repoUrl, targetDir], {
             env: { ...process.env, HOME: "/root" },
             stdio: ["pipe", "pipe", "pipe"],

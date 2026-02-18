@@ -15,11 +15,8 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV STORE_PATH=/data/store.json
 
-# Install git (needed for cloning repos) + curl
-RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
-
-# Install Claude Code CLI globally
-RUN npm install -g @anthropic-ai/claude-code
+# Install git (needed for cloning repos) + curl + bash
+RUN apt-get update && apt-get install -y git curl bash && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /data /workspace
 
