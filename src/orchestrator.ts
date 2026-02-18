@@ -77,6 +77,7 @@ export type Pipeline = {
         url?: string;
     };
     artifacts: Record<string, unknown>;
+    tokenUsage: { inputTokens: number; outputTokens: number };
     createdAt: string;
     updatedAt: string;
     error?: string;
@@ -148,6 +149,7 @@ export class Orchestrator extends EventEmitter {
             events: [],
             workspace,
             artifacts: {},
+            tokenUsage: { inputTokens: 0, outputTokens: 0 },
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
@@ -276,6 +278,7 @@ Réponds en JSON avec cette structure:
             this.addEvent(id, "Analyst", "🔍", `✗ Analyse échouée: ${result.error}`, "error");
             throw new Error(`Analysis failed: ${result.error}`);
         }
+        this.addTokens(id, result);
         await this.saveState();
     }
 
@@ -335,6 +338,7 @@ Réponds en JSON:
             this.addEvent(id, "Architect", "📐", `✗ Architecture échouée: ${result.error}`, "error");
             throw new Error(`Architecture failed: ${result.error}`);
         }
+        this.addTokens(id, result);
         await this.saveState();
     }
 
@@ -405,6 +409,12 @@ Instructions:
 3. Assure-toi que le Dockerfile produit une image qui démarre correctement
 4. NE génère PAS toutes les features, juste le squelette
 
+RÈGLES CRITIQUES POUR LE DOCKERFILE:
+- NE JAMAIS utiliser "COPY ... 2>/dev/null || true" — la syntaxe shell ne marche PAS dans COPY
+- Utiliser des fichiers simples et basiques dans le Dockerfile
+- Le Dockerfile doit être simple : FROM, WORKDIR, COPY, RUN, EXPOSE, CMD
+- NE PAS modifier le Dockerfile dans les features suivantes sauf si absolument nécessaire
+
 Le projet doit builder et démarrer avec: docker build . && docker run -p 3000:3000`,
             systemPrompt: "Tu es un développeur senior. Crée un scaffold minimal mais fonctionnel. Utilise les meilleures pratiques.",
             cwd: p.workspace,
@@ -415,6 +425,7 @@ Le projet doit builder et démarrer avec: docker build . && docker run -p 3000:3
         if (!result.success) {
             this.addEvent(id, "Developer", "💻", `Erreur scaffold: ${result.error}`, "error");
         }
+        this.addTokens(id, result);
 
         // Push to GitHub
         if (p.github) {
@@ -493,6 +504,7 @@ Instructions:
             if (!result.success) {
                 this.addEvent(id, "Developer", "💻", `Erreur feature "${feature}": ${result.error}`, "warning");
             }
+            this.addTokens(id, result);
 
             // Push after each feature
             if (p.github) {
@@ -577,6 +589,7 @@ Instructions:
         } else {
             this.addEvent(id, "Debugger", "🔧", `Erreur debugger: ${result.error}`, "error");
         }
+        this.addTokens(id, result);
     }
 
     private async runQA(id: string) {
@@ -605,6 +618,7 @@ Résumé: donne une note /10 et liste les problèmes trouvés.`,
             await gitPush(p.workspace, "chore: QA fixes");
             this.addEvent(id, "QA", "🧪", "✓ Review complet", "success");
         }
+        this.addTokens(id, result);
 
         this.setAgentStatus(id, "QA", "done", "Review terminé");
         await this.saveState();
@@ -658,6 +672,14 @@ Résumé: donne une note /10 et liste les problèmes trouvés.`,
     private shouldStop(id: string): boolean {
         const p = this.pipelines.get(id);
         return !p || p.phase === "PAUSED" || p.phase === "FAILED";
+    }
+
+    private addTokens(id: string, result: { inputTokens: number; outputTokens: number }) {
+        const p = this.pipelines.get(id);
+        if (!p) return;
+        if (!p.tokenUsage) p.tokenUsage = { inputTokens: 0, outputTokens: 0 };
+        p.tokenUsage.inputTokens += result.inputTokens;
+        p.tokenUsage.outputTokens += result.outputTokens;
     }
 
     private slugify(text: string): string {

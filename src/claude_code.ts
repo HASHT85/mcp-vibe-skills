@@ -26,6 +26,8 @@ export type AgentResult = {
     finalResult?: string;
     error?: string;
     durationMs: number;
+    inputTokens: number;
+    outputTokens: number;
 };
 
 export type AgentOptions = {
@@ -161,7 +163,11 @@ function runBash(command: string, cwd: string): Promise<string> {
 // ─── Main Agent Runner ───
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
-const MODEL = "claude-sonnet-4-20250514";
+const DEFAULT_MODEL = process.env.AI_MODEL || "claude-haiku-3";
+
+export function getCurrentModel(): string {
+    return DEFAULT_MODEL;
+}
 
 export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult> {
     const startTime = Date.now();
@@ -177,13 +183,17 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
             actions: [],
             error: "ANTHROPIC_API_KEY is not set.",
             durationMs: Date.now() - startTime,
+            inputTokens: 0,
+            outputTokens: 0,
         };
     }
 
     console.log(`[Agent] Starting in ${options.cwd}`);
-    console.log(`[Agent] Max turns: ${maxTurns}, Timeout: ${timeoutMs / 1000}s`);
+    console.log(`[Agent] Model: ${DEFAULT_MODEL}, Max turns: ${maxTurns}, Timeout: ${timeoutMs / 1000}s`);
 
     const client = new Anthropic();
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
 
     // Build full prompt
     let fullPrompt = options.prompt;
@@ -209,14 +219,17 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
             console.log(`[Agent] Turn ${turn + 1}/${maxTurns}`);
 
             const response = await client.messages.create({
-                model: MODEL,
+                model: DEFAULT_MODEL,
                 max_tokens: 4096,
                 system: systemPrompt,
                 tools: TOOLS,
                 messages,
             });
 
-            console.log(`[Agent] Response: stop_reason=${response.stop_reason}, ${response.content.length} blocks`);
+            console.log(`[Agent] Response: stop_reason=${response.stop_reason}, ${response.content.length} blocks, tokens: ${response.usage.input_tokens}in/${response.usage.output_tokens}out`);
+
+            totalInputTokens += response.usage.input_tokens;
+            totalOutputTokens += response.usage.output_tokens;
 
             // Process response content
             const assistantContent: Anthropic.Messages.ContentBlock[] = response.content;
@@ -289,9 +302,11 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
             actions,
             finalResult: finalResult || undefined,
             durationMs: Date.now() - startTime,
+            inputTokens: totalInputTokens,
+            outputTokens: totalOutputTokens,
         };
 
-        console.log(`[Agent] Done in ${result.durationMs}ms, ${actions.length} actions`);
+        console.log(`[Agent] Done in ${result.durationMs}ms, ${actions.length} actions, tokens: ${totalInputTokens}in/${totalOutputTokens}out`);
         return result;
 
     } catch (err: any) {
@@ -301,6 +316,8 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
             actions,
             error: err.message,
             durationMs: Date.now() - startTime,
+            inputTokens: totalInputTokens,
+            outputTokens: totalOutputTokens,
         };
     }
 }

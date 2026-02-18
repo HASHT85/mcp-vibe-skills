@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Rocket, FolderKanban, Bot, Sparkles, Server,
   ChevronLeft, Plus, ExternalLink, Github, Pause, Play,
-  Trash2, LayoutGrid,
+  Trash2, LayoutGrid, Coins,
 } from 'lucide-react';
 import {
   checkAuth, setAuth, listPipelines, launchIdea,
@@ -100,34 +100,56 @@ function Dashboard() {
 
   const selected = pipelines.find(p => p.id === selectedId);
 
+  // Render main content based on active nav
+  const renderMainContent = () => {
+    // If a project is selected, always show detail
+    if (selected) {
+      return (
+        <ProjectDetail
+          key={selected.id}
+          pipeline={selected}
+          onBack={() => setSelectedId(null)}
+          onRefresh={load}
+        />
+      );
+    }
+
+    switch (activeNav) {
+      case 'projects':
+        return (
+          <ProjectList
+            key="list"
+            pipelines={pipelines}
+            onSelect={(id) => setSelectedId(id)}
+          />
+        );
+      case 'agents':
+        return <AgentsView key="agents" pipelines={pipelines} />;
+      case 'tokens':
+        return <TokensView key="tokens" pipelines={pipelines} />;
+      case 'deploy':
+        return <DeployView key="deploy" pipelines={pipelines} />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="app-layout">
       {/* TopBar */}
       <TopBar
         pipelineCount={pipelines.filter(p => !['COMPLETED', 'FAILED'].includes(p.phase)).length}
         onLaunch={() => setShowModal(true)}
+        totalTokens={pipelines.reduce((sum, p) => sum + (p.tokenUsage?.inputTokens || 0) + (p.tokenUsage?.outputTokens || 0), 0)}
       />
 
       {/* Sidebar */}
-      <Sidebar active={activeNav} onChange={setActiveNav} />
+      <Sidebar active={activeNav} onChange={(id) => { setActiveNav(id); setSelectedId(null); }} />
 
       {/* Main */}
       <main className="main-content">
         <AnimatePresence mode="wait">
-          {selected ? (
-            <ProjectDetail
-              key={selected.id}
-              pipeline={selected}
-              onBack={() => setSelectedId(null)}
-              onRefresh={load}
-            />
-          ) : (
-            <ProjectList
-              key="list"
-              pipelines={pipelines}
-              onSelect={(id) => setSelectedId(id)}
-            />
-          )}
+          {renderMainContent()}
         </AnimatePresence>
       </main>
 
@@ -153,7 +175,7 @@ function Dashboard() {
 
 // ─── TopBar ───
 
-function TopBar({ pipelineCount, onLaunch }: { pipelineCount: number; onLaunch: () => void }) {
+function TopBar({ pipelineCount, onLaunch, totalTokens }: { pipelineCount: number; onLaunch: () => void; totalTokens: number }) {
   return (
     <header className="topbar">
       <div className="topbar-logo">
@@ -161,6 +183,10 @@ function TopBar({ pipelineCount, onLaunch }: { pipelineCount: number; onLaunch: 
         <span>VibeCraft HQ</span>
       </div>
       <div className="topbar-status">
+        <div className="status-badge" title="Total tokens used">
+          <Coins size={12} />
+          {formatTokenCount(totalTokens)} tokens
+        </div>
         <div className="status-badge">
           <span className="status-dot" />
           {pipelineCount} active
@@ -179,7 +205,7 @@ function TopBar({ pipelineCount, onLaunch }: { pipelineCount: number; onLaunch: 
 const NAV_ITEMS = [
   { id: 'projects', icon: LayoutGrid, label: 'Projects' },
   { id: 'agents', icon: Bot, label: 'Agents' },
-  { id: 'skills', icon: Sparkles, label: 'Skills' },
+  { id: 'tokens', icon: Coins, label: 'Tokens' },
   { id: 'deploy', icon: Server, label: 'Deploy' },
 ];
 
@@ -233,6 +259,7 @@ function ProjectList({ pipelines, onSelect }: { pipelines: Pipeline[]; onSelect:
 }
 
 function ProjectCard({ pipeline: p, onClick }: { pipeline: Pipeline; onClick: () => void }) {
+  const totalTokens = (p.tokenUsage?.inputTokens || 0) + (p.tokenUsage?.outputTokens || 0);
   return (
     <div className="project-card" onClick={onClick}>
       <div className="card-header">
@@ -250,14 +277,22 @@ function ProjectCard({ pipeline: p, onClick }: { pipeline: Pipeline; onClick: ()
           </span>
         ))}
       </div>
-      {p.github && (
-        <div className="link-row">
-          <Github size={12} />
-          <a href={p.github.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-            {p.github.owner}/{p.github.repo}
-          </a>
-        </div>
-      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {p.github && (
+          <div className="link-row">
+            <Github size={12} />
+            <a href={p.github.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+              {p.github.owner}/{p.github.repo}
+            </a>
+          </div>
+        )}
+        {totalTokens > 0 && (
+          <div className="token-badge">
+            <Coins size={10} />
+            {formatTokenCount(totalTokens)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -286,6 +321,8 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
     }
   };
 
+  const totalTokens = (p.tokenUsage?.inputTokens || 0) + (p.tokenUsage?.outputTokens || 0);
+
   return (
     <motion.div
       className="detail-view"
@@ -302,7 +339,7 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
           <h2>{p.name}</h2>
           <div className="detail-desc">{p.description}</div>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           <span className={`phase-badge ${p.phase.toLowerCase()}`}>{p.phase}</span>
           {!['COMPLETED', 'FAILED'].includes(p.phase) && (
             <button className="btn-back" onClick={handlePause} title={p.phase === 'PAUSED' ? 'Resume' : 'Pause'}>
@@ -320,8 +357,8 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
         <div className="progress-fill" style={{ width: `${p.progress}%` }} />
       </div>
 
-      {/* Links */}
-      <div style={{ display: 'flex', gap: 16 }}>
+      {/* Links + Tokens */}
+      <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         {p.github && (
           <div className="link-row">
             <Github size={12} />
@@ -334,6 +371,13 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
           <div className="link-row">
             <Rocket size={12} />
             <span>Dokploy: {p.dokploy.applicationId?.slice(0, 8)}...</span>
+          </div>
+        )}
+        {totalTokens > 0 && (
+          <div className="token-badge" style={{ fontSize: 12 }}>
+            <Coins size={12} />
+            {formatTokenCount(p.tokenUsage?.inputTokens || 0)} in / {formatTokenCount(p.tokenUsage?.outputTokens || 0)} out
+            ({formatTokenCount(totalTokens)} total)
           </div>
         )}
       </div>
@@ -400,6 +444,184 @@ function Terminal({ events }: { events: PipelineEvent[] }) {
         <div ref={endRef} />
       </div>
     </div>
+  );
+}
+
+// ─── Agents View ───
+
+function AgentsView({ pipelines }: { pipelines: Pipeline[] }) {
+  const allAgents = pipelines.flatMap(p =>
+    (p.agents || []).map(a => ({ ...a, pipelineName: p.name, pipelinePhase: p.phase }))
+  );
+
+  const byRole = allAgents.reduce((acc, a) => {
+    if (!acc[a.role]) acc[a.role] = [];
+    acc[a.role].push(a);
+    return acc;
+  }, {} as Record<string, typeof allAgents>);
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <div className="section-title">Agents ({allAgents.length})</div>
+      {Object.entries(byRole).map(([role, agents]) => (
+        <div key={role} style={{ marginBottom: 24 }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+            {agents[0]?.emoji} {role} ({agents.length})
+          </div>
+          <div className="agent-cards">
+            {agents.map((agent, i) => (
+              <motion.div
+                key={`${agent.pipelineName}-${i}`}
+                className={`agent-card ${agent.status}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+              >
+                <div className="agent-card-header">
+                  <span className="agent-card-emoji">{agent.emoji}</span>
+                  <span className="agent-card-name">{agent.role}</span>
+                  <span className={`agent-chip ${agent.status}`} style={{ marginLeft: 'auto' }}>
+                    {agent.status}
+                  </span>
+                </div>
+                <div className="agent-card-status">
+                  {agent.pipelineName} • {agent.currentAction || agent.pipelinePhase}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {allAgents.length === 0 && (
+        <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: 60 }}>
+          Aucun agent actif. Lance un projet pour les voir en action.
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+// ─── Tokens View ───
+
+function TokensView({ pipelines }: { pipelines: Pipeline[] }) {
+  const totalInput = pipelines.reduce((s, p) => s + (p.tokenUsage?.inputTokens || 0), 0);
+  const totalOutput = pipelines.reduce((s, p) => s + (p.tokenUsage?.outputTokens || 0), 0);
+  const totalTokens = totalInput + totalOutput;
+
+  // Rough cost estimation for Haiku 3
+  const costPerMInput = 0.25; // $0.25 per 1M input tokens
+  const costPerMOutput = 1.25; // $1.25 per 1M output tokens
+  const estimatedCost = (totalInput / 1_000_000) * costPerMInput + (totalOutput / 1_000_000) * costPerMOutput;
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <div className="section-title">Token Usage</div>
+
+      {/* Summary Cards */}
+      <div className="token-summary">
+        <div className="token-card">
+          <div className="token-card-label">Total Tokens</div>
+          <div className="token-card-value">{formatTokenCount(totalTokens)}</div>
+        </div>
+        <div className="token-card">
+          <div className="token-card-label">Input Tokens</div>
+          <div className="token-card-value">{formatTokenCount(totalInput)}</div>
+        </div>
+        <div className="token-card">
+          <div className="token-card-label">Output Tokens</div>
+          <div className="token-card-value">{formatTokenCount(totalOutput)}</div>
+        </div>
+        <div className="token-card highlight">
+          <div className="token-card-label">Coût estimé (Haiku)</div>
+          <div className="token-card-value">${estimatedCost.toFixed(4)}</div>
+        </div>
+      </div>
+
+      {/* Per-project breakdown */}
+      <div className="section-title" style={{ marginTop: 24 }}>Par Projet</div>
+      <div className="terminal">
+        <div className="terminal-header">
+          <div className="terminal-dots"><span /><span /><span /></div>
+          Token Breakdown
+        </div>
+        <div className="terminal-body">
+          {pipelines.map(p => {
+            const inp = p.tokenUsage?.inputTokens || 0;
+            const out = p.tokenUsage?.outputTokens || 0;
+            const total = inp + out;
+            const pct = totalTokens > 0 ? ((total / totalTokens) * 100).toFixed(1) : '0';
+            return (
+              <div key={p.id} className="terminal-line info">
+                <span className="terminal-agent" style={{ minWidth: 200 }}>{p.name}</span>
+                <span className="terminal-msg">
+                  {formatTokenCount(inp)} in / {formatTokenCount(out)} out = {formatTokenCount(total)} ({pct}%)
+                </span>
+              </div>
+            );
+          })}
+          {pipelines.length === 0 && (
+            <div className="terminal-line info">
+              <span className="terminal-msg" style={{ color: 'var(--text-muted)' }}>Aucune donnée de tokens</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Deploy View ───
+
+function DeployView({ pipelines }: { pipelines: Pipeline[] }) {
+  const deployed = pipelines.filter(p => p.dokploy);
+  const withGithub = pipelines.filter(p => p.github);
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <div className="section-title">Déploiements ({deployed.length})</div>
+
+      {deployed.length === 0 && withGithub.length === 0 && (
+        <div style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: 60 }}>
+          Aucun déploiement. Les projets sont déployés automatiquement via Dokploy.
+        </div>
+      )}
+
+      <div className="projects-grid">
+        {withGithub.map(p => (
+          <div key={p.id} className="project-card">
+            <div className="card-header">
+              <span className="card-name">{p.name}</span>
+              <span className={`phase-badge ${p.phase.toLowerCase()}`}>{p.phase}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+              {p.github && (
+                <div className="link-row">
+                  <Github size={12} />
+                  <a href={p.github.url} target="_blank" rel="noopener noreferrer">
+                    {p.github.owner}/{p.github.repo}
+                  </a>
+                  <ExternalLink size={10} />
+                </div>
+              )}
+              {p.dokploy && (
+                <div className="link-row">
+                  <Server size={12} />
+                  <span>Dokploy: {p.dokploy.applicationId?.slice(0, 12)}...</span>
+                  {p.dokploy.url && (
+                    <a href={p.dokploy.url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink size={10} />
+                    </a>
+                  )}
+                </div>
+              )}
+              {!p.dokploy && (
+                <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>⏳ En attente de déploiement...</div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </motion.div>
   );
 }
 
@@ -508,4 +730,10 @@ function formatTime(iso: string): string {
   } catch {
     return '';
   }
+}
+
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
 }

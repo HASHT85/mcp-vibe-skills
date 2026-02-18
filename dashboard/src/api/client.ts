@@ -158,6 +158,10 @@ export type Pipeline = {
     createdAt: string;
     updatedAt?: string;
     error?: string;
+    tokenUsage?: {
+        inputTokens: number;
+        outputTokens: number;
+    };
 };
 
 export type Project = {
