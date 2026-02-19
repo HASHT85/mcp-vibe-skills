@@ -653,7 +653,7 @@ export async function createDomain(
                     https: true,
                     certificateType: "letsencrypt",
                     path: "/",
-                    port: 80,
+                    port: 3000,
                 }
             }),
         });
