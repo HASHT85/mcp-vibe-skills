@@ -36,6 +36,8 @@ export type PipelinePhase =
     | "FAILED"
     | "PAUSED";
 
+export type ProjectType = "static" | "spa" | "fullstack" | "api" | "unknown";
+
 export type AgentStatus = "waiting" | "active" | "done" | "error";
 
 export type PipelineAgent = {
@@ -64,6 +66,7 @@ export type Pipeline = {
     description: string;
     phase: PipelinePhase;
     progress: number;          // 0-100
+    projectType: ProjectType;
     agents: PipelineAgent[];
     events: PipelineEvent[];
     workspace: string;         // /workspace/<id>
@@ -146,6 +149,7 @@ export class Orchestrator extends EventEmitter {
             description,
             phase: "QUEUED",
             progress: 0,
+            projectType: "unknown",
             agents: DEFAULT_AGENTS.map(a => ({ ...a, status: "waiting" as AgentStatus })),
             events: [],
             workspace,
@@ -381,20 +385,30 @@ Réponds en JSON avec cette structure:
 {
   "name": "nom du projet",
   "summary": "résumé en 2-3 phrases",
+  "type": "static|spa|fullstack|api",
   "features": ["feature 1", "feature 2", ...],
   "userStories": [{"story": "...", "priority": "High|Medium|Low"}],
   "stack": {"frontend": "...", "backend": "...", "database": "..."},
   "targetAudience": "..."
-}`,
+}
+
+Règles pour le champ "type":
+- "static" : HTML/CSS/JS vanilla, pas de build tool, pas de backend
+- "spa" : React, Vue, Svelte, Angular, Vite, Next.js... (nécessite npm run build)
+- "fullstack" : frontend + backend (Express, Fastify, Django, etc.)
+- "api" : backend/API uniquement, pas d'interface utilisateur`,
             systemPrompt: "Tu es un analyste produit senior. Sois concis et pragmatique.",
             cwd: p.workspace,
             maxTurns: 3,
         });
 
         if (result.success && result.finalResult) {
-            p.artifacts.analysis = this.tryParseJson(result.finalResult);
+            const analysis = this.tryParseJson(result.finalResult);
+            p.artifacts.analysis = analysis;
+            // Detect and store project type
+            p.projectType = this.detectProjectType(analysis);
             this.setAgentStatus(id, "Analyst", "done", "PRD créé");
-            this.addEvent(id, "Analyst", "🔍", "✓ PRD créé avec analyse complète", "success");
+            this.addEvent(id, "Analyst", "🔍", `✓ PRD créé — type détecté: ${p.projectType}`, "success");
         } else {
             this.setAgentStatus(id, "Analyst", "error", result.error || "Échec");
             this.addEvent(id, "Analyst", "🔍", `✗ Analyse échouée: ${result.error}`, "error");
@@ -414,7 +428,9 @@ Réponds en JSON avec cette structure:
         const analysis = p.artifacts.analysis as any;
         const keywords = [
             ...(analysis?.stack ? Object.values(analysis.stack) : []),
-            ...(analysis?.features?.slice(0, 3) || []),
+            ...(analysis?.techStack ? Object.values(analysis.techStack) : []),
+            ...(analysis?.technologies || []),
+            p.description,
         ].filter(Boolean).map(String);
 
         const skills = await findSkillsForContext(keywords, 5);
@@ -424,14 +440,25 @@ Réponds en JSON avec cette structure:
 
         this.addEvent(id, "Architect", "📐", `Skills assignés: ${skills.map(s => s.title).join(", ") || "aucun"}`, "info");
 
+        const dockerfileTemplate = this.getDockerfileTemplate(p.projectType, analysis?.stack);
+        const typeGuidance = this.getArchitectureGuidance(p.projectType);
+
         const result = await runClaudeAgent({
             prompt: `Conçois l'architecture technique pour ce projet.
 
 PRD: ${JSON.stringify(analysis, null, 2)}
+
+Type de projet détecté: ${p.projectType}
+${typeGuidance}
 ${skillsContext}
 
+Template Dockerfile recommandé pour ce type de projet:
+\`\`\`dockerfile
+${dockerfileTemplate}
+\`\`\`
+
 Crée un document d'architecture avec:
-1. Stack technique précise
+1. Stack technique précise (adapté au type: ${p.projectType})
 2. Structure de fichiers
 3. Endpoints API (si applicable)
 4. Schéma de données
@@ -444,7 +471,7 @@ Réponds en JSON:
   "endpoints": [{"method": "GET", "path": "/api/...", "description": "..."}],
   "features": ["feature à implémenter 1", "feature 2", ...]
 }`,
-            systemPrompt: "Tu es un architecte logiciel senior. Choisis des stacks simples et éprouvées.",
+            systemPrompt: "Tu es un architecte logiciel senior. Choisis des stacks simples et éprouvées. Adapte ton architecture au type de projet détecté.",
             cwd: p.workspace,
             maxTurns: 3,
             appendPrompt: skillsContext,
@@ -520,25 +547,30 @@ Réponds en JSON:
 
         // Use Claude Code to scaffold the project
         const architecture = p.artifacts.architecture as any;
+        const dockerfileTemplate = this.getDockerfileTemplate(p.projectType, architecture?.stack);
+        const scaffoldGuidance = this.getScaffoldGuidance(p.projectType);
+
         const result = await runClaudeAgent({
             prompt: `Crée le scaffold initial de ce projet dans le répertoire courant.
 
+Type de projet: ${p.projectType}
 Architecture: ${JSON.stringify(architecture, null, 2)}
 
-Instructions:
-1. Crée tous les fichiers de base (package.json, Dockerfile, etc.)
-2. Implémente un hello world fonctionnel qui build
-3. Assure-toi que le Dockerfile produit une image qui démarre correctement
-4. NE génère PAS toutes les features, juste le squelette
+${scaffoldGuidance}
+
+DOCKERFILE OBLIGATOIRE — utilise EXACTEMENT ce template comme base:
+\`\`\`dockerfile
+${dockerfileTemplate}
+\`\`\`
 
 RÈGLES CRITIQUES POUR LE DOCKERFILE:
 - NE JAMAIS utiliser "COPY ... 2>/dev/null || true" — la syntaxe shell ne marche PAS dans COPY
-- Utiliser des fichiers simples et basiques dans le Dockerfile
 - Le Dockerfile doit être simple : FROM, WORKDIR, COPY, RUN, EXPOSE, CMD
 - NE PAS modifier le Dockerfile dans les features suivantes sauf si absolument nécessaire
-
-Le projet doit builder et démarrer avec: docker build . && docker run -p 3000:3000`,
-            systemPrompt: "Tu es un développeur senior. Crée un scaffold minimal mais fonctionnel. Utilise les meilleures pratiques.",
+- Pour les projets static: expose le port 80 (nginx), pas 3000
+- Pour les projets spa: build en 2 étapes (node build → nginx serve)
+- Pour les projets api/fullstack: expose le port 3000 (node)`,
+            systemPrompt: "Tu es un développeur senior. Crée un scaffold minimal mais fonctionnel. Adapte le code au type de projet détecté.",
             cwd: p.workspace,
             allowedTools: ["Write", "Edit", "Bash"],
             maxTurns: 20,
@@ -612,8 +644,14 @@ Le projet doit builder et démarrer avec: docker build . && docker run -p 3000:3
             const pipeline = this.pipelines.get(id)!;
             pipeline.progress = devProgress;
 
+            const devSystemPrompt = p.projectType === "static"
+                ? "Tu es un développeur frontend expert HTML/CSS/JS vanilla. Écris du code moderne, sans framework, avec des animations CSS et du JS natif."
+                : p.projectType === "spa"
+                ? "Tu es un développeur React/Vue senior. Écris des composants propres, typés, réutilisables."
+                : "Tu es un développeur senior fullstack. Écris du code propre et fonctionnel. Gère les erreurs correctement.";
+
             const result = await runClaudeAgent({
-                prompt: `Implémente cette feature dans le projet existant:
+                prompt: `Implémente cette feature dans le projet existant (type: ${p.projectType}):
 
 Feature: "${feature}"
 
@@ -622,9 +660,10 @@ Architecture: ${JSON.stringify(architecture, null, 2)}
 Instructions:
 1. Lis le code existant pour comprendre la structure
 2. Implémente la feature de manière propre
-3. Assure-toi que le code compile sans erreur
-4. Ne casse pas les features existantes`,
-                systemPrompt: "Tu es un développeur senior. Écris du code propre et fonctionnel. Gère les erreurs correctement.",
+3. Assure-toi que le code compile/fonctionne sans erreur
+4. Ne casse pas les features existantes
+5. NE modifie pas le Dockerfile sauf si absolument nécessaire`,
+                systemPrompt: devSystemPrompt,
                 cwd: p.workspace,
                 allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
                 maxTurns: 30,
@@ -809,6 +848,144 @@ Résumé: donne une note /10 et liste les problèmes trouvés.`,
         if (!p.tokenUsage) p.tokenUsage = { inputTokens: 0, outputTokens: 0 };
         p.tokenUsage.inputTokens += result.inputTokens;
         p.tokenUsage.outputTokens += result.outputTokens;
+    }
+
+    // ─── Project Type Helpers ───
+
+    private detectProjectType(analysis: any): ProjectType {
+        // Trust the model's own detection first
+        const declared = (analysis?.type || "").toLowerCase();
+        if (["static", "spa", "fullstack", "api"].includes(declared)) {
+            return declared as ProjectType;
+        }
+
+        // Fallback: infer from stack
+        const frontend = (analysis?.stack?.frontend || "").toLowerCase();
+        const backend = (analysis?.stack?.backend || "").toLowerCase();
+
+        const hasBackend = backend && !["none", "aucun", "n/a", "-", ""].includes(backend);
+        const hasFrontend = frontend && !["none", "aucun", "n/a", "-", ""].includes(frontend);
+        const isSPA = /react|vue|svelte|angular|vite|next|nuxt|remix/.test(frontend);
+
+        if (!hasBackend) return isSPA ? "spa" : "static";
+        if (!hasFrontend) return "api";
+        return "fullstack";
+    }
+
+    private getDockerfileTemplate(type: ProjectType, stack?: any): string {
+        switch (type) {
+            case "static":
+                return `FROM nginx:alpine
+COPY . /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]`;
+
+            case "spa":
+                return `# Stage 1: Build
+FROM node:20-slim AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Stage 2: Serve
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]`;
+
+            case "api":
+                return `FROM node:20-slim
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+EXPOSE 3000
+CMD ["node", "index.js"]`;
+
+            case "fullstack":
+            default:
+                return `FROM node:20-slim AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+FROM node:20-slim
+WORKDIR /app
+COPY --from=builder /app/package*.json ./
+RUN npm ci --only=production
+COPY --from=builder /app/dist ./dist
+EXPOSE 3000
+CMD ["node", "dist/index.js"]`;
+        }
+    }
+
+    private getArchitectureGuidance(type: ProjectType): string {
+        switch (type) {
+            case "static":
+                return `CONTRAINTES ARCHITECTURE (site statique):
+- Pas de backend, pas de build tool (juste HTML/CSS/JS vanilla)
+- Dockerfile: nginx:alpine, COPY vers /usr/share/nginx/html, port 80
+- Pas de package.json nécessaire (sauf si on utilise npm pour des libs)
+- Structure simple: index.html, style.css, script.js`;
+
+            case "spa":
+                return `CONTRAINTES ARCHITECTURE (SPA):
+- Framework frontend uniquement (React/Vue/Svelte avec Vite)
+- Dockerfile multi-stage: node build → nginx serve, port 80
+- Pas de backend: utilise des services externes (Supabase, Firebase) si besoin de data
+- Build: npm run build → dist/ → nginx`;
+
+            case "api":
+                return `CONTRAINTES ARCHITECTURE (API backend):
+- Pas de frontend, uniquement des endpoints REST/GraphQL
+- Dockerfile: node:20-slim, port 3000
+- Inclure un endpoint /health pour le healthcheck Dokploy`;
+
+            case "fullstack":
+                return `CONTRAINTES ARCHITECTURE (fullstack):
+- Frontend + Backend dans le même repo
+- Backend expose une API REST sur /api/*
+- Frontend servi statiquement ou via le backend
+- Dockerfile: multi-stage build, port 3000`;
+
+            default:
+                return "";
+        }
+    }
+
+    private getScaffoldGuidance(type: ProjectType): string {
+        switch (type) {
+            case "static":
+                return `INSTRUCTIONS SCAFFOLD (site statique):
+1. Crée index.html, style.css, et script.js directement
+2. Le Dockerfile est nginx:alpine — COPY directement les fichiers HTML/CSS/JS
+3. Aucun npm install nécessaire
+4. Assure-toi que index.html est à la racine du projet`;
+
+            case "spa":
+                return `INSTRUCTIONS SCAFFOLD (SPA):
+1. Initialise un projet Vite (react-ts ou vue-ts selon l'archi)
+2. Le Dockerfile build en 2 étapes: npm run build → dist/ → nginx
+3. Vérifie que npm run build fonctionne avant de committer`;
+
+            case "api":
+                return `INSTRUCTIONS SCAFFOLD (API):
+1. Crée un serveur Express/Fastify minimal avec au moins GET /health et GET /
+2. package.json avec scripts start et build si TypeScript
+3. Port d'écoute: 3000`;
+
+            case "fullstack":
+                return `INSTRUCTIONS SCAFFOLD (fullstack):
+1. Structure claire backend/ et frontend/ ou src/ avec routing
+2. Backend: Express sur port 3000, sert aussi le frontend en production
+3. Frontend: pages de base avec routing`;
+
+            default:
+                return "";
+        }
     }
 
     private slugify(text: string): string {

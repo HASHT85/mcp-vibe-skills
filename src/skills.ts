@@ -90,20 +90,38 @@ async function fetchListPage(url: string, limit = 20): Promise<SkillItem[]> {
     return Array.from(uniq.values()).slice(0, limit);
 }
 
-export async function fetchTrending(limit = 20): Promise<SkillItem[]> {
+export async function fetchTrending(limit = 200): Promise<SkillItem[]> {
     return fetchListPage("https://skills.sh/trending", limit);
 }
 
-export async function fetchHot(limit = 20): Promise<SkillItem[]> {
+export async function fetchHot(limit = 200): Promise<SkillItem[]> {
     return fetchListPage("https://skills.sh/hot", limit);
+}
+
+export async function fetchAllTime(limit = 200): Promise<SkillItem[]> {
+    return fetchListPage("https://skills.sh", limit);
+}
+
+// Normalize compound keywords: "HTML/CSS/JS vanilla" → ["html", "css", "js", "vanilla"]
+function normalizeKeywords(raw: string[]): string[] {
+    const STOPWORDS = new Set(["none", "the", "and", "for", "with", "using", "based", "app", "web"]);
+    const result = new Set<string>();
+    for (const kw of raw) {
+        const parts = kw.toLowerCase().split(/[\/,\s.+\-]+/);
+        for (const p of parts) {
+            const clean = p.replace(/[^a-z0-9]/g, "").trim();
+            if (clean.length >= 2 && !STOPWORDS.has(clean)) result.add(clean);
+        }
+    }
+    return Array.from(result);
 }
 
 export async function searchSkills(q: string, limit = 20): Promise<SkillItem[]> {
     const query = q.toLowerCase().trim();
     if (!query) return [];
 
-    const [t, h] = await Promise.all([fetchTrending(50), fetchHot(50)]);
-    const merged = [...t, ...h];
+    const [t, h, a] = await Promise.all([fetchTrending(200), fetchHot(200), fetchAllTime(200)]);
+    const merged = [...t, ...h, ...a];
 
     const uniq = new Map<string, SkillItem>();
     for (const it of merged) uniq.set(it.href, it);
@@ -115,7 +133,7 @@ export async function searchSkills(q: string, limit = 20): Promise<SkillItem[]> 
             it.repo.toLowerCase().includes(query) ||
             it.skill.toLowerCase().includes(query)
         )
-        .slice(0, Math.min(limit, 50));
+        .slice(0, Math.min(limit, 200));
 }
 
 // ─── Context-Aware Skills Lookup (used by Orchestrator) ───
@@ -140,9 +158,13 @@ export async function findSkillsForContext(
     if (!keywords.length) return [];
 
     try {
+        // Normalize compound keywords before searching
+        const normalized = normalizeKeywords(keywords);
+        console.log("[Skills] keywords normalized:", normalized);
+
         // Search for each keyword and merge results
         const allResults: SkillItem[] = [];
-        for (const kw of keywords.slice(0, 5)) {
+        for (const kw of normalized.slice(0, 8)) {
             const results = await searchSkills(kw, 10);
             allResults.push(...results);
         }

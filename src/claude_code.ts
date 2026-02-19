@@ -163,7 +163,7 @@ function runBash(command: string, cwd: string): Promise<string> {
 // ─── Main Agent Runner ───
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
-const DEFAULT_MODEL = process.env.AI_MODEL || "claude-3-5-sonnet-20241022 ";
+const DEFAULT_MODEL = process.env.AI_MODEL || "claude-haiku-4-5-20251001";
 
 export function getCurrentModel(): string {
     return DEFAULT_MODEL;
