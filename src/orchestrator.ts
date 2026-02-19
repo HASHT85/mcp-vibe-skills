@@ -194,7 +194,16 @@ export class Orchestrator extends EventEmitter {
         const p = this.pipelines.get(id);
         if (!p || p.phase !== "PAUSED") return false;
         this.addEvent(id, "Orchestrator", "▶️", "Pipeline repris", "info");
-        this.executePipeline(id).catch(console.error);
+        // If project already has dokploy/github, it was a modification — don't re-run full pipeline
+        const pendingMod = p.artifacts.pendingModification as string | undefined;
+        if (pendingMod) {
+            this.executeModification(id, pendingMod).catch(console.error);
+        } else if (p.dokploy) {
+            // Already deployed — resume from development
+            this.executeFromDevelopment(id).catch(console.error);
+        } else {
+            this.executePipeline(id).catch(console.error);
+        }
         return true;
     }
 
@@ -219,6 +228,7 @@ export class Orchestrator extends EventEmitter {
         p.phase = "DEVELOPMENT";
         p.progress = 50;
         p.error = undefined;
+        p.artifacts.pendingModification = instructions; // used by resumePipeline
         p.events.push({
             id: crypto.randomUUID(),
             pipelineId: id,
@@ -314,12 +324,31 @@ Instructions techniques:
             this.setAgentStatus(id, "QA", "done");
 
             // Done
+            delete p.artifacts.pendingModification;
             this.setPhase(id, "COMPLETED");
             this.addEvent(id, "Orchestrator", "🎉", "Modification terminée et déployée!", "success");
 
         } catch (err: any) {
             this.setPhase(id, "FAILED", err.message);
             this.addEvent(id, "Orchestrator", "❌", `Erreur modification: ${err.message}`, "error");
+        } finally {
+            this.running.delete(id);
+            await this.saveState();
+        }
+    }
+
+    // ─── Resume from Development (after pause on already-deployed project) ───
+
+    private async executeFromDevelopment(id: string) {
+        if (this.running.has(id)) return;
+        this.running.add(id);
+        try {
+            await this.runDevelopment(id);
+            if (!this.shouldStop(id)) await this.runQA(id);
+            this.setPhase(id, "COMPLETED");
+            this.addEvent(id, "Orchestrator", "🎉", "Projet terminé et déployé!", "success");
+        } catch (err: any) {
+            this.setPhase(id, "FAILED", err.message);
         } finally {
             this.running.delete(id);
             await this.saveState();
@@ -587,8 +616,8 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
             this.addEvent(id, "Developer", "💻", "Push GitHub → scaffold initial", "success");
         }
 
-        // Deploy to Dokploy
-        if (isDokployConfigured() && p.github) {
+        // Deploy to Dokploy — only if not already deployed
+        if (isDokployConfigured() && p.github && !p.dokploy) {
             this.setPhase(id, "DEPLOYING");
             try {
                 const dokProject = await createDokployProject(repoName, p.description);

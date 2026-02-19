@@ -220,8 +220,8 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
 
             const response = await client.messages.create({
                 model: DEFAULT_MODEL,
-                max_tokens: 4096,
-                system: systemPrompt,
+                max_tokens: 8192,
+                system: systemPrompt + "\n\nRÈGLES ABSOLUES: Ne crée JAMAIS de fichiers de documentation (.md), de tests, de rapports ou de scripts de validation. Concentre-toi uniquement sur le code fonctionnel demandé. Sois concis dans tes réponses textuelles.",
                 tools: TOOLS,
                 messages,
             });
@@ -310,11 +310,25 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
         return result;
 
     } catch (err: any) {
-        console.error(`[Agent] ❌ Error:`, err.message);
+        const errMsg = String(err.message || err);
+        console.error(`[Agent] ❌ Error: ${errMsg}`);
+
+        // Fatal errors that should stop the entire pipeline
+        const isFatal =
+            errMsg.includes("credit balance is too low") ||
+            errMsg.includes("invalid_api_key") ||
+            errMsg.includes("permission_error");
+
+        if (isFatal) {
+            const fatalErr = new Error(`FATAL: ${errMsg}`);
+            (fatalErr as any).fatal = true;
+            throw fatalErr;
+        }
+
         return {
             success: false,
             actions,
-            error: err.message,
+            error: errMsg,
             durationMs: Date.now() - startTime,
             inputTokens: totalInputTokens,
             outputTokens: totalOutputTokens,
