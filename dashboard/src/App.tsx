@@ -3,11 +3,11 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Rocket, FolderKanban, Bot, Sparkles, Server,
   ChevronLeft, Plus, ExternalLink, Github, Pause, Play,
-  Trash2, LayoutGrid, Coins,
+  Trash2, LayoutGrid, Coins, Edit,
 } from 'lucide-react';
 import {
   checkAuth, setAuth, listPipelines, launchIdea,
-  pausePipeline, resumePipeline, deletePipeline, connectAllSSE,
+  pausePipeline, resumePipeline, deletePipeline, connectAllSSE, modifyPipeline,
 } from './api/client';
 import type { Pipeline, PipelineEvent, PipelineAgent } from './api/client';
 import './index.css';
@@ -304,6 +304,10 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
   onBack: () => void;
   onRefresh: () => void;
 }) {
+  const [showModify, setShowModify] = useState(false);
+  const [modifyText, setModifyText] = useState('');
+  const [modifying, setModifying] = useState(false);
+
   const handlePause = async () => {
     if (p.phase === 'PAUSED') {
       await resumePipeline(p.id);
@@ -318,6 +322,21 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
       await deletePipeline(p.id);
       onBack();
       onRefresh();
+    }
+  };
+
+  const handleModify = async () => {
+    if (!modifyText.trim()) return;
+    setModifying(true);
+    try {
+      await modifyPipeline(p.id, modifyText.trim());
+      setShowModify(false);
+      setModifyText('');
+      onRefresh();
+    } catch (err: any) {
+      alert(`Erreur: ${err.message}`);
+    } finally {
+      setModifying(false);
     }
   };
 
@@ -341,6 +360,11 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           <span className={`phase-badge ${p.phase.toLowerCase()}`}>{p.phase}</span>
+          {['COMPLETED', 'FAILED'].includes(p.phase) && (
+            <button className="btn-modify" onClick={() => setShowModify(true)} title="Modifier le projet">
+              <Edit size={14} /> Modifier
+            </button>
+          )}
           {!['COMPLETED', 'FAILED'].includes(p.phase) && (
             <button className="btn-back" onClick={handlePause} title={p.phase === 'PAUSED' ? 'Resume' : 'Pause'}>
               {p.phase === 'PAUSED' ? <Play size={14} /> : <Pause size={14} />}
@@ -367,7 +391,15 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
             </a>
           </div>
         )}
-        {p.dokploy && (
+        {p.dokploy?.url && (
+          <div className="link-row">
+            <ExternalLink size={12} />
+            <a href={p.dokploy.url} target="_blank" rel="noopener noreferrer">
+              {p.dokploy.url}
+            </a>
+          </div>
+        )}
+        {p.dokploy && !p.dokploy.url && (
           <div className="link-row">
             <Rocket size={12} />
             <span>Dokploy: {p.dokploy.applicationId?.slice(0, 8)}...</span>
@@ -393,6 +425,50 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
       {/* Terminal */}
       <div className="section-title">Console</div>
       <Terminal events={p.events || []} />
+
+      {/* Modify Modal */}
+      <AnimatePresence>
+        {showModify && (
+          <motion.div
+            className="modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowModify(false)}
+          >
+            <motion.div
+              className="modal modify-modal"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3>✏️ Modifier "{p.name}"</h3>
+              <p style={{ color: 'var(--color-text-dim)', fontSize: 13, margin: '8px 0 16px' }}>
+                Décris les modifications à apporter. L'agent Developer va modifier le code, push sur GitHub, et redéployer.
+              </p>
+              <textarea
+                autoFocus
+                rows={6}
+                placeholder="Ex: Change le titre en 'Mon Portfolio', ajoute un mode dark, corrige le footer..."
+                value={modifyText}
+                onChange={(e) => setModifyText(e.target.value)}
+                className="modify-textarea"
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+                <button className="btn-cancel" onClick={() => setShowModify(false)}>Annuler</button>
+                <button
+                  className="btn-launch"
+                  onClick={handleModify}
+                  disabled={modifying || !modifyText.trim()}
+                >
+                  {modifying ? 'Envoi...' : '🚀 Lancer la modification'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

@@ -185,6 +185,23 @@ app.delete("/pipeline/:id", async (req: Request, res: Response) => {
     res.json({ ok });
 });
 
+// Modify pipeline (send new instructions to a completed/failed project)
+app.post("/pipeline/:id/modify", async (req: Request, res: Response) => {
+    try {
+        const instructions = String(req.body?.instructions ?? "").trim();
+        if (!instructions) {
+            return res.status(400).json({ error: "instructions_required" });
+        }
+        const pipeline = await orchestrator.modifyPipeline(req.params.id, instructions);
+        if (!pipeline) {
+            return res.status(404).json({ error: "pipeline_not_found" });
+        }
+        res.json({ pipeline });
+    } catch (err: any) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
 // ─────────────────────────────────────
 // Projects & Dashboard Data
 // ─────────────────────────────────────

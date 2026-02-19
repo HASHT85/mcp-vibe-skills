@@ -9,7 +9,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { EventEmitter } from "node:events";
 
-import { runClaudeAgent, gitInit, gitPush, agentEvents, type AgentAction } from "./claude_code.js";
+import { runClaudeAgent, gitInit, gitPush, gitClone, agentEvents, type AgentAction } from "./claude_code.js";
 import { findSkillsForContext } from "./skills.js";
 import {
     isDokployConfigured,
@@ -199,6 +199,127 @@ export class Orchestrator extends EventEmitter {
         this.pipelines.delete(id);
         await this.saveState();
         return true;
+    }
+
+    // ─── Modify Existing Pipeline ───
+
+    async modifyPipeline(id: string, instructions: string): Promise<Pipeline | null> {
+        const p = this.pipelines.get(id);
+        if (!p) return null;
+        if (this.running.has(id)) throw new Error("Pipeline is already running");
+        if (!["COMPLETED", "FAILED"].includes(p.phase)) {
+            throw new Error("Pipeline must be COMPLETED or FAILED to modify");
+        }
+
+        // Reset state for modification
+        p.phase = "DEVELOPMENT";
+        p.progress = 50;
+        p.error = undefined;
+        p.events.push({
+            id: crypto.randomUUID(),
+            pipelineId: id,
+            timestamp: new Date().toISOString(),
+            agentRole: "Orchestrator",
+            agentEmoji: "✏️",
+            action: `Modification demandée: ${instructions.slice(0, 100)}...`,
+            type: "info",
+        });
+        await this.saveState();
+
+        // Run modification in background
+        this.executeModification(id, instructions).catch(err => {
+            console.error(`[Orchestrator] Modify error for ${id}:`, err);
+        });
+
+        return p;
+    }
+
+    private async executeModification(id: string, instructions: string) {
+        if (this.running.has(id)) return;
+        this.running.add(id);
+
+        const p = this.pipelines.get(id)!;
+
+        try {
+            this.setPhase(id, "DEVELOPMENT");
+            this.setAgentStatus(id, "Developer", "active", "Modification en cours...");
+
+            // Clone the repo if workspace doesn't exist (container was rebuilt)
+            if (p.github) {
+                const workspaceExists = await fs.access(p.workspace).then(() => true).catch(() => false);
+                if (!workspaceExists) {
+                    this.addEvent(id, "Developer", "💻", "Re-clonage du workspace...", "info");
+                    await gitClone(
+                        `https://${GITHUB_TOKEN}@github.com/${p.github.owner}/${p.github.repo}.git`,
+                        p.workspace
+                    );
+                }
+            }
+
+            // Run developer agent with modification instructions
+            const result = await runClaudeAgent({
+                prompt: `Tu as un projet web existant à modifier. Voici les instructions de modification:
+
+${instructions}
+
+Instructions techniques:
+1. Lis le code existant pour comprendre la structure
+2. Applique les modifications demandées
+3. Assure-toi que le code compile sans erreur
+4. Ne casse pas les fonctionnalités existantes
+5. Si il y a un Dockerfile, assure-toi qu'il reste valide`,
+                systemPrompt: "Tu es un développeur senior. Applique les modifications demandées de manière propre et professionnelle.",
+                cwd: p.workspace,
+                allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
+                maxTurns: 30,
+            });
+
+            if (!result.success) {
+                this.addEvent(id, "Developer", "💻", `Erreur modification: ${result.error}`, "warning");
+            }
+            this.addTokens(id, result);
+
+            // Push to GitHub
+            if (p.github) {
+                await gitPush(p.workspace, `mod: ${instructions.slice(0, 50)}`);
+                this.addEvent(id, "Developer", "💻", "Push → modification appliquée", "success");
+            }
+
+            // Wait for Dokploy build
+            if (p.dokploy) {
+                await this.waitForBuild(id);
+            }
+
+            // Run QA
+            this.setPhase(id, "QA");
+            this.setAgentStatus(id, "QA", "active", "Vérification post-modification...");
+
+            const qaResult = await runClaudeAgent({
+                prompt: `Vérifie que le projet fonctionne correctement après les modifications:
+"${instructions}"
+
+1. Vérifie que le build fonctionne
+2. Vérifie qu'il n'y a pas d'erreurs dans le code
+3. Vérifie que les modifications sont correctes`,
+                systemPrompt: "Tu es un QA engineer. Vérifie le code de manière rigoureuse.",
+                cwd: p.workspace,
+                allowedTools: ["Read", "Bash", "ListDir"],
+                maxTurns: 10,
+            });
+            this.addTokens(id, qaResult);
+            this.setAgentStatus(id, "QA", "done");
+
+            // Done
+            this.setPhase(id, "COMPLETED");
+            this.addEvent(id, "Orchestrator", "🎉", "Modification terminée et déployée!", "success");
+
+        } catch (err: any) {
+            this.setPhase(id, "FAILED", err.message);
+            this.addEvent(id, "Orchestrator", "❌", `Erreur modification: ${err.message}`, "error");
+        } finally {
+            this.running.delete(id);
+            await this.saveState();
+        }
     }
 
     // ─── Pipeline Execution ───

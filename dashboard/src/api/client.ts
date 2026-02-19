@@ -103,6 +103,13 @@ export function connectAllSSE(onEvent: (event: PipelineEvent) => void): () => vo
     return () => es.close();
 }
 
+export async function modifyPipeline(id: string, instructions: string) {
+    return api<{ pipeline: Pipeline }>(`/pipeline/${id}/modify`, {
+        method: 'POST',
+        body: JSON.stringify({ instructions }),
+    });
+}
+
 // ─── Legacy ───
 
 export async function getProjects() {
