@@ -272,7 +272,7 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
                     toolResults.push({
                         type: "tool_result",
                         tool_use_id: block.id,
-                        content: result.substring(0, 10000), // Limit result size
+                        content: result.substring(0, 3000),
                     });
                 }
             }
@@ -287,6 +287,16 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
             if (toolResults.length > 0) {
                 messages.push({ role: "assistant", content: assistantContent });
                 messages.push({ role: "user", content: toolResults });
+
+                // Sliding window: keep initial user message + last 3 exchange pairs
+                // to prevent quadratic token growth over many turns
+                const KEEP_PAIRS = 3;
+                if (messages.length > 1 + KEEP_PAIRS * 2) {
+                    const initial = messages[0];
+                    const tail = messages.slice(-(KEEP_PAIRS * 2));
+                    messages.length = 0;
+                    messages.push(initial, ...tail);
+                }
             } else {
                 break;
             }

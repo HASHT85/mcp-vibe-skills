@@ -285,7 +285,7 @@ Instructions techniques:
                 systemPrompt: "Tu es un développeur senior. Applique les modifications demandées de manière propre et professionnelle.",
                 cwd: p.workspace,
                 allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
-                maxTurns: 30,
+                maxTurns: 15,
             });
 
             if (!result.success) {
@@ -620,7 +620,7 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
             systemPrompt: "Tu es un développeur senior. Crée un scaffold minimal mais fonctionnel. Adapte le code au type de projet détecté.",
             cwd: p.workspace,
             allowedTools: ["Write", "Edit", "Bash"],
-            maxTurns: 20,
+            maxTurns: 12,
         });
 
         if (!result.success) {
@@ -723,7 +723,7 @@ Instructions:
                 systemPrompt: devSystemPrompt,
                 cwd: p.workspace,
                 allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
-                maxTurns: 30,
+                maxTurns: 12,
             });
 
             if (!result.success) {
@@ -809,7 +809,7 @@ Instructions:
             systemPrompt: "Tu es un debugger expert. Analyse les erreurs de build et corrige-les de manière ciblée.",
             cwd: p.workspace,
             allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
-            maxTurns: 15,
+            maxTurns: 8,
         });
 
         if (result.success) {
@@ -840,7 +840,7 @@ Résumé: donne une note /10 et liste les problèmes trouvés.`,
             systemPrompt: "Tu es un QA engineer senior. Sois thorough mais pragmatique.",
             cwd: p.workspace,
             allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
-            maxTurns: 15,
+            maxTurns: 8,
         });
 
         if (result.success && p.github) {
