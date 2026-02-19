@@ -584,9 +584,9 @@ function TokensView({ pipelines }: { pipelines: Pipeline[] }) {
   const totalOutput = pipelines.reduce((s, p) => s + (p.tokenUsage?.outputTokens || 0), 0);
   const totalTokens = totalInput + totalOutput;
 
-  // Rough cost estimation for Haiku 3
-  const costPerMInput = 0.25; // $0.25 per 1M input tokens
-  const costPerMOutput = 1.25; // $1.25 per 1M output tokens
+  // Claude Haiku 4.5 pricing (claude-haiku-4-5-20251001)
+  const costPerMInput = 1.00; // $1.00 per 1M input tokens
+  const costPerMOutput = 5.00; // $5.00 per 1M output tokens
   const estimatedCost = (totalInput / 1_000_000) * costPerMInput + (totalOutput / 1_000_000) * costPerMOutput;
 
   return (
@@ -608,7 +608,7 @@ function TokensView({ pipelines }: { pipelines: Pipeline[] }) {
           <div className="token-card-value">{formatTokenCount(totalOutput)}</div>
         </div>
         <div className="token-card highlight">
-          <div className="token-card-label">Coût estimé (Haiku)</div>
+          <div className="token-card-label">Coût estimé (Haiku 4.5)</div>
           <div className="token-card-value">${estimatedCost.toFixed(4)}</div>
         </div>
       </div>

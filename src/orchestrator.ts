@@ -386,7 +386,10 @@ Instructions techniques:
             // Done!
             this.setPhase(id, "COMPLETED");
             this.setAgentStatus(id, "QA", "done");
-            this.addEvent(id, "Orchestrator", "🎉", "Projet terminé et déployé!", "success");
+            const completedMsg = this.pipelines.get(id)?.dokploy
+                ? "Projet terminé et déployé!"
+                : "Projet terminé! (configure GITHUB_TOKEN + DOKPLOY_URL pour le déploiement)";
+            this.addEvent(id, "Orchestrator", "🎉", completedMsg, "success");
 
         } catch (err: any) {
             this.setPhase(id, "FAILED", err.message);
@@ -552,8 +555,23 @@ Réponds en JSON:
                         url: repo.html_url,
                     };
                     this.addEvent(id, "Developer", "💻", `Repo GitHub créé: ${GITHUB_OWNER}/${repoName}`, "success");
+                } else {
+                    // Repo already exists (422) or other error — attempt to reuse existing repo
+                    const errText = await createRes.text().catch(() => "");
+                    if (createRes.status === 422 || createRes.status === 409) {
+                        this.addEvent(id, "Developer", "💻", `Repo GitHub déjà existant, réutilisation: ${GITHUB_OWNER}/${repoName}`, "warning");
+                        p.github = {
+                            owner: GITHUB_OWNER,
+                            repo: repoName,
+                            url: `https://github.com/${GITHUB_OWNER}/${repoName}`,
+                        };
+                    } else {
+                        this.addEvent(id, "Developer", "💻", `Erreur GitHub (${createRes.status}): ${errText.slice(0, 150)}`, "error");
+                    }
+                }
 
-                    // Clone the repo
+                // Clone repo if github is now set
+                if (p.github) {
                     const cloneUrl = `https://${GITHUB_TOKEN}@github.com/${GITHUB_OWNER}/${repoName}.git`;
                     const { gitClone } = await import("./claude_code.js");
                     await gitClone(cloneUrl, p.workspace);
@@ -636,8 +654,9 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
                     applicationId: app.applicationId,
                 };
 
-                // Create domain for the application
-                const domain = await createDomain(app.applicationId, repoName);
+                // Create domain — port depends on project type (nginx=80, node=3000)
+                const containerPort = (p.projectType === "static" || p.projectType === "spa") ? 80 : 3000;
+                const domain = await createDomain(app.applicationId, repoName, containerPort);
                 if (domain) {
                     p.dokploy.url = `https://${domain.host}`;
                     this.addEvent(id, "Dokploy", "🌐", `Domain créé → https://${domain.host}`, "success");
@@ -649,7 +668,12 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
             }
         }
 
-        this.addEvent(id, "Developer", "💻", "✓ Scaffold créé et déployé", "success");
+        const scaffoldMsg = p.dokploy
+            ? "✓ Scaffold créé et déployé sur Dokploy"
+            : p.github
+                ? "✓ Scaffold créé et pushé sur GitHub (Dokploy non configuré)"
+                : "✓ Scaffold créé (GitHub/Dokploy non configurés)";
+        this.addEvent(id, "Developer", "💻", scaffoldMsg, p.dokploy ? "success" : "warning");
         await this.saveState();
     }
 

@@ -629,7 +629,8 @@ export async function getLatestDeployment(applicationId: string): Promise<any | 
  */
 export async function createDomain(
     applicationId: string,
-    slug: string
+    slug: string,
+    port: number = 3000
 ): Promise<{ domainId?: string; host: string } | null> {
     if (!isDokployConfigured()) return null;
 
@@ -640,7 +641,7 @@ export async function createDomain(
     }
 
     const host = `${slug}.${baseDomain}`;
-    console.log(`[Dokploy] Creating domain ${host} for application ${applicationId}...`);
+    console.log(`[Dokploy] Creating domain ${host} for application ${applicationId} (port ${port})...`);
 
     try {
         const res = await fetch(`${DOKPLOY_URL}/api/trpc/domain.create`, {
@@ -653,7 +654,7 @@ export async function createDomain(
                     https: true,
                     certificateType: "letsencrypt",
                     path: "/",
-                    port: 3000,
+                    port,
                 }
             }),
         });
