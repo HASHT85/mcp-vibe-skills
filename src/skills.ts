@@ -169,11 +169,21 @@ export async function findSkillsForContext(
             allResults.push(...results);
         }
 
-        // Deduplicate
+        // Deduplicate + score by number of keyword matches
         const uniq = new Map<string, SkillItem>();
-        for (const item of allResults) uniq.set(item.href, item);
+        const scoreMap = new Map<string, number>();
+        for (const item of allResults) {
+            scoreMap.set(item.href, (scoreMap.get(item.href) || 0) + 1);
+            uniq.set(item.href, item);
+        }
 
-        const topSkills = Array.from(uniq.values()).slice(0, limit);
+        // Sort: most keyword matches first, then by install count
+        const topSkills = Array.from(uniq.values())
+            .sort((a, b) => {
+                const diff = (scoreMap.get(b.href) || 0) - (scoreMap.get(a.href) || 0);
+                return diff !== 0 ? diff : (b.installs || 0) - (a.installs || 0);
+            })
+            .slice(0, limit);
 
         // Fetch detail for each skill
         const { fetchSkillDetail } = await import("./skills_get.js");

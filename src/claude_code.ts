@@ -384,8 +384,8 @@ export async function gitPush(cwd: string, message: string): Promise<boolean> {
             proc.stderr?.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
 
             proc.on("close", (code) => {
-                if (code !== 0 && idx <= 2) {
-                    console.error(`[Git] ${cmd} ${args[0]} failed: ${stderr}`);
+                if (code !== 0) {
+                    console.error(`[Git] ${cmd} ${args.join(" ")} failed (code ${code}):\n${stderr}`);
                     resolve(false);
                     return;
                 }

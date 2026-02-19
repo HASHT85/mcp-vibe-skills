@@ -630,8 +630,12 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
 
         // Push to GitHub
         if (p.github) {
-            await gitPush(p.workspace, "feat: initial scaffold by VibeCraft AI");
-            this.addEvent(id, "Developer", "💻", "Push GitHub → scaffold initial", "success");
+            const pushed = await gitPush(p.workspace, "feat: initial scaffold by VibeCraft AI");
+            if (pushed) {
+                this.addEvent(id, "Developer", "💻", "Push GitHub → scaffold initial", "success");
+            } else {
+                this.addEvent(id, "Developer", "💻", "❌ Push scaffold échoué — vérifier logs container", "error");
+            }
         }
 
         // Deploy to Dokploy — only if not already deployed
@@ -729,8 +733,12 @@ Instructions:
 
             // Push after each feature
             if (p.github) {
-                await gitPush(p.workspace, `feat: ${feature}`);
-                this.addEvent(id, "Developer", "💻", `Push → feat: ${feature}`, "success");
+                const pushed = await gitPush(p.workspace, `feat: ${feature}`);
+                if (pushed) {
+                    this.addEvent(id, "Developer", "💻", `Push → feat: ${feature}`, "success");
+                } else {
+                    this.addEvent(id, "Developer", "💻", `❌ Push échoué: feat: ${feature}`, "error");
+                }
             }
 
             // Wait for deploy and check build
