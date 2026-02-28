@@ -475,6 +475,11 @@ Règles pour le champ "type":
         const dockerfileTemplate = this.getDockerfileTemplate(p.projectType, analysis?.stack);
         const typeGuidance = this.getArchitectureGuidance(p.projectType);
 
+        const needsMultimodal = /pdf|image|vision|multimodal|multi-modal/i.test(p.description);
+        const multimodalContext = needsMultimodal
+            ? "\n\nRECOMMANDATION MULTIMODAL/PDF:\n- L'utilisateur a demandé des capacités PDF/Multimodales. Prévois l'intégration d'un SDK d'IA (ex: @anthropic-ai/sdk ou openai) ainsi que des librairies de parsing de base comme pdf-parse pour le backend, ou react-pdf/pdfjs-dist coté frontend."
+            : "";
+
         const result = await runClaudeAgent({
             prompt: `Conçois l'architecture technique pour ce projet.
 
@@ -482,6 +487,7 @@ PRD: ${JSON.stringify(analysis, null, 2)}
 
 Type de projet détecté: ${p.projectType}
 ${typeGuidance}
+${multimodalContext}
 ${skillsContext}
 
 Template Dockerfile recommandé pour ce type de projet:
