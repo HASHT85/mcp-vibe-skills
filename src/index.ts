@@ -77,12 +77,14 @@ app.post("/pipeline/launch", async (req: Request, res: Response) => {
     try {
         const description = String(req.body?.description ?? "").trim();
         const name = req.body?.name ? String(req.body.name).trim() : undefined;
+        const fileBase64 = req.body?.fileBase64 ? String(req.body.fileBase64) : undefined;
+        const fileType = req.body?.fileType ? String(req.body.fileType) : undefined;
 
         if (!description) {
             return res.status(400).json({ error: "missing_description" });
         }
 
-        const pipeline = await orchestrator.launchIdea(description, name);
+        const pipeline = await orchestrator.launchIdea(description, name, fileBase64, fileType);
         res.json({ pipeline });
     } catch (err: any) {
         console.error("Pipeline launch error:", err);

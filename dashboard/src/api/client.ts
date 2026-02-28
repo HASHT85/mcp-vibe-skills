@@ -36,10 +36,10 @@ async function api<T = unknown>(path: string, options?: RequestInit): Promise<T>
 
 // ─── Pipeline (Orchestrator) ───
 
-export async function launchIdea(description: string, name?: string) {
+export async function launchIdea(description: string, name?: string, fileBase64?: string, fileType?: string) {
     return api<{ pipeline: Pipeline }>('/pipeline/launch', {
         method: 'POST',
-        body: JSON.stringify({ description, name }),
+        body: JSON.stringify({ description, name, fileBase64, fileType }),
     });
 }
 

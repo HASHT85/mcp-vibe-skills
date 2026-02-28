@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Rocket, FolderKanban, Bot, Sparkles, Server,
   ChevronLeft, Plus, ExternalLink, Github, Pause, Play,
-  Trash2, LayoutGrid, Coins, Edit,
+  Trash2, LayoutGrid, Coins, Edit, Paperclip, X
 } from 'lucide-react';
 import {
   checkAuth, setAuth, listPipelines, launchIdea,
@@ -161,8 +161,8 @@ function Dashboard() {
         {showModal && (
           <LaunchModal
             onClose={() => setShowModal(false)}
-            onLaunch={async (desc, name) => {
-              await launchIdea(desc, name);
+            onLaunch={async (desc, name, fileBase64, fileType) => {
+              await launchIdea(desc, name, fileBase64, fileType);
               setShowModal(false);
               load();
             }}
@@ -742,17 +742,49 @@ function LiveActivityPanel({ events, pipelines }: { events: PipelineEvent[]; pip
 
 function LaunchModal({ onClose, onLaunch }: {
   onClose: () => void;
-  onLaunch: (desc: string, name?: string) => void;
+  onLaunch: (desc: string, name?: string, fileBase64?: string, fileType?: string) => void;
 }) {
   const [desc, setDesc] = useState('');
   const [name, setName] = useState('');
+  const [file, setFile] = useState<{ name: string; type: string; data: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) processFile(f);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.indexOf('image/') === 0 || item.type === 'application/pdf') {
+        const f = item.getAsFile();
+        if (f) processFile(f);
+        break;
+      }
+    }
+  };
+
+  const processFile = (f: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      // Extract just the base64 part, dropping the data url prefix
+      const base64 = result.split(',')[1];
+      if (base64) {
+        setFile({ name: f.name, type: f.type, data: base64 });
+      }
+    };
+    reader.readAsDataURL(f);
+  };
 
   const submit = async () => {
     if (!desc.trim()) return;
     setLoading(true);
     try {
-      await onLaunch(desc.trim(), name.trim() || undefined);
+      await onLaunch(desc.trim(), name.trim() || undefined, file?.data, file?.type);
     } finally {
       setLoading(false);
     }
@@ -783,12 +815,35 @@ function LaunchModal({ onClose, onLaunch }: {
           style={{ marginBottom: '12px', width: '100%' }}
         />
         <textarea
-          placeholder="Ex: Un dashboard analytics pour tracker les ventes e-commerce en temps réel avec des graphiques interactifs..."
+          placeholder="Ex: Un dashboard analytics pour tracker les ventes e-commerce en temps réel avec des graphiques interactifs... (Vous pouvez aussi coller une image Ctrl+V)"
           value={desc}
           onChange={(e) => setDesc(e.target.value)}
+          onPaste={handlePaste}
           autoFocus
         />
+
+        {file && (
+          <div className="file-preview-pill" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-layer-2)', borderRadius: 8, marginBottom: 16 }}>
+            <Paperclip size={14} />
+            <span style={{ fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+            <button onClick={() => setFile(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         <div className="modal-actions">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*,application/pdf"
+            style={{ display: 'none' }}
+          />
+          <button className="btn-cancel" onClick={() => fileInputRef.current?.click()} title="Joindre une image ou un PDF" style={{ marginRight: 'auto' }}>
+            <Paperclip size={16} />
+          </button>
+
           <button className="btn-cancel" onClick={onClose}>Annuler</button>
           <button
             className="btn-launch"

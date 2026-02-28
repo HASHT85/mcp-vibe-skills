@@ -38,6 +38,8 @@ export type AgentOptions = {
     maxTurns?: number;
     appendPrompt?: string;
     timeoutMs?: number;
+    attachedFileBase64?: string;
+    attachedFileType?: string;
 };
 
 // ─── Event Emitter for live streaming ───
@@ -196,16 +198,45 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
     let totalOutputTokens = 0;
 
     // Build full prompt
-    let fullPrompt = options.prompt;
+    let fullPromptText = options.prompt;
     if (options.appendPrompt) {
-        fullPrompt += "\n\n--- CONTEXT ---\n" + options.appendPrompt;
+        fullPromptText += "\n\n--- CONTEXT ---\n" + options.appendPrompt;
     }
 
     const systemPrompt = options.systemPrompt || "You are a senior software engineer. Write clean, working code.";
 
+    const initialContent: Anthropic.Messages.ContentBlockParam[] = [
+        { type: "text", text: fullPromptText }
+    ];
+
+    if (options.attachedFileBase64 && options.attachedFileType) {
+        const isImage = options.attachedFileType.startsWith("image/");
+        if (isImage) {
+            initialContent.push({
+                type: "image",
+                source: {
+                    type: "base64",
+                    media_type: options.attachedFileType as any,
+                    data: options.attachedFileBase64,
+                }
+            });
+            console.log(`[Agent] 📎 Attached Image: ${options.attachedFileType}`);
+        } else if (options.attachedFileType === "application/pdf") {
+            initialContent.push({
+                type: "document",
+                source: {
+                    type: "base64",
+                    media_type: "application/pdf",
+                    data: options.attachedFileBase64,
+                }
+            });
+            console.log(`[Agent] 📎 Attached Document: PDF`);
+        }
+    }
+
     // Conversation loop
     const messages: Anthropic.Messages.MessageParam[] = [
-        { role: "user", content: fullPrompt },
+        { role: "user", content: initialContent },
     ];
 
     try {

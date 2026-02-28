@@ -136,7 +136,7 @@ export class Orchestrator extends EventEmitter {
 
     // ─── Pipeline Management ───
 
-    async launchIdea(description: string, name?: string): Promise<Pipeline> {
+    async launchIdea(description: string, name?: string, fileBase64?: string, fileType?: string): Promise<Pipeline> {
         const id = crypto.randomUUID().slice(0, 8);
         const projectName = name || this.slugify(description);
         const workspace = path.join(WORKSPACE_ROOT, id);
@@ -158,6 +158,10 @@ export class Orchestrator extends EventEmitter {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
+
+        if (fileBase64 && fileType) {
+            pipeline.artifacts.initialFile = { base64: fileBase64, type: fileType };
+        }
 
         this.pipelines.set(id, pipeline);
         this.addEvent(id, "Orchestrator", "🚀", `Pipeline créé: "${description}"`, "info");
@@ -432,6 +436,8 @@ Règles pour le champ "type":
             systemPrompt: "Tu es un analyste produit senior. Sois concis et pragmatique.",
             cwd: p.workspace,
             maxTurns: 3,
+            attachedFileBase64: p.artifacts.initialFile?.base64,
+            attachedFileType: p.artifacts.initialFile?.type,
         });
 
         if (result.success && result.finalResult) {
