@@ -37,7 +37,12 @@ export type PipelinePhase =
     | "COMPLETED"
     | "FAILED"
     | "PAUSED";
-export type ProjectType = "static" | "spa" | "fullstack" | "api" | "python-worker" | "node-worker" | "unknown";
+export type ProjectType = "static" | "spa" | "fullstack" | "api" | "python-worker" | "node-worker" | "postgres" | "redis" | "unknown";
+export type ProjectService = {
+    name: string;
+    type: ProjectType;
+    stack?: string;
+};
 
 export type AgentStatus = "waiting" | "active" | "done" | "error";
 
@@ -67,7 +72,7 @@ export type Pipeline = {
     description: string;
     phase: PipelinePhase;
     progress: number;          // 0-100
-    projectType: ProjectType;
+    services: ProjectService[];
     agents: PipelineAgent[];
     events: PipelineEvent[];
     workspace: string;         // /workspace/<id>
@@ -78,9 +83,16 @@ export type Pipeline = {
     };
     dokploy?: {
         projectId: string;
-        applicationId: string;
+        applicationId?: string;
         domainId?: string;
         url?: string;
+        apps?: {
+            name: string;
+            type: ProjectType;
+            applicationId: string;
+            domainId?: string;
+            url?: string;
+        }[];
     };
     artifacts: Record<string, unknown>;
     tokenUsage: { inputTokens: number; outputTokens: number };
@@ -154,7 +166,7 @@ export class Orchestrator extends EventEmitter {
             description,
             phase: "QUEUED",
             progress: 0,
-            projectType: "unknown",
+            services: [],
             agents: DEFAULT_AGENTS.map(a => ({ ...a, status: "waiting" as AgentStatus })),
             events: [],
             workspace,
@@ -509,20 +521,37 @@ Réponds en JSON avec cette structure:
 {
   "name": "nom du projet",
   "summary": "résumé en 2-3 phrases",
-  "type": "static|spa|fullstack|api|python-worker|node-worker",
+  "services": [
+    {
+      "name": "frontend-dashboard",
+      "type": "spa",
+      "stack": "React, Tailwind"
+    },
+    {
+      "name": "data-scraper-worker",
+      "type": "python-worker",
+      "stack": "Python, CCXT"
+    },
+    {
+      "name": "database",
+      "type": "postgres",
+      "stack": "PostgreSQL"
+    }
+  ],
   "features": ["feature 1", "feature 2", ...],
   "userStories": [{"story": "...", "priority": "High|Medium|Low"}],
-  "stack": {"frontend": "...", "backend": "...", "database": "..."},
   "targetAudience": "..."
 }
 
-Règles pour le champ "type":
+Règles pour le champ "type" de chaque service:
 - "static" : HTML/CSS/JS vanilla, pas de build tool, pas de backend
 - "spa" : React, Vue, Svelte, Angular, Vite, Next.js... (nécessite npm run build)
-- "fullstack" : frontend React/Vue + backend Node.js/Express séparés
-- "api" : backend/API uniquement (Node.js)
-- "python-worker": PRIORITAIRE si la logique principale est en Python — bot, scraper, daemon, cron, IA, trading, data science, machine learning. MÊME SI un dashboard web est demandé, utilise "python-worker" (le dashboard Flask sera intégré automatiquement dans le même container).
-- "node-worker": PRIORITAIRE si la logique principale est en Node.js — bot, scraper, daemon, cron. MÊME SI un dashboard est demandé, utilise "node-worker" (Express dashboard intégré).`,
+- "fullstack" : déprécié, sépare plutôt en un service "spa" et un service "api".
+- "api" : backend/API uniquement (Node.js/Express ou Python/FastAPI)
+- "python-worker": Tâche d'arrière plan en Python (bot, scraper, daemon, IA). IMPORTANT: ne PAS utiliser pour une API web. Pas de port exposé.
+- "node-worker": Tâche d'arrière plan en Node.js (bot, cron). Pas de port exposé.
+- "postgres" ou "redis": Bases de données si nécessaire.
+SI le projet est simple, tu PEUX ne lister qu'un seul service dans le tableau.`,
             systemPrompt: "Tu es un analyste produit senior. Sois concis et pragmatique. IMPORTANT: si le projet est un bot/scraper/daemon Python avec un dashboard web, choisis 'python-worker' (pas 'fullstack') — le dashboard Flask est automatiquement intégré par notre infra.",
             cwd: p.workspace,
             maxTurns: 3,
@@ -533,10 +562,14 @@ Règles pour le champ "type":
         if (result.success && result.finalResult) {
             const analysis = this.tryParseJson(result.finalResult);
             p.artifacts.analysis = analysis;
-            // Detect and store project type
-            p.projectType = this.detectProjectType(analysis);
+            // Parse services array from JSON
+            p.services = Array.isArray(analysis?.services)
+                ? analysis.services
+                : [{ name: "main", type: this.detectProjectType(analysis) }];
+
+            const typesStr = p.services.map(s => s.type).join(', ');
             this.setAgentStatus(id, "Analyst", "done", "PRD créé");
-            this.addEvent(id, "Analyst", "🔍", `✓ PRD créé — type détecté: ${p.projectType}`, "success");
+            this.addEvent(id, "Analyst", "🔍", `✓ PRD créé — services: ${typesStr}`, "success");
         } else {
             this.setAgentStatus(id, "Analyst", "error", result.error || "Échec");
             this.addEvent(id, "Analyst", "🔍", `✗ Analyse échouée: ${result.error}`, "error");
@@ -568,8 +601,11 @@ Règles pour le champ "type":
 
         this.addEvent(id, "Architect", "📐", `Skills assignés: ${skills.map(s => s.title).join(", ") || "aucun"}`, "info");
 
-        const dockerfileTemplate = this.getDockerfileTemplate(p.projectType, analysis?.stack);
-        const typeGuidance = this.getArchitectureGuidance(p.projectType);
+        const servicesInfos = p.services.map(s => {
+            const dockerfile = this.getDockerfileTemplate(s.type, analysis?.stack);
+            const guidance = this.getArchitectureGuidance(s.type);
+            return `Service: ${s.name} (Type: ${s.type})\n${guidance}\n[Dockerfile Recommandé]\n\`\`\`dockerfile\n${dockerfile}\n\`\`\``;
+        }).join("\n\n---\n\n");
 
         const needsMultimodal = /pdf|image|vision|multimodal|multi-modal/i.test(p.description);
         const multimodalContext = needsMultimodal
@@ -577,35 +613,33 @@ Règles pour le champ "type":
             : "";
 
         const result = await runClaudeAgent({
-            prompt: `Conçois l'architecture technique pour ce projet.
+            prompt: `Conçois l'architecture technique multi-services pour ce projet.
 
 PRD: ${JSON.stringify(analysis, null, 2)}
 
-Type de projet détecté: ${p.projectType}
-${typeGuidance}
+SERVICES DÉTECTÉS PAR L'ANALYSTE:
+${servicesInfos}
 ${multimodalContext}
 ${skillsContext}
 
-Template Dockerfile recommandé pour ce type de projet:
-\`\`\`dockerfile
-${dockerfileTemplate}
-\`\`\`
-
-Crée un document d'architecture avec:
-1. Stack technique précise (adapté au type: ${p.projectType})
-2. Structure de fichiers
-3. Endpoints API (si applicable)
+Crée un document d'architecture détaillé avec:
+1. Stack technique précise pour CHAQUE service
+2. Arborescence des fichiers (séparée par dossiers de services, ex: /frontend, /backend)
+3. Endpoints API inter-services (si applicable)
 4. Schéma de données
-5. Plan de déploiement (Docker + Dokploy)
+5. Plan de déploiement (Docker Compose ou multi-containers)
 
 Réponds en JSON:
 {
-  "stack": {"frontend": "...", "backend": "...", "database": "...", "deployment": "Docker"},
-  "fileStructure": [{"path": "...", "description": "..."}],
+  "architectureOverview": "Résumé de l'architecture retenue",
+  "servicesStack": {
+    "NOM_DU_SERVICE": {"stack": "...", "deployment": "Docker"}
+  },
+  "fileStructure": [{"path": "/frontend/...", "description": "..."}, {"path": "/backend/...", "description": "..."}],
   "endpoints": [{"method": "GET", "path": "/api/...", "description": "..."}],
   "features": ["feature à implémenter 1", "feature 2", ...]
 }`,
-            systemPrompt: "Tu es un architecte logiciel senior. Choisis des stacks simples et éprouvées. Adapte ton architecture au type de projet détecté.",
+            systemPrompt: "Tu es un architecte logiciel senior. Conçois des architectures micro-services intelligentes (frontend, api, workers) basées sur la demande.",
             cwd: p.workspace,
             maxTurns: 3,
             appendPrompt: skillsContext,
@@ -619,8 +653,8 @@ Réponds en JSON:
             this.addEvent(id, "Architect", "📐", "✓ Architecture technique définie", "success");
         } else {
             this.setAgentStatus(id, "Architect", "error", result.error || "Échec");
-            this.addEvent(id, "Architect", "📐", `✗ Architecture échouée: ${result.error}`, "error");
-            throw new Error(`Architecture failed: ${result.error}`);
+            this.addEvent(id, "Architect", "📐", `✗ Architecture échouée: ${result.error} `, "error");
+            throw new Error(`Architecture failed: ${result.error} `);
         }
         this.addTokens(id, result);
         await this.saveState();
@@ -631,7 +665,7 @@ Réponds en JSON:
         this.setAgentStatus(id, "Developer", "active", "Création du scaffold...");
 
         const p = this.pipelines.get(id)!;
-        const repoName = `vibecraft-${this.slugify(p.name)}`;
+        const repoName = `vibecraft - ${this.slugify(p.name)} `;
 
         // Create GitHub repo
         const GITHUB_OWNER = getGithubOwner();
@@ -641,7 +675,7 @@ Réponds en JSON:
                 const createRes = await fetch("https://api.github.com/user/repos", {
                     method: "POST",
                     headers: {
-                        Authorization: `token ${GITHUB_TOKEN}`,
+                        Authorization: `token ${GITHUB_TOKEN} `,
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
@@ -699,33 +733,30 @@ Réponds en JSON:
 
         // Use Claude Code to scaffold the project
         const architecture = p.artifacts.architecture as any;
-        const dockerfileTemplate = this.getDockerfileTemplate(p.projectType, architecture?.stack);
-        const scaffoldGuidance = this.getScaffoldGuidance(p.projectType);
+
+        const servicesGuidance = p.services.map(s => {
+            return `Service: ${s.name} (Type: ${s.type})\n${this.getScaffoldGuidance(s.type)}\n\n[Dockerfile Recommandé]\n\`\`\`dockerfile\n${this.getDockerfileTemplate(s.type, architecture?.servicesStack?.[s.name]?.stack || architecture?.stack)}\n\`\`\``;
+        }).join("\n\n---\n\n");
 
         const result = await runClaudeAgent({
-            prompt: `Crée le scaffold initial de ce projet dans le répertoire courant.
+            prompt: `Crée le scaffold initial de ce projet multi-services dans le répertoire courant.
 
-Type de projet: ${p.projectType}
-Architecture: ${JSON.stringify(architecture, null, 2)}
+Types de services à créer: ${p.services.map(s => s.type).join(', ')}
+Architecture globale: ${JSON.stringify(architecture, null, 2)}
 
-${scaffoldGuidance}
+INSTRUCTIONS PAR SERVICE:
+${servicesGuidance}
 
-DOCKERFILE OBLIGATOIRE — utilise EXACTEMENT ce template comme base:
-\`\`\`dockerfile
-${dockerfileTemplate}
-\`\`\`
-
-RÈGLES CRITIQUES POUR LE DOCKERFILE:
+RÈGLES CRITIQUES POUR LES DOCKERFILE:
 - NE JAMAIS utiliser "COPY ... 2>/dev/null || true" — la syntaxe shell ne marche PAS dans COPY
-- Le Dockerfile doit être simple : FROM, WORKDIR, COPY, RUN, EXPOSE, CMD
-- NE PAS modifier le Dockerfile dans les features suivantes sauf si absolument nécessaire
-- Pour les projets static: expose le port 80 (nginx), pas 3000
-- Pour les projets spa: build en 2 étapes (node build → nginx serve)
-- Pour les projets api/fullstack: expose le port 3000 (node)`,
-            systemPrompt: "Tu es un développeur senior. Crée un scaffold minimal mais fonctionnel. Adapte le code au type de projet détecté.",
+- Chaque Dockerfile doit être placé à la racine du dossier de son service (ex: /frontend/Dockerfile)
+- Pour les projets static: expose le port 80 (nginx)
+- Pour les spa: build multi-stage (node puis nginx)
+- Pour les api/worker/fullstack: expose le port 3000 ou 8080 en fonction du code`,
+            systemPrompt: "Tu es un développeur senior. Crée un scaffold propre avec une arborescence claire (un dossier par service).",
             cwd: p.workspace,
-            allowedTools: ["Write", "Edit", "Bash"],
-            maxTurns: 12,
+            allowedTools: ["Write", "Edit", "Bash", "ListDir"],
+            maxTurns: 15,
             abortSignal: this.abortControllers.get(id)?.signal,
         });
 
@@ -750,34 +781,69 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
             this.setPhase(id, "DEPLOYING");
             try {
                 const dokProject = await createDokployProject(repoName, p.description);
-                const app = await createDokployApplication({
-                    name: repoName,
-                    projectId: dokProject.projectId,
-                    environmentId: dokProject.environmentId || "",
-                    owner: p.github.owner,
-                    repo: p.github.repo,
-                    branch: "main",
-                    buildType: "dockerfile",
-                });
 
                 p.dokploy = {
                     projectId: dokProject.projectId,
-                    applicationId: app.applicationId,
+                    apps: []
                 };
 
-                // Create domain for all project types (workers now have embedded web server)
-                const containerPort = (p.projectType === "static" || p.projectType === "spa") ? 80
-                    : p.projectType === "python-worker" ? 8080
-                        : 3000; // node-worker, api, fullstack all use 3000
-                const domain = await createDomain(app.applicationId, repoName, containerPort);
-                if (domain) {
-                    p.dokploy.url = `https://${domain.host}`;
-                    p.dokploy.domainId = domain.domainId;
-                    this.addEvent(id, "Dokploy", "🌐", `Domain créé → https://${domain.host}`, "success");
+                for (const service of p.services) {
+                    if (service.type === "postgres" || service.type === "redis") {
+                        this.addEvent(id, "Dokploy", "⚠️", `Création de BDD ${service.type} automatique non supportée actuellement (à faire manuellement)`, "warning");
+                        continue;
+                    }
+
+                    const appName = `${repoName}-${service.name}`.substring(0, 30);
+                    const app = await createDokployApplication({
+                        name: appName,
+                        projectId: dokProject.projectId,
+                        environmentId: dokProject.environmentId || "",
+                        owner: p.github.owner,
+                        repo: p.github.repo,
+                        branch: "main",
+                        buildType: "dockerfile",
+                        // point Dokploy to the sub-folder for this service
+                        env: `DOKPLOY_SUB_PATH=/${service.name}` // (pseudo env, Dokploy requires UI config for subpaths if not root, or docker-compose)
+                        // Actually Dokploy UI lets you specify 'buildPath'. In our generic API it might just build from root if not specified.
+                        // We will rely on Claude creating docker-compose OR we create multiple apps and ask user to set build paths if needed.
+                        // For now we just create the Apps.
+                    });
+
+                    // Port logic
+                    const containerPort = (service.type === "static" || service.type === "spa") ? 80
+                        : service.type === "python-worker" ? 8080
+                            : 3000;
+
+                    let domainUrl;
+                    let domainId;
+
+                    // only web apps get a domain
+                    if (service.type !== "python-worker" && service.type !== "node-worker") {
+                        const domain = await createDomain(app.applicationId, appName, containerPort);
+                        if (domain) {
+                            domainUrl = `https://${domain.host}`;
+                            domainId = domain.domainId;
+                            this.addEvent(id, "Dokploy", "🌐", `${service.name}: Domain créé → ${domainUrl}`, "success");
+                        }
+                    } else {
+                        // Workers get internal domain or just internal mapping, no public domain created by default, or maybe an internal domain.
+                        this.addEvent(id, "Dokploy", "⚙️", `${service.name} (worker): Pas de domaine public configuré`, "info");
+                    }
+
+                    p.dokploy.apps!.push({
+                        name: service.name,
+                        type: service.type,
+                        applicationId: app.applicationId,
+                        domainId: domainId,
+                        url: domainUrl
+                    });
                 }
 
+                // Set the main URL to the first app that has one
+                const mainApp = p.dokploy.apps!.find(a => a.url);
+                if (mainApp) p.dokploy.url = mainApp.url;
 
-                this.addEvent(id, "Dokploy", "🚀", `Déployé dans Dokploy → ${repoName}`, "deploy");
+                this.addEvent(id, "Dokploy", "🚀", `Déployé dans Dokploy → ${p.dokploy.apps!.length} service(s)`, "deploy");
             } catch (err: any) {
                 this.addEvent(id, "Dokploy", "🚀", `Erreur Dokploy: ${err.message}`, "error");
             }
@@ -799,6 +865,7 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
         const p = this.pipelines.get(id)!;
         const architecture = p.artifacts.architecture as any;
         const features = architecture?.features || [];
+        const projectTypes = p.services.map(s => s.type).join(', ');
 
         for (let i = 0; i < features.length; i++) {
             if (this.shouldStop(id)) return;
@@ -807,29 +874,21 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
             this.setAgentStatus(id, "Developer", "active", `Feature ${i + 1}/${features.length}: ${feature}`);
             this.addEvent(id, "Developer", "💻", `Feature ${i + 1}/${features.length}: ${feature}`, "info");
 
-            // Update progress proportionally within Development phase
             const devProgress = 40 + Math.round((i / features.length) * 30);
-            const pipeline = this.pipelines.get(id)!;
-            pipeline.progress = devProgress;
+            p.progress = devProgress;
 
-            const devSystemPrompt = p.projectType === "static"
-                ? "Tu es un développeur frontend expert HTML/CSS/JS vanilla. Écris du code moderne, sans framework, avec des animations CSS et du JS natif."
-                : p.projectType === "spa"
-                    ? "Tu es un développeur React/Vue senior."
-                    : p.projectType.includes("worker")
-                        ? "Tu es un Ingénieur Data/IA et Backend senior. Gère les boucles, les requêtes API (requests/fetch) de façon solide et propre."
-                        : "Tu es un développeur senior fullstack. Écris du code propre et fonctionnel. Gère les erreurs correctement.";
+            const devSystemPrompt = "Tu es un développeur senior fullstack. Écris du code propre et fonctionnel pour implémenter la feature demandée. Gère proprement le code pour les différents services.";
 
             const result = await runClaudeAgent({
-                prompt: `Implémente cette feature dans le projet existant (type: ${p.projectType}):
+                prompt: `Implémente cette feature dans le projet existant (services: ${projectTypes}):
 
 Feature: "${feature}"
 
 Architecture: ${JSON.stringify(architecture, null, 2)}
 
 Instructions:
-1. Lis le code existant pour comprendre la structure
-2. Implémente la feature de manière propre
+1. Lis le code existant pour comprendre la structure multi-services
+2. Implémente la feature de manière propre (API, Frontend, etc. selon le cas)
 3. Assure-toi que le code compile/fonctionne sans erreur
 4. Ne casse pas les features existantes
 5. NE modifie pas le Dockerfile sauf si absolument nécessaire`,
@@ -848,6 +907,8 @@ Instructions:
             // Push after each feature
             if (p.github) {
                 const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
+                // Uses dynamically imported gitPush if needed, but it's available via previous imports
+                const { gitPush } = await import("./claude_code.js");
                 const pushed = await gitPush(p.workspace, `feat: ${feature}`, authUrl);
                 if (pushed) {
                     this.addEvent(id, "Developer", "💻", `Push → feat: ${feature}`, "success");
@@ -856,8 +917,8 @@ Instructions:
                 }
             }
 
-            // Wait for deploy and check build
-            if (p.dokploy) {
+            // Wait for deploy and check build for all apps
+            if (p.dokploy && p.dokploy.apps && p.dokploy.apps.length > 0) {
                 await this.waitForBuild(id);
             }
         }
@@ -868,62 +929,78 @@ Instructions:
 
     private async waitForBuild(id: string, maxRetries = 3) {
         const p = this.pipelines.get(id)!;
-        if (!p.dokploy) return;
+        if (!p.dokploy || !p.dokploy.apps) return;
 
         // Wait a bit for Dokploy to start building
         await this.sleep(10000);
 
         for (let attempt = 0; attempt < maxRetries; attempt++) {
-            if (this.shouldStop(id)) return; // Check for abort signal during long wait
+            if (this.shouldStop(id)) return;
 
-            try {
-                const deployment = await getLatestDeployment(p.dokploy.applicationId);
-                if (!deployment) continue;
-
-                if (deployment.status === "done") {
-                    this.addEvent(id, "Dokploy", "🚀", `✓ Build réussi`, "deploy");
-                    return;
-                }
-
-                if (deployment.status === "error") {
-                    // Build failed — activate debugger
-                    const logs = await getBuildLogs(p.dokploy.applicationId);
-                    this.addEvent(id, "Dokploy", "🚀", `✗ Build échoué`, "error");
-
-                    await this.runDebugger(id, logs);
-
-                    // Re-push and retry
-                    if (p.github) {
-                        const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
-                        await gitPush(p.workspace, "fix: build error correction", authUrl);
-                        await triggerDeploy(p.dokploy.applicationId);
-                        await this.sleep(15000);
+            let allDone = true;
+            for (const app of p.dokploy.apps) {
+                try {
+                    const deployment = await getLatestDeployment(app.applicationId);
+                    if (!deployment) {
+                        allDone = false;
+                        continue;
                     }
+
+                    if (deployment.status === "error") {
+                        // Build failed — activate debugger
+                        const logs = await getBuildLogs(app.applicationId);
+                        this.addEvent(id, "Dokploy", "🚀", `✗ Build échoué pour ${app.name}`, "error");
+
+                        await this.runDebugger(id, logs, app.name);
+
+                        // Re-push and retry
+                        if (p.github) {
+                            const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
+                            const { gitPush } = await import("./claude_code.js");
+                            await gitPush(p.workspace, `fix: build error correction for ${app.name}`, authUrl);
+
+                            // Re-trigger deploy for all apps to be safe, or just this one
+                            await triggerDeploy(app.applicationId);
+                            await this.sleep(15000);
+                        }
+
+                        // We reset allDone and break out of the inner loop to start a new retry
+                        allDone = false;
+                        break;
+                    } else if (deployment.status !== "done") {
+                        allDone = false; // still deploying
+                    }
+                } catch (err) {
+                    console.warn(`[Orchestrator] Build check error for ${app.name}:`, err);
+                    allDone = false;
                 }
-            } catch (err) {
-                console.warn(`[Orchestrator] Build check error:`, err);
+            }
+
+            if (allDone) {
+                this.addEvent(id, "Dokploy", "🚀", `✓ Tous les builds réussis`, "deploy");
+                return;
             }
 
             await this.sleep(10000);
         }
     }
 
-    private async runDebugger(id: string, errorLogs: string) {
+    private async runDebugger(id: string, errorLogs: string, appName: string = "") {
         this.setAgentStatus(id, "Debugger", "active", "Correction des erreurs...");
-        this.addEvent(id, "Debugger", "🔧", "Analyse des logs de build...", "info");
+        this.addEvent(id, "Debugger", "🔧", `Analyse des logs de build(${appName})...`, "info");
 
         const p = this.pipelines.get(id)!;
 
         const debugResult = await runClaudeAgent({
-            prompt: `Le build Docker a échoué. Voici les logs d'erreur:
+            prompt: `Le build Docker a échoué pour le service ${appName}.Voici les logs d'erreur:
 
 ${errorLogs}
 
-Instructions:
-1. Analyse les erreurs
-2. Corrige les fichiers problématiques
-3. Assure-toi que le Dockerfile et le code sont corrects
-4. Le build doit passer après ta correction`,
+                            Instructions:
+                            1. Analyse les erreurs
+                            2. Corrige les fichiers problématiques
+                            3. Assure - toi que les Dockerfiles et le code sont corrects
+                            4. Le build doit passer après ta correction`,
             systemPrompt: "Tu es un debugger expert. Analyse les erreurs de build et corrige-les de manière ciblée.",
             cwd: p.workspace,
             allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
@@ -933,9 +1010,9 @@ Instructions:
 
         if (debugResult.success) {
             this.setAgentStatus(id, "Debugger", "done", "Corrections appliquées");
-            this.addEvent(id, "Debugger", "🔧", "✓ Corrections appliquées", "success");
+            this.addEvent(id, "Debugger", "🔧", `✓ Corrections appliquées`, "success");
         } else {
-            this.addEvent(id, "Debugger", "🔧", `Erreur debugger: ${debugResult.error}`, "error");
+            this.addEvent(id, "Debugger", "🔧", `Erreur debugger: ${debugResult.error} `, "error");
         }
         this.addTokens(id, debugResult);
     }
@@ -949,13 +1026,13 @@ Instructions:
         const result = await runClaudeAgent({
             prompt: `Fais un review complet du projet:
 
-1. Vérifie que le code compile sans erreur
-2. Vérifie la structure du projet
-3. Vérifie les bonnes pratiques de sécurité
-4. Corrige les problèmes trouvés
-5. Assure-toi que le Dockerfile est correct
+                            1. Vérifie que le code compile sans erreur
+                            2. Vérifie la structure du projet
+                            3. Vérifie les bonnes pratiques de sécurité
+                            4. Corrige les problèmes trouvés
+                            5. Assure - toi que le Dockerfile est correct
 
-Résumé: donne une note /10 et liste les problèmes trouvés.`,
+                            Résumé: donne une note / 10 et liste les problèmes trouvés.`,
             systemPrompt: "Tu es un Architecte Logiciel Senior. Structure le code logiquement et proprement.",
             cwd: p.workspace,
             allowedTools: ["Read", "ListDir"],
@@ -1320,59 +1397,76 @@ REGLE ABSOLUE: Aucun import depuis un module local (pas de from src.xxx import, 
 
     private async verifyAndAutoFix(id: string, maxFixRetries = 2) {
         const p = this.pipelines.get(id);
-        if (!p || !p.dokploy?.url) return;
+        if (!p || !p.dokploy || !p.dokploy.apps) return;
 
-        for (let attempt = 1; attempt <= maxFixRetries; attempt++) {
-            this.setAgentStatus(id, "QA", "active", "Vérification HTTP du déploiement...");
-            this.addEvent(id, "QA", "🔍", "Vérification HTTP de " + p.dokploy.url, "info");
+        for (const app of p.dokploy.apps) {
+            if (!app.url) {
+                let logs = "";
+                let hasRuntimeError = false;
+                try {
+                    const fullLogs = await getApplicationLogs(app.applicationId);
+                    logs = fullLogs.length > 5000 ? "... " + fullLogs.slice(-5000) : fullLogs;
+                    hasRuntimeError = logs.includes("Traceback (most recent") ||
+                        logs.includes("Exception:") ||
+                        logs.includes("Error: listen EADDRINUSE");
+                } catch (e) { }
 
-            const health = await this.verifyWebDisplay(p.dokploy.url);
-
-            // Check logs for silent crashes (e.g. backend bot crashed but Flask 200 OK)
-            let logs = "";
-            let hasRuntimeError = false;
-            try {
-                const fullLogs = await getApplicationLogs(p.dokploy.applicationId);
-                // Keep only the last 5000 chars to avoid prompt bloat
-                logs = fullLogs.length > 5000 ? "... " + fullLogs.slice(-5000) : fullLogs;
-                const lowerLogs = logs.toLowerCase();
-                // "error" is too generic for npm/node output, let's look for common crash patterns
-                hasRuntimeError = logs.includes("Traceback (most recent") ||
-                    logs.includes("Exception:") ||
-                    logs.includes("Error: listen EADDRINUSE") ||
-                    lowerLogs.includes("bad gateway") ||
-                    lowerLogs.includes("segmentation fault");
-            } catch (err) { }
-
-            if (health.ok && !hasRuntimeError) {
-                this.addEvent(id, "QA", "✅", `Le site répond correctement (HTTP ${health.status}) et aucun crash détecté.`, "success");
-                return;
+                if (hasRuntimeError) {
+                    this.addEvent(id, "QA", "⚠️", `${app.name}: Crash backend détecté dans les logs.`, "warning");
+                } else {
+                    this.addEvent(id, "QA", "✅", `${app.name}: Service démarré sans logs d'erreur majeurs.`, "success");
+                }
+                continue;
             }
 
-            const errorType = !health.ok ? `HTTP ${health.status || health.error}` : "Crash silencieux (Logs d'erreur détectés)";
-            this.addEvent(id, "QA", "⚠️", `Problème: ${errorType}. Auto-Correction (Essai ${attempt}/${maxFixRetries})...`, "warning");
+            for (let attempt = 1; attempt <= maxFixRetries; attempt++) {
+                this.setAgentStatus(id, "QA", "active", `Vérification HTTP de ${app.url}...`);
+                this.addEvent(id, "QA", "🔍", `Vérification HTTP de ${app.url}`, "info");
 
-            // Injection du script pour changer le port sur Dokploy si besoin
-            let dokployScriptInfo = "";
-            if (p.dokploy.domainId) {
-                const apiScriptPath = path.join(p.workspace, "update_dokploy_port.sh");
-                const apiScriptContent = `#!/bin/bash
-if [ -z "$1" ]; then echo "Usage: ./update_dokploy_port.sh <POST_NUMBER>"; exit 1; fi
+                const health = await this.verifyWebDisplay(app.url);
+
+                let logs = "";
+                let hasRuntimeError = false;
+                try {
+                    const fullLogs = await getApplicationLogs(app.applicationId);
+                    logs = fullLogs.length > 5000 ? "... " + fullLogs.slice(-5000) : fullLogs;
+                    const lowerLogs = logs.toLowerCase();
+                    hasRuntimeError = logs.includes("Traceback (most recent") ||
+                        logs.includes("Exception:") ||
+                        logs.includes("Error: listen EADDRINUSE") ||
+                        lowerLogs.includes("bad gateway") ||
+                        lowerLogs.includes("segmentation fault");
+                } catch (err) { }
+
+                if (health.ok && !hasRuntimeError) {
+                    this.addEvent(id, "QA", "✅", `${app.name}: Le site répond correctement (HTTP ${health.status}) et aucun crash détecté.`, "success");
+                    break; // Move to next app
+                }
+
+                const errorType = !health.ok ? `HTTP ${health.status || health.error}` : "Crash silencieux (Logs d'erreur détectés)";
+                this.addEvent(id, "QA", "⚠️", `${app.name}: Problème: ${errorType}. Auto-Correction (Essai ${attempt}/${maxFixRetries})...`, "warning");
+
+                // Injection du script pour changer le port sur Dokploy si besoin
+                let dokployScriptInfo = "";
+                if (app.domainId) {
+                    const apiScriptPath = path.join(p.workspace, `update_dokploy_port_${app.name}.sh`);
+                    const apiScriptContent = `#!/bin/bash
+if [ -z "$1" ]; then echo "Usage: ./update_dokploy_port_${app.name}.sh <POST_NUMBER>"; exit 1; fi
 curl -X POST "${getDokployUrl()}/api/trpc/domain.update" \\
      -H "Content-Type: application/json" -H "x-api-key: $DOKPLOY_TOKEN" \\
-     -d '{"json": {"domainId": "${p.dokploy.domainId}", "port": '$1', "https": true, "certificateType": "letsencrypt", "path": "/"}}'
+     -d '{"json": {"domainId": "${app.domainId}", "port": '$1', "https": true, "certificateType": "letsencrypt", "path": "/"}}'
 curl -X POST "${getDokployUrl()}/api/trpc/application.deploy" \\
      -H "Content-Type: application/json" -H "x-api-key: $DOKPLOY_TOKEN" \\
-     -d '{"json": {"applicationId": "${p.dokploy.applicationId}"}}'
-echo "Dokploy port updated to $1 and deployment triggered."
+     -d '{"json": {"applicationId": "${app.applicationId}"}}'
+echo "Dokploy port updated to $1 and deployment triggered for ${app.name}."
 `;
-                await fs.writeFile(apiScriptPath, apiScriptContent, { mode: 0o755 });
-                dokployScriptInfo = `ATTENTION: Par défaut, le service Dokploy a été configuré pour pointer sur un port spécifique. Si tu découvres que ton code écoute sur un port différent (ex: app.run(port=5000) mais Dokploy pointe vers autre chose), tu peux SOIT corriger le code pour correspondre à Dokploy, SOIT modifier le port de Dokploy lui-même en exécutant:
-./update_dokploy_port.sh <NOUVEAU_PORT> (ex: ./update_dokploy_port.sh 5000)
-(Ne commite surtout pas ce fichier script update_dokploy_port.sh dans git!)`;
-            }
+                    await fs.writeFile(apiScriptPath, apiScriptContent, { mode: 0o755 });
+                    dokployScriptInfo = `ATTENTION: Par défaut, le service Dokploy a été configuré pour pointer sur un port spécifique. Si tu découvres que ton code écoute sur un port différent (ex: app.run(port=5000) mais Dokploy pointe vers autre chose), tu peux SOIT corriger le code pour correspondre à Dokploy, SOIT modifier le port de Dokploy lui-même en exécutant:
+./update_dokploy_port_${app.name}.sh <NOUVEAU_PORT> (ex: ./update_dokploy_port_${app.name}.sh 5000)
+(Ne commite surtout pas ce fichier script update_dokploy_port_${app.name}.sh dans git!)`;
+                }
 
-            const instructions = `URGENT AUTO-FIX: Le projet vient d'être déployé mais une erreur est détectée en production.
+                const instructions = `URGENT AUTO-FIX: Le service ${app.name} vient d'être déployé mais une erreur est détectée en production.
 Symptôme actuel : ${!health.ok ? 'Le site web retourne une erreur ' + (health.status || health.error) + ' (Bad Gateway / Plantage).' : 'Le site retourne 200 OK, mais le contenu semble vide ou le backend/bot a crashé de manière silencieuse.'}
 
 Voici l'aperçu du code HTML tel qu'il est renvoyé par le site (te permet de voir si l'UI a chargé, ou si c'est une vue d'erreur) :
@@ -1395,64 +1489,71 @@ ${dokployScriptInfo}
 
 Corrige le problème pour que le serveur (et le bot) démarre(nt) correctement sans erreur.`;
 
-            this.setAgentStatus(id, "Developer", "active", "Auto-Correction en cours...");
+                this.setAgentStatus(id, "Developer", "active", "Auto-Correction en cours...");
 
-            const result = await runClaudeAgent({
-                prompt: `Tu as un projet existant à modifier pour corriger un crash en prod. (Tentative ${attempt}/${maxFixRetries})
+                const result = await runClaudeAgent({
+                    prompt: `Tu as un projet existant à modifier pour corriger un crash en prod. (Tentative ${attempt} / ${maxFixRetries})
 Voici le problème:
-${instructions}
-${attempt > 1 ? '\nATTENTION: Ta tentative précédente n\'a rien écrit ou n\'a pas résolu le souci. Tu DOIS ESSAYER UNE AUTRE APPROCHE (comme changer le port via ./update_dokploy_port.sh ou fixer les imports).\n' : ''}
+                        ${instructions}
+${attempt > 1 ? '\nATTENTION: Ta tentative précédente n\'a rien écrit ou n\'a pas résolu le souci. Tu DOIS ESSAYER UNE AUTRE APPROCHE (comme changer le port via ./update_dokploy_port_' + app.name + '.sh ou fixer les imports).\n' : ''}
 PROCESSUS OBLIGATOIRE - respecte cet ordre:
-1. Utilise ListDir sur "." pour comprendre la structure.
-2. Utilise Read sur main.py, server.py, package.json, requirements.txt, supervisord.conf, etc.
-3. IDENTIFIE la cause du crash (regarde attentivement les imports et le port serveur).
-4. UTILISE WRITE pour sauvegarder chaque fichier corrigé (OBLIGATOIRE) ou exécute le script bash pour changer de port.
+                1. Utilise ListDir sur "." pour comprendre la structure.
+2. Utilise Read sur le code, package.json, requirements.txt, supervisord.conf, etc.
+3. IDENTIFIE la cause du crash(regarde attentivement les imports et le port serveur).
+4. UTILISE WRITE pour sauvegarder chaque fichier corrigé(OBLIGATOIRE) ou exécute le script bash pour changer de port.
 5. Confirme l'action effectuée.
 
 RÈGLES ABSOLUES:
-- Si tu utilises ./update_dokploy_port.sh, tu dois quand même t'assurer que le code écoute bien sur ce port.
-- IMPORTANT: Si 0 fichier est écrit ET aucune commande de port n'est exécutée, la tâche échoue.`,
-                systemPrompt: "Tu es un développeur de crise. Tu DOIS utiliser l'outil Write pour sauvegarder tes correctifs et fixer le bug.",
-                cwd: p.workspace,
-                allowedTools: ["Read", "Write", "Bash", "ListDir"],
-                maxTurns: 15,
-                timeoutMs: 10 * 60 * 1000,
-                abortSignal: this.abortControllers.get(id)?.signal,
-            });
+                - Si tu utilises./ update_dokploy_port_${app.name}.sh, tu dois quand même t'assurer que le code écoute bien sur ce port.
+                    - IMPORTANT: Si 0 fichier est écrit ET aucune commande de port n'est exécutée, la tâche échoue.`,
+                    systemPrompt: "Tu es un développeur de crise. Tu DOIS utiliser l'outil Write pour sauvegarder tes correctifs et fixer le bug.",
+                    cwd: p.workspace,
+                    allowedTools: ["Read", "Write", "Bash", "ListDir"],
+                    maxTurns: 15,
+                    timeoutMs: 10 * 60 * 1000,
+                    abortSignal: this.abortControllers.get(id)?.signal,
+                });
 
-            this.addTokens(id, result);
+                this.addTokens(id, result);
 
-            const { execSync } = await import("node:child_process");
-            let hasChanges = false;
-            try {
-                const status = execSync("git status --porcelain", { cwd: p.workspace }).toString().trim();
-                hasChanges = status.length > 0;
-            } catch { hasChanges = false; }
+                const { execSync } = await import("node:child_process");
+                let hasChanges = false;
+                try {
+                    const status = execSync("git status --porcelain", { cwd: p.workspace }).toString().trim();
+                    hasChanges = status.length > 0;
+                } catch { hasChanges = false; }
 
-            if (hasChanges && p.github) {
-                const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
-                const pushed = await gitPush(p.workspace, `fix: auto-correction HTTP ${health.status || health.error}`, authUrl);
-                if (pushed) {
-                    this.addEvent(id, "Developer", "💻", "Push auto-correction appliqué", "success");
-                    await this.waitForBuild(id); // waits for deploy to finish
+                if (hasChanges && p.github) {
+                    const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
+                    const { gitPush } = await import("./claude_code.js");
+                    const pushed = await gitPush(p.workspace, `fix: auto-correction ${app.name} HTTP ${health.status || health.error}`, authUrl);
+                    if (pushed) {
+                        this.addEvent(id, "Developer", "💻", `${app.name}: Push auto-correction appliqué`, "success");
+                    } else {
+                        this.addEvent(id, "Developer", "⚠️", `${app.name}: Push échoué, revérification...`, "warning");
+                    }
+                } else {
+                    this.addEvent(id, "Developer", "ℹ️", `${app.name}: Aucune modification git, attente d'un éventuel redéploiement Dokploy...`, "info");
                 }
+
+                // On attend toujours car le script bash a pu déclencher un déploiement Dokploy.
+                await this.waitForBuild(id);
+            } // end retry loop
+
+            // Verify a final time and report failure for this app if it didn't succeed
+            const finalHealth = await this.verifyWebDisplay(app.url);
+            let finalLogs = "";
+            try { finalLogs = await getApplicationLogs(app.applicationId); } catch (e) { }
+            const finalHasRuntimeError = finalLogs.includes("Traceback (most recent") || finalLogs.includes("Exception:") || finalLogs.includes("Error: listen EADDRINUSE");
+
+            if (!finalHealth.ok || finalHasRuntimeError) {
+                const finalErr = !finalHealth.ok ? `HTTP ${finalHealth.status || finalHealth.error}` : "Crash backend (Logs)";
+                this.addEvent(id, "QA", "❌", `${app.name}: Le site est toujours cassé après auto-correction (${finalErr}).`, "error");
             } else {
-                this.addEvent(id, "Developer", "⚠️", "Aucune modification trouvée après auto-correction.", "warning");
-                continue;
+                this.addEvent(id, "QA", "✅", `${app.name}: Auto-correction réussie! (HTTP ${finalHealth.status} et aucun crash)`, "success");
             }
         }
 
-        const finalHealth = await this.verifyWebDisplay(p.dokploy.url);
-        let finalLogs = "";
-        try { finalLogs = await getApplicationLogs(p.dokploy.applicationId); } catch (e) { }
-        const finalHasRuntimeError = finalLogs.includes("Traceback (most recent") || finalLogs.includes("Exception:") || finalLogs.includes("Error: listen EADDRINUSE");
-
-        if (!finalHealth.ok || finalHasRuntimeError) {
-            const finalErr = !finalHealth.ok ? `HTTP ${finalHealth.status || finalHealth.error}` : "Crash backend (Logs)";
-            this.addEvent(id, "QA", "❌", `Le site est toujours cassé après auto-correction (${finalErr}).`, "error");
-        } else {
-            this.addEvent(id, "QA", "✅", `Auto-correction réussie! (HTTP ${finalHealth.status} et aucun crash)`, "success");
-        }
         this.setAgentStatus(id, "QA", "done");
     }
 
