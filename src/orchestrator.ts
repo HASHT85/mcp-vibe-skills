@@ -386,6 +386,11 @@ RÈGLES ABSOLUES:
             this.addTokens(id, qaResult);
             this.setAgentStatus(id, "QA", "done");
 
+            // Auto-fix loop if website is down
+            if (p.dokploy) {
+                await this.verifyAndAutoFix(id);
+            }
+
             // Done
             delete p.artifacts.pendingModification;
             this.setPhase(id, "COMPLETED");
@@ -453,6 +458,11 @@ RÈGLES ABSOLUES:
 
             // Phase 5: QA
             await this.runQA(id);
+
+            // Auto-fix loop if website is down
+            if (p.dokploy) {
+                await this.verifyAndAutoFix(id);
+            }
 
             // Done!
             this.setPhase(id, "COMPLETED");
@@ -1278,6 +1288,109 @@ REGLE ABSOLUE: Aucun import depuis un module local (pas de from src.xxx import, 
 
     private sleep(ms: number): Promise<void> {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // ─── Post-Deploy Auto-Fix ───
+
+    private async verifyWebDisplay(url: string, maxRetries = 10, delayMs = 5000): Promise<{ ok: boolean, status: number, error?: string }> {
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                const res = await fetch(url, { redirect: "follow" });
+                if (res.status !== 502 && res.status !== 503 && res.status !== 404) {
+                    return { ok: true, status: res.status };
+                }
+            } catch (err: any) {
+                console.log(`[HealthCheck] Attempt ${i + 1} failed: ${err.message}`);
+            }
+            await new Promise(r => setTimeout(r, delayMs));
+        }
+        try {
+            const res = await fetch(url, { redirect: "follow" });
+            return { ok: res.status !== 502 && res.status !== 503 && res.status !== 404, status: res.status };
+        } catch (err: any) {
+            return { ok: false, status: 0, error: err.message };
+        }
+    }
+
+    private async verifyAndAutoFix(id: string, maxFixRetries = 2) {
+        const p = this.pipelines.get(id);
+        if (!p || !p.dokploy?.url) return;
+
+        for (let attempt = 1; attempt <= maxFixRetries; attempt++) {
+            this.setAgentStatus(id, "QA", "active", "Vérification HTTP du déploiement...");
+            this.addEvent(id, "QA", "🔍", "Vérification HTTP de " + p.dokploy.url, "info");
+
+            const health = await this.verifyWebDisplay(p.dokploy.url);
+            if (health.ok) {
+                this.addEvent(id, "QA", "✅", `Le site répond correctement (HTTP ${health.status})`, "success");
+                return;
+            }
+
+            this.addEvent(id, "QA", "⚠️", `Erreur HTTP ${health.status || health.error}. Auto-Correction (Essai ${attempt}/${maxFixRetries})...`, "warning");
+
+            const instructions = `URGENT AUTO-FIX: Le projet vient d'être déployé mais le site web retourne une erreur HTTP ${health.status || health.error} (Bad Gateway / Plantage). 
+Vérifie les points suivants :
+1. Le code refuse de démarrer (erreur syntaxe ou import d'un module inexistant comme src.xxx).
+2. Le port exposé (ex: 8080 pour python, 3000 pour node) ne correspond pas au port serveur (app.run ou app.listen).
+3. Une dépendance manque dans requirements.txt ou package.json (ex: flask-socketio).
+
+Corrige le code pour que le projet démarre correctement sans erreur 502.`;
+
+            this.setAgentStatus(id, "Developer", "active", "Auto-Correction en cours...");
+
+            const result = await runClaudeAgent({
+                prompt: `Tu as un projet existant à modifier pour corriger un crash en prod.
+Voici le problème:
+${instructions}
+
+PROCESSUS OBLIGATOIRE - respecte cet ordre:
+1. Utilise ListDir sur "." pour comprendre la structure.
+2. Utilise Read sur main.py, server.py, package.json, requirements.txt, supervisord.conf, etc.
+3. IDENTIFIE la cause du crash (regarde attentivement les imports et le port serveur).
+4. UTILISE WRITE pour sauvegarder chaque fichier corrigé (OBLIGATOIRE).
+5. Confirme la liste des fichiers écrits.
+
+RÈGLES ABSOLUES:
+- Si imports cassés, réécris le fichier entier avec les imports corrigés.
+- Assure-toi que tous les modules externes sont dans le fichier de dépendances.
+- IMPORTANT: Si 0 fichier est écrit, la tâche échoue. Tu DOIS modifier le code.`,
+                systemPrompt: "Tu es un développeur de crise. Tu DOIS utiliser l'outil Write pour sauvegarder tes correctifs et fixer le bug.",
+                cwd: p.workspace,
+                allowedTools: ["Read", "Write", "Bash", "ListDir"],
+                maxTurns: 15,
+                timeoutMs: 10 * 60 * 1000,
+                abortSignal: this.abortControllers.get(id)?.signal,
+            });
+
+            this.addTokens(id, result);
+
+            const { execSync } = await import("node:child_process");
+            let hasChanges = false;
+            try {
+                const status = execSync("git status --porcelain", { cwd: p.workspace }).toString().trim();
+                hasChanges = status.length > 0;
+            } catch { hasChanges = false; }
+
+            if (hasChanges && p.github) {
+                const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
+                const pushed = await gitPush(p.workspace, `fix: auto-correction HTTP ${health.status || health.error}`, authUrl);
+                if (pushed) {
+                    this.addEvent(id, "Developer", "💻", "Push auto-correction appliqué", "success");
+                    await this.waitForBuild(id); // waits for deploy to finish
+                }
+            } else {
+                this.addEvent(id, "Developer", "⚠️", "Aucune modification trouvée après auto-correction.", "warning");
+                break;
+            }
+        }
+
+        const finalHealth = await this.verifyWebDisplay(p.dokploy.url);
+        if (!finalHealth.ok) {
+            this.addEvent(id, "QA", "❌", `Le site est toujours cassé après auto-correction (HTTP ${finalHealth.status || finalHealth.error}).`, "error");
+        } else {
+            this.addEvent(id, "QA", "✅", `Auto-correction réussie! (HTTP ${finalHealth.status})`, "success");
+        }
+        this.setAgentStatus(id, "QA", "done");
     }
 
     // ─── Persistence ───
