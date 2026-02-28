@@ -438,8 +438,12 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
             </button>
           )}
           {!['COMPLETED', 'FAILED'].includes(p.phase) && (
-            <button className="btn-kill" onClick={handleKill} title="Forcer l'arrêt (Kill)">
-              <Bomb size={14} color="var(--error)" />
+            <button
+              onClick={handleKill}
+              title="Forcer l'arrêt du pipeline"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+            >
+              <Bomb size={14} /> Stop
             </button>
           )}
           <button className="btn-back" onClick={handleDelete} title="Delete">

@@ -480,11 +480,11 @@ Réponds en JSON avec cette structure:
 Règles pour le champ "type":
 - "static" : HTML/CSS/JS vanilla, pas de build tool, pas de backend
 - "spa" : React, Vue, Svelte, Angular, Vite, Next.js... (nécessite npm run build)
-- "fullstack" : frontend + backend (Express, Fastify, Django, etc.)
-- "api" : backend/API uniquement
-- "python-worker": script Python autonome (Daemon/Cron, IA, Scraper, Trading bot) sans port HTTP
-- "node-worker": script Node.js autonome (Daemon/Cron) sans port HTTP`,
-            systemPrompt: "Tu es un analyste produit senior. Sois concis et pragmatique. Détecte bien si le projet nécessite une interface web ou si c'est un agent/bot autonome de traitement Data/IA en fond.",
+- "fullstack" : frontend React/Vue + backend Node.js/Express séparés
+- "api" : backend/API uniquement (Node.js)
+- "python-worker": PRIORITAIRE si la logique principale est en Python — bot, scraper, daemon, cron, IA, trading, data science, machine learning. MÊME SI un dashboard web est demandé, utilise "python-worker" (le dashboard Flask sera intégré automatiquement dans le même container).
+- "node-worker": PRIORITAIRE si la logique principale est en Node.js — bot, scraper, daemon, cron. MÊME SI un dashboard est demandé, utilise "node-worker" (Express dashboard intégré).`,
+            systemPrompt: "Tu es un analyste produit senior. Sois concis et pragmatique. IMPORTANT: si le projet est un bot/scraper/daemon Python avec un dashboard web, choisis 'python-worker' (pas 'fullstack') — le dashboard Flask est automatiquement intégré par notre infra.",
             cwd: p.workspace,
             maxTurns: 3,
             attachedFiles: (p.artifacts.initialFiles as any),
@@ -1003,7 +1003,8 @@ Résumé: donne une note /10 et liste les problèmes trouvés.`,
             return declared as ProjectType;
         }
 
-        // Fallback: infer from stack
+        // Fallback: infer from description and stack
+        const desc = (analysis?.summary || "").toLowerCase();
         const frontend = (analysis?.stack?.frontend || "").toLowerCase();
         const backend = (analysis?.stack?.backend || "").toLowerCase();
 
@@ -1011,8 +1012,12 @@ Résumé: donne une note /10 et liste les problèmes trouvés.`,
         const hasFrontend = frontend && !["none", "aucun", "n/a", "-", ""].includes(frontend);
         const isSPA = /react|vue|svelte|angular|vite|next|nuxt|remix/.test(frontend);
 
-        if (backend.includes('python') && !hasFrontend) return "python-worker";
-        if (backend.includes('node') && !hasFrontend) return "node-worker";
+        // Python bot/worker detection — even with a web dashboard, prefer python-worker
+        const isPythonBot = backend.includes("python") || /python|flask|fastapi|django|pandas|scraper|scraping|bot\s|cron|daemon|trading|data.sci|machine.learn|ia\s|ml\s/.test(desc);
+        const isNodeBot = (backend.includes("node") || backend.includes("express")) && /bot\s|scraper|cron|daemon|worker/.test(desc);
+
+        if (isPythonBot) return "python-worker";
+        if (isNodeBot) return "node-worker";
 
         if (!hasBackend) return isSPA ? "spa" : "static";
         if (!hasFrontend) return "api";
