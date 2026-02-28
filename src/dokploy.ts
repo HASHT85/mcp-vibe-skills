@@ -533,8 +533,6 @@ export async function createDokployApplication(input: CreateApplicationInput): P
                             sourceType: "github",
                             autoDeploy: true,
                             buildType: "dockerfile",
-                            contextPath: input.contextPath || ".",
-                            dockerPath: input.dockerPath || "./Dockerfile",
                             cleanCache: false
                         }
                     })

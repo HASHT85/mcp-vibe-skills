@@ -802,10 +802,8 @@ RÈGLES CRITIQUES POUR LES DOCKERFILE:
                         repo: p.github.repo,
                         branch: "main",
                         buildType: "dockerfile",
-                        buildPath: `./${service.name}/Dockerfile`,
-                        contextPath: `./${service.name}`,
-                        dockerPath: `./Dockerfile`,
-                        env: `DOKPLOY_SUB_PATH=./${service.name}`
+                        buildPath: `/${service.name}/Dockerfile`,
+                        env: `DOKPLOY_SUB_PATH=/${service.name}`
                     });
 
                     // Port logic
