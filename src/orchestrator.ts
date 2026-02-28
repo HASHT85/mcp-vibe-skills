@@ -1339,10 +1339,10 @@ Corrige le code pour que le projet démarre correctement sans erreur 502.`;
             this.setAgentStatus(id, "Developer", "active", "Auto-Correction en cours...");
 
             const result = await runClaudeAgent({
-                prompt: `Tu as un projet existant à modifier pour corriger un crash en prod.
+                prompt: `Tu as un projet existant à modifier pour corriger un crash en prod. (Tentative ${attempt}/${maxFixRetries})
 Voici le problème:
 ${instructions}
-
+${attempt > 1 ? '\nATTENTION: Ta tentative précédente n\'a rien écrit. Tu DOIS ESSAYER UNE AUTRE APPROCHE et écrire au moins un fichier.\n' : ''}
 PROCESSUS OBLIGATOIRE - respecte cet ordre:
 1. Utilise ListDir sur "." pour comprendre la structure.
 2. Utilise Read sur main.py, server.py, package.json, requirements.txt, supervisord.conf, etc.
@@ -1380,7 +1380,7 @@ RÈGLES ABSOLUES:
                 }
             } else {
                 this.addEvent(id, "Developer", "⚠️", "Aucune modification trouvée après auto-correction.", "warning");
-                break;
+                continue;
             }
         }
 
