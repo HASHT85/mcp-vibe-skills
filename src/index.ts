@@ -191,10 +191,13 @@ app.delete("/pipeline/:id", async (req: Request, res: Response) => {
 app.post("/pipeline/:id/modify", async (req: Request, res: Response) => {
     try {
         const instructions = String(req.body?.instructions ?? "").trim();
-        if (!instructions) {
+        const fileBase64 = req.body?.fileBase64 as string | undefined;
+        const fileType = req.body?.fileType as string | undefined;
+
+        if (!instructions && !fileBase64) {
             return res.status(400).json({ error: "instructions_required" });
         }
-        const pipeline = await orchestrator.modifyPipeline(req.params.id, instructions);
+        const pipeline = await orchestrator.modifyPipeline(req.params.id, instructions, fileBase64, fileType);
         if (!pipeline) {
             return res.status(404).json({ error: "pipeline_not_found" });
         }

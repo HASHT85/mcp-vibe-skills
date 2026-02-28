@@ -308,6 +308,10 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
   const [modifyText, setModifyText] = useState('');
   const [modifying, setModifying] = useState(false);
 
+  // File state
+  const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const handlePause = async () => {
     if (p.phase === 'PAUSED') {
       await resumePipeline(p.id);
@@ -326,12 +330,29 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
   };
 
   const handleModify = async () => {
-    if (!modifyText.trim()) return;
+    if (!modifyText.trim() && !file) return;
     setModifying(true);
     try {
-      await modifyPipeline(p.id, modifyText.trim());
+      let fileBase64: string | undefined;
+      let fileType: string | undefined;
+
+      if (file) {
+        fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        fileType = file.type;
+      }
+
+      await modifyPipeline(p.id, modifyText.trim(), fileBase64, fileType);
       setShowModify(false);
       setModifyText('');
+      setFile(null);
       onRefresh();
     } catch (err: any) {
       alert(`Erreur: ${err.message}`);
@@ -339,6 +360,35 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
       setModifying(false);
     }
   };
+
+  const processFile = (selectedFile: File) => {
+    if (selectedFile.type.startsWith('image/') || selectedFile.type === 'application/pdf') {
+      setFile(selectedFile);
+    } else {
+      alert("Seuls les images et les PDF sont supportés.");
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processFile(e.target.files[0]);
+    }
+  };
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const pastedFile = items[i].getAsFile();
+        if (pastedFile) {
+          e.preventDefault();
+          processFile(pastedFile);
+          break;
+        }
+      }
+    }
+  }, []);
 
   const totalTokens = (p.tokenUsage?.inputTokens || 0) + (p.tokenUsage?.outputTokens || 0);
 
@@ -434,7 +484,7 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setShowModify(false)}
+            onClick={() => { setShowModify(false); setFile(null); setModifyText(''); }}
           >
             <motion.div
               className="modal modify-modal"
@@ -450,20 +500,53 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
               <textarea
                 autoFocus
                 rows={6}
-                placeholder="Ex: Change le titre en 'Mon Portfolio', ajoute un mode dark, corrige le footer..."
+                placeholder="Ex: Change le titre en 'Mon Portfolio', ajoute un mode dark, corrige le footer... (Ctrl+V pour coller une image)"
                 value={modifyText}
                 onChange={(e) => setModifyText(e.target.value)}
+                onPaste={handlePaste}
                 className="modify-textarea"
               />
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-                <button className="btn-cancel" onClick={() => setShowModify(false)}>Annuler</button>
+
+              {file && (
+                <div className="file-preview-pill">
+                  <div className="file-info">
+                    <Paperclip size={14} />
+                    <span className="file-name">{file.name}</span>
+                    <span className="file-size">({Math.round(file.size / 1024)} KB)</span>
+                  </div>
+                  <button className="remove-file-btn" onClick={() => setFile(null)} title="Retirer le fichier">
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                accept="image/*,application/pdf"
+                onChange={handleFileChange}
+              />
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
                 <button
-                  className="btn-launch"
-                  onClick={handleModify}
-                  disabled={modifying || !modifyText.trim()}
+                  className="btn-attach"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Joindre une image ou un PDF"
                 >
-                  {modifying ? 'Envoi...' : '🚀 Lancer la modification'}
+                  <Paperclip size={16} /> Joindre un fichier
                 </button>
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn-cancel" onClick={() => { setShowModify(false); setFile(null); setModifyText(''); }}>Annuler</button>
+                  <button
+                    className="btn-launch"
+                    onClick={handleModify}
+                    disabled={modifying || (!modifyText.trim() && !file)}
+                  >
+                    {modifying ? 'Envoi...' : '🚀 Lancer la modification'}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

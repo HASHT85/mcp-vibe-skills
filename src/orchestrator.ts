@@ -220,7 +220,7 @@ export class Orchestrator extends EventEmitter {
 
     // ─── Modify Existing Pipeline ───
 
-    async modifyPipeline(id: string, instructions: string): Promise<Pipeline | null> {
+    async modifyPipeline(id: string, instructions: string, fileBase64?: string, fileType?: string): Promise<Pipeline | null> {
         const p = this.pipelines.get(id);
         if (!p) return null;
         if (this.running.has(id)) throw new Error("Pipeline is already running");
@@ -233,26 +233,31 @@ export class Orchestrator extends EventEmitter {
         p.progress = 50;
         p.error = undefined;
         p.artifacts.pendingModification = instructions; // used by resumePipeline
+        if (fileBase64 && fileType) {
+            (p.artifacts as any).pendingModificationFileBase64 = fileBase64;
+            (p.artifacts as any).pendingModificationFileType = fileType;
+        }
+
         p.events.push({
             id: crypto.randomUUID(),
             pipelineId: id,
             timestamp: new Date().toISOString(),
             agentRole: "Orchestrator",
             agentEmoji: "✏️",
-            action: `Modification demandée: ${instructions.slice(0, 100)}...`,
+            action: `Modification demandée: ${instructions.slice(0, 100)}...${fileBase64 ? ' (avec fichier)' : ''}`,
             type: "info",
         });
         await this.saveState();
 
         // Run modification in background
-        this.executeModification(id, instructions).catch(err => {
+        this.executeModification(id, instructions, fileBase64, fileType).catch(err => {
             console.error(`[Orchestrator] Modify error for ${id}:`, err);
         });
 
         return p;
     }
 
-    private async executeModification(id: string, instructions: string) {
+    private async executeModification(id: string, instructions: string, fileBase64?: string, fileType?: string) {
         if (this.running.has(id)) return;
         this.running.add(id);
 
@@ -286,6 +291,8 @@ Instructions techniques:
 3. Assure-toi que le code compile sans erreur
 4. Ne casse pas les fonctionnalités existantes
 5. Si il y a un Dockerfile, assure-toi qu'il reste valide`,
+                attachedFileBase64: fileBase64,
+                attachedFileType: fileType,
                 systemPrompt: "Tu es un développeur senior. Applique les modifications demandées de manière propre et professionnelle.",
                 cwd: p.workspace,
                 allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],

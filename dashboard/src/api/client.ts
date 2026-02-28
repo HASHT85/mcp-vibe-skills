@@ -103,10 +103,10 @@ export function connectAllSSE(onEvent: (event: PipelineEvent) => void): () => vo
     return () => es.close();
 }
 
-export async function modifyPipeline(id: string, instructions: string) {
+export async function modifyPipeline(id: string, instructions: string, fileBase64?: string, fileType?: string) {
     return api<{ pipeline: Pipeline }>(`/pipeline/${id}/modify`, {
         method: 'POST',
-        body: JSON.stringify({ instructions }),
+        body: JSON.stringify({ instructions, fileBase64, fileType }),
     });
 }
 
