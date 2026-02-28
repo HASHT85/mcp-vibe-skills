@@ -90,8 +90,10 @@ export type Pipeline = {
 
 const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || "/workspace";
 const STORE_PATH = process.env.PIPELINES_STORE || "/data/pipelines.json";
-const GITHUB_OWNER = process.env.GITHUB_OWNER || "";
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
+
+// Read at call-time (not at module init) so env vars from .env container work
+const getGithubOwner = () => process.env.GITHUB_OWNER || "";
+const getGithubToken = () => process.env.GITHUB_TOKEN || "";
 
 const DEFAULT_AGENTS: Omit<PipelineAgent, "status">[] = [
     { role: "Analyst", emoji: "🔍" },
@@ -297,7 +299,7 @@ export class Orchestrator extends EventEmitter {
                 if (!workspaceExists) {
                     this.addEvent(id, "Developer", "💻", "Re-clonage du workspace...", "info");
                     await gitClone(
-                        `https://${GITHUB_TOKEN}@github.com/${p.github.owner}/${p.github.repo}.git`,
+                        `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`,
                         p.workspace
                     );
                 }
@@ -447,7 +449,35 @@ Instructions techniques:
             this.abortControllers.delete(id);
             this.running.delete(id);
             await this.saveState();
+            // ─── Companion Dashboard: if worker completed, auto-launch a frontend
+            const finished = this.pipelines.get(id);
+            if (finished?.phase === "COMPLETED" && finished.projectType?.includes("worker")) {
+                this.launchCompanionDashboard(finished).catch(console.error);
+            }
         }
+    }
+
+    // ─── Companion Dashboard auto-launcher ───
+
+    private async launchCompanionDashboard(workerPipeline: Pipeline) {
+        const workerName = workerPipeline.name;
+        const workerDesc = workerPipeline.description;
+        const workerGithub = workerPipeline.github;
+
+        const dashboardDesc = `Crée un dashboard web React / SPA moderne qui affiche les données produites par ce worker en tâche de fond :
+"${workerDesc}"
+
+- Nom du worker: ${workerName}
+${workerGithub ? `- Repo worker: ${workerGithub.url}` : ""}
+- Le dashboard doit : afficher les données en temps réel (polling toutes les 30s), avoir des graphiques / tableaux modernes, permettre de voir l'état du worker (actif / en attente).
+- Technologie : React + Vite, fetch() vers une API REST simple, recharts pour les graphiques.
+- Design : dark mode, très modern, dashboard style Mission Control.`;
+
+        const dashboardName = `${workerName}-dashboard`;
+
+        this.addEvent(workerPipeline.id, "Orchestrator", "🌐", `Lancement automatique du companion Dashboard: "${dashboardName}"`, "info");
+
+        await this.launchIdea(dashboardDesc, dashboardName);
     }
 
     // ─── Phase Runners ───
@@ -592,6 +622,8 @@ Réponds en JSON:
         const repoName = `vibecraft-${this.slugify(p.name)}`;
 
         // Create GitHub repo
+        const GITHUB_OWNER = getGithubOwner();
+        const GITHUB_TOKEN = getGithubToken();
         if (GITHUB_OWNER && GITHUB_TOKEN) {
             try {
                 const createRes = await fetch("https://api.github.com/user/repos", {
