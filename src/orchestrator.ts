@@ -1132,12 +1132,16 @@ CMD ["node", "dist/index.js"]`;
             case "python-worker":
                 return `CONTRAINTES ARCHITECTURE (Python Bot + Dashboard Web):
 - Ce projet contient DEUX composants dans le même container:
-  1. LE BOT (main.py) : logique principale (boucle, fetch API, traitement data, calculs IA, etc.)
-     - Le bot écrit ses résultats dans data/data.json après chaque cycle pour partager avec le serveur.
-  2. LE SERVEUR WEB (server.py) : Flask sur le port 8080 qui sert :
+  1. LE BOT (main.py) : logique principale tout-en-un (boucle, fetch API, calculs).
+     - Le bot écrit ses résultats dans data/data.json après chaque cycle.
+  2. LE SERVEUR WEB (server.py) : Flask sur le port 8080.
      - GET / : page HTML dashboard (graphiques Chart.js, dark mode, auto-refresh)
      - GET /api/data : retourne data/data.json en JSON
-- requirements.txt inclut: flask, requests + toutes les déps du bot.
+- STRUCTURE OBLIGATOIRE (FLAT - PAS DE SOUS-DOSSIERS src/):
+  main.py, server.py, requirements.txt, supervisord.conf, Dockerfile, templates/index.html, data/data.json
+  INTERDIT: src/, lib/, modules/, utils/ ou tout import de sous-module custom
+- requirements.txt DOIT inclure: flask, requests + toutes déps du bot.
+  Si tu utilises SocketIO: ajoute flask-socketio dans requirements.txt
 - supervisord lance main.py + server.py simultanément.
 - EXPOSE 8080.`;
 
@@ -1187,15 +1191,34 @@ CMD ["node", "dist/index.js"]`;
 
             case "python-worker":
                 return `INSTRUCTIONS SCAFFOLD (Python Bot + Dashboard Web):
-1. Crée data/ avec un data.json vide: {"entries": [], "lastUpdate": null}
-2. Crée main.py: logique du bot qui écrit dans data/data.json après chaque cycle
-3. Crée server.py: Flask app sur port 8080 avec:
-   - Route GET / : sert le dashboard HTML (inline ou depuis templates/index.html)
-   - Route GET /api/data : lis et retourne data/data.json
-4. Crée templates/index.html: dashboard moderne dark mode avec Chart.js et auto-refresh
-5. requirements.txt: flask, requests + dépendances du bot (pandas, etc si nécessaire)
-6. supervisord.conf: deux programs [program:bot] et [program:server]
-7. IMPORTANT: Copie supervisord.conf vers /etc/supervisor/conf.d/app.conf dans le Dockerfile`;
+1. Crée data/data.json: {"entries": [], "lastUpdate": null}
+2. Crée main.py: TOUT le code bot dans ce seul fichier (pas d'imports depuis src/ ou sous-dossiers)
+   - boucle infinie ou APScheduler, fetch API, écriture dans data/data.json
+3. Crée server.py: TOUT le code serveur dans ce seul fichier
+   - from flask import Flask, render_template, jsonify
+   - app = Flask(__name__, template_folder='templates')
+   - DERNIERE LIGNE OBLIGATOIRE: app.run(host='0.0.0.0', port=8080, debug=False)
+   - Si tu utilises SocketIO: from flask_socketio import SocketIO (ET ajoute flask-socketio dans requirements.txt)
+   - PORT = 8080 TOUJOURS (JAMAIS 5000)
+4. Crée templates/index.html: dark mode Chart.js, polling GET /api/data toutes les 5s
+5. requirements.txt: flask, requests + déps du bot + flask-socketio si utilisé
+6. supervisord.conf:
+[supervisord]
+nodaemon=true
+[program:bot]
+command=python /app/main.py
+directory=/app
+autostart=true
+autorestart=true
+[program:server]
+command=python /app/server.py
+directory=/app
+autostart=true
+autorestart=true
+7. Dockerfile: COPY supervisord.conf /etc/supervisor/conf.d/app.conf
+   CMD ["supervisord", "-c", "/etc/supervisor/conf.d/app.conf"]
+   EXPOSE 8080
+REGLE ABSOLUE: Aucun import depuis un module local (pas de from src.xxx import, pas de from utils import)`;
 
             case "node-worker":
                 return `INSTRUCTIONS SCAFFOLD (Node Bot + Dashboard Web):
