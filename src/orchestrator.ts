@@ -14,11 +14,11 @@ import { findSkillsForContext } from "./skills.js";
 import {
     isDokployConfigured,
     createDokployProject,
-    createDokployApplication,
     createDomain,
     triggerDeploy,
     getBuildLogs,
     getLatestDeployment,
+    getApplicationLogs,
 } from "./dokploy.js";
 
 // ─── Types ───
@@ -1323,12 +1323,30 @@ REGLE ABSOLUE: Aucun import depuis un module local (pas de from src.xxx import, 
             this.addEvent(id, "QA", "🔍", "Vérification HTTP de " + p.dokploy.url, "info");
 
             const health = await this.verifyWebDisplay(p.dokploy.url);
-            if (health.ok) {
-                this.addEvent(id, "QA", "✅", `Le site répond correctement (HTTP ${health.status})`, "success");
+
+            // Check logs for silent crashes (e.g. backend bot crashed but Flask 200 OK)
+            let logs = "";
+            let hasRuntimeError = false;
+            try {
+                const fullLogs = await getApplicationLogs(p.dokploy.applicationId);
+                // Keep only the last 5000 chars to avoid prompt bloat
+                logs = fullLogs.length > 5000 ? "... " + fullLogs.slice(-5000) : fullLogs;
+                const lowerLogs = logs.toLowerCase();
+                // "error" is too generic for npm/node output, let's look for common crash patterns
+                hasRuntimeError = logs.includes("Traceback (most recent") ||
+                    logs.includes("Exception:") ||
+                    logs.includes("Error: listen EADDRINUSE") ||
+                    lowerLogs.includes("bad gateway") ||
+                    lowerLogs.includes("segmentation fault");
+            } catch (err) { }
+
+            if (health.ok && !hasRuntimeError) {
+                this.addEvent(id, "QA", "✅", `Le site répond correctement (HTTP ${health.status}) et aucun crash détecté.`, "success");
                 return;
             }
 
-            this.addEvent(id, "QA", "⚠️", `Erreur HTTP ${health.status || health.error}. Auto-Correction (Essai ${attempt}/${maxFixRetries})...`, "warning");
+            const errorType = !health.ok ? `HTTP ${health.status || health.error}` : "Crash silencieux (Logs d'erreur détectés)";
+            this.addEvent(id, "QA", "⚠️", `Problème: ${errorType}. Auto-Correction (Essai ${attempt}/${maxFixRetries})...`, "warning");
 
             // Injection du script pour changer le port sur Dokploy si besoin
             let dokployScriptInfo = "";
@@ -1350,15 +1368,23 @@ echo "Dokploy port updated to $1 and deployment triggered."
 (Ne commite surtout pas ce fichier script update_dokploy_port.sh dans git!)`;
             }
 
-            const instructions = `URGENT AUTO-FIX: Le projet vient d'être déployé mais le site web retourne une erreur HTTP ${health.status || health.error} (Bad Gateway / Plantage). 
+            const instructions = `URGENT AUTO-FIX: Le projet vient d'être déployé mais une erreur grave est détectée en production.
+Symptôme actuel : ${!health.ok ? 'Le site web retourne une erreur ' + (health.status || health.error) + ' (Bad Gateway / Plantage).' : 'Le site retourne 200 OK, mais le backend/bot a crashé de manière silencieuse (voir logs).'}
+
+Voici les logs du serveur en production (les dernières lignes):
+<logs>
+${logs || 'Aucun log disponible.'}
+</logs>
+
 Vérifie les points suivants :
-1. Le code refuse de démarrer (erreur syntaxe ou import d'un module inexistant comme src.xxx).
-2. Le port exposé dans le code (ex: 8080 ou 5000) ne correspond pas au port configuré dans le conteneur/Dokploy.
-3. Une dépendance manque dans requirements.txt ou package.json (ex: flask-socketio).
+1. Les logs ci-dessus te montrent exactement où ça plante (Traceback, imports, EADDRINUSE, etc.).
+2. Le code refuse de démarrer (erreur syntaxe ou import d'un module inexistant comme src.xxx).
+3. Le port exposé dans le code (ex: 8080 ou 5000) ne correspond pas au port configuré dans le conteneur/Dokploy.
+4. Une dépendance manque dans requirements.txt ou package.json (ex: flask-socketio).
 
 ${dokployScriptInfo}
 
-Corrige le problème pour que le projet démarre correctement sans erreur 502.`;
+Corrige le problème pour que le serveur (et le bot) démarre(nt) correctement sans erreur.`;
 
             this.setAgentStatus(id, "Developer", "active", "Auto-Correction en cours...");
 
@@ -1408,10 +1434,15 @@ RÈGLES ABSOLUES:
         }
 
         const finalHealth = await this.verifyWebDisplay(p.dokploy.url);
-        if (!finalHealth.ok) {
-            this.addEvent(id, "QA", "❌", `Le site est toujours cassé après auto-correction (HTTP ${finalHealth.status || finalHealth.error}).`, "error");
+        let finalLogs = "";
+        try { finalLogs = await getApplicationLogs(p.dokploy.applicationId); } catch (e) { }
+        const finalHasRuntimeError = finalLogs.includes("Traceback (most recent") || finalLogs.includes("Exception:") || finalLogs.includes("Error: listen EADDRINUSE");
+
+        if (!finalHealth.ok || finalHasRuntimeError) {
+            const finalErr = !finalHealth.ok ? `HTTP ${finalHealth.status || finalHealth.error}` : "Crash backend (Logs)";
+            this.addEvent(id, "QA", "❌", `Le site est toujours cassé après auto-correction (${finalErr}).`, "error");
         } else {
-            this.addEvent(id, "QA", "✅", `Auto-correction réussie! (HTTP ${finalHealth.status})`, "success");
+            this.addEvent(id, "QA", "✅", `Auto-correction réussie! (HTTP ${finalHealth.status} et aucun crash)`, "success");
         }
         this.setAgentStatus(id, "QA", "done");
     }
