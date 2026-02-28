@@ -505,12 +505,12 @@ export async function gitPush(cwd: string, message: string, authRemoteUrl?: stri
             ? [
                 ["git", ["remote", "set-url", "origin", authRemoteUrl]],
                 ["git", ["add", "-A"]],
-                ["git", ["commit", "-m", message, "--allow-empty"]],
+                ["git", ["commit", "-m", message]],
                 ["git", ["push", "origin", "main"]],
             ]
             : [
                 ["git", ["add", "-A"]],
-                ["git", ["commit", "-m", message, "--allow-empty"]],
+                ["git", ["commit", "-m", message]],
                 ["git", ["push", "origin", "main"]],
             ];
 

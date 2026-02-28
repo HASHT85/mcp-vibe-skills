@@ -339,10 +339,27 @@ RÈGLES ABSOLUES:
 
             // Push to GitHub
             if (p.github) {
-                const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
-                await gitPush(p.workspace, `mod: ${instructions.slice(0, 50)}`, authUrl);
-                this.addEvent(id, "Developer", "💻", "Push → modification appliquée", "success");
+                // Check if there's anything to commit
+                const { execSync } = await import("node:child_process");
+                let hasChanges = false;
+                try {
+                    const status = execSync("git status --porcelain", { cwd: p.workspace }).toString().trim();
+                    hasChanges = status.length > 0;
+                } catch { hasChanges = false; }
+
+                if (!hasChanges) {
+                    this.addEvent(id, "Developer", "⚠️", "Aucun fichier modifié — l'agent n'a pas écrit de code. Reformule ta demande en étant plus précis sur les fichiers à modifier.", "warning");
+                } else {
+                    const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
+                    const pushed = await gitPush(p.workspace, `mod: ${instructions.slice(0, 50)}`, authUrl);
+                    if (pushed) {
+                        this.addEvent(id, "Developer", "💻", "Push → modification appliquée", "success");
+                    } else {
+                        this.addEvent(id, "Developer", "⚠️", "Push échoué — relance la modification", "warning");
+                    }
+                }
             }
+
 
             // Wait for Dokploy build
             if (p.dokploy) {
