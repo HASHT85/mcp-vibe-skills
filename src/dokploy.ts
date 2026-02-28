@@ -36,25 +36,26 @@ export type CreateApplicationInput = {
     sourceType?: "git" | "github" | "gitlab" | "bitbucket" | "docker";
 };
 
-const DOKPLOY_URL = process.env.DOKPLOY_URL || "";
-const DOKPLOY_TOKEN = process.env.DOKPLOY_TOKEN || "";
+// Read at call-time so container .env vars are available after module init
+const getDokployUrl = () => process.env.getDokployUrl() || "";
+const getDokployToken = () => process.env.DOKPLOY_TOKEN || "";
 
 function getHeaders() {
     return {
         "Content-Type": "application/json",
-        "x-api-key": DOKPLOY_TOKEN,
+        "x-api-key": getDokployToken(),
     };
 }
 
 export function isDokployConfigured(): boolean {
-    return Boolean(DOKPLOY_URL && DOKPLOY_TOKEN);
+    return Boolean(getDokployUrl() && getDokployToken());
 }
 
 export async function getGithubProviders(): Promise<any[]> {
     if (!isDokployConfigured()) return [];
     try {
         // Try the TRPC endpoint first
-        const res = await fetch(`${DOKPLOY_URL}/api/trpc/github.githubProviders`, {
+        const res = await fetch(`${getDokployUrl()}/api/trpc/github.githubProviders`, {
             method: "GET",
             headers: getHeaders()
         });
@@ -75,7 +76,7 @@ export async function getDokployUser(): Promise<any> {
     try {
         // Step 1: Get basic session info to find the userId
         console.log(`[Dokploy] Fetching user session from user.get...`);
-        const res = await fetch(`${DOKPLOY_URL}/api/trpc/user.get`, { method: "GET", headers: getHeaders() });
+        const res = await fetch(`${getDokployUrl()}/api/trpc/user.get`, { method: "GET", headers: getHeaders() });
 
         if (!res.ok) {
             console.warn(`[Dokploy] user.get failed: ${res.status}`);
@@ -96,7 +97,7 @@ export async function getDokployUser(): Promise<any> {
         // Step 2: Fetch full user profile with user.one to get relations (like githubInstallations)
         const input = { json: { userId } };
         const oneRes = await fetch(
-            `${DOKPLOY_URL}/api/trpc/user.one?input=${encodeURIComponent(JSON.stringify(input))}`,
+            `${getDokployUrl()}/api/trpc/user.one?input=${encodeURIComponent(JSON.stringify(input))}`,
             { method: "GET", headers: getHeaders() }
         );
 
@@ -113,9 +114,9 @@ export async function getDokployUser(): Promise<any> {
 
         // Step 3: Experimental probes for GitHub endpoints if not found in user profile
         const probeEndpoints = [
-            `${DOKPLOY_URL}/api/trpc/github.installations`,
-            `${DOKPLOY_URL}/api/trpc/github.get`,
-            `${DOKPLOY_URL}/api/trpc/git.all`,
+            `${getDokployUrl()}/api/trpc/github.installations`,
+            `${getDokployUrl()}/api/trpc/github.get`,
+            `${getDokployUrl()}/api/trpc/git.all`,
         ];
 
         for (const url of probeEndpoints) {
@@ -151,7 +152,7 @@ export async function listDokployProjects(): Promise<DokployProject[]> {
         throw new Error("dokploy_not_configured");
     }
 
-    const res = await fetch(`${DOKPLOY_URL}/api/trpc/project.all`, {
+    const res = await fetch(`${getDokployUrl()}/api/trpc/project.all`, {
         method: "GET",
         headers: getHeaders(),
     });
@@ -191,7 +192,7 @@ export async function getDokployProject(projectId: string): Promise<DokployProje
     // Input must be wrapped in json for SuperJSON
     const input = { json: { projectId } };
     const res = await fetch(
-        `${DOKPLOY_URL}/api/trpc/project.one?input=${encodeURIComponent(JSON.stringify(input))}`,
+        `${getDokployUrl()}/api/trpc/project.one?input=${encodeURIComponent(JSON.stringify(input))}`,
         {
             method: "GET",
             headers: getHeaders(),
@@ -223,7 +224,7 @@ export async function listDokployApplications(projectId: string): Promise<Dokplo
     // or fetched via application.all with filter
     const input = { json: { projectId } };
     const res = await fetch(
-        `${DOKPLOY_URL}/api/trpc/application.all?input=${encodeURIComponent(JSON.stringify(input))}`,
+        `${getDokployUrl()}/api/trpc/application.all?input=${encodeURIComponent(JSON.stringify(input))}`,
         {
             method: "GET",
             headers: getHeaders(),
@@ -244,7 +245,7 @@ export async function getApplication(applicationId: string): Promise<DokployAppl
 
     const input = { json: { applicationId } };
     const res = await fetch(
-        `${DOKPLOY_URL}/api/trpc/application.one?input=${encodeURIComponent(JSON.stringify(input))}`,
+        `${getDokployUrl()}/api/trpc/application.one?input=${encodeURIComponent(JSON.stringify(input))}`,
         { method: "GET", headers: getHeaders() }
     );
 
@@ -265,7 +266,7 @@ export async function getBuildLogs(applicationId: string): Promise<string> {
     try {
         const input = { json: { applicationId } };
         const res = await fetch(
-            `${DOKPLOY_URL}/api/trpc/deployment.all?input=${encodeURIComponent(JSON.stringify(input))}`,
+            `${getDokployUrl()}/api/trpc/deployment.all?input=${encodeURIComponent(JSON.stringify(input))}`,
             { method: "GET", headers: getHeaders() }
         );
 
@@ -292,7 +293,7 @@ export async function getApplicationLogs(applicationId: string): Promise<string>
     try {
         const input = { json: { applicationId } };
         const res = await fetch(
-            `${DOKPLOY_URL}/api/trpc/application.readLogs?input=${encodeURIComponent(JSON.stringify(input))}`,
+            `${getDokployUrl()}/api/trpc/application.readLogs?input=${encodeURIComponent(JSON.stringify(input))}`,
             { method: "GET", headers: getHeaders() }
         );
         if (res.ok) {
@@ -313,7 +314,7 @@ export async function triggerDeploy(applicationId: string): Promise<boolean> {
     }
 
     console.log(`[Dokploy] Triggering deploy for app ${applicationId}...`);
-    const res = await fetch(`${DOKPLOY_URL}/api/trpc/application.deploy`, {
+    const res = await fetch(`${getDokployUrl()}/api/trpc/application.deploy`, {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({ json: { applicationId } }),
@@ -337,15 +338,15 @@ export async function triggerDeploy(applicationId: string): Promise<boolean> {
 export async function createDokployProject(name: string, description?: string): Promise<DokployProject> {
     if (!isDokployConfigured()) {
         console.error("Dokploy Config Missing:", {
-            URL: process.env.DOKPLOY_URL,
+            URL: process.env.getDokployUrl(),
             TOKEN_SET: !!process.env.DOKPLOY_TOKEN
         });
         throw new Error("dokploy_not_configured");
     }
 
-    console.log(`[Dokploy] Creating project '${name}' at ${DOKPLOY_URL}...`);
+    console.log(`[Dokploy] Creating project '${name}' at ${getDokployUrl()}...`);
 
-    const res = await fetch(`${DOKPLOY_URL}/api/trpc/project.create`, {
+    const res = await fetch(`${getDokployUrl()}/api/trpc/project.create`, {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({ json: { name, description: description || "" } }),
@@ -395,7 +396,7 @@ export async function createDokployProject(name: string, description?: string): 
     if (!environmentId) {
         try {
             console.log(`[Dokploy] Fetching environments via API for project ${listProject.projectId}...`);
-            const envRes = await fetch(`${DOKPLOY_URL}/api/trpc/environment.all?input=${encodeURIComponent(JSON.stringify({ json: { projectId: listProject.projectId } }))}`, {
+            const envRes = await fetch(`${getDokployUrl()}/api/trpc/environment.all?input=${encodeURIComponent(JSON.stringify({ json: { projectId: listProject.projectId } }))}`, {
                 method: "GET",
                 headers: getHeaders(),
             });
@@ -422,7 +423,7 @@ export async function createDokployProject(name: string, description?: string): 
     if (!environmentId) {
         console.log(`[Dokploy] No environment ID found. Attempting to create 'production' environment...`);
         try {
-            const createEnvRes = await fetch(`${DOKPLOY_URL}/api/trpc/environment.create`, {
+            const createEnvRes = await fetch(`${getDokployUrl()}/api/trpc/environment.create`, {
                 method: "POST",
                 headers: getHeaders(),
                 body: JSON.stringify({ json: { projectId: listProject.projectId, name: "production", description: "Default environment" } }),
@@ -465,7 +466,7 @@ export async function createDokployApplication(input: CreateApplicationInput): P
 
     console.log("[Dokploy] Application Create Payload:", JSON.stringify(payload, null, 2));
 
-    const res = await fetch(`${DOKPLOY_URL}/api/trpc/application.create`, {
+    const res = await fetch(`${getDokployUrl()}/api/trpc/application.create`, {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({ json: payload }),
@@ -511,7 +512,7 @@ export async function createDokployApplication(input: CreateApplicationInput): P
             };
 
             console.log(`[Dokploy] Linking GitHub Repo...`);
-            const linkRes = await fetch(`${DOKPLOY_URL}/api/trpc/application.saveGithubProvider`, {
+            const linkRes = await fetch(`${getDokployUrl()}/api/trpc/application.saveGithubProvider`, {
                 method: "POST",
                 headers: getHeaders(),
                 body: JSON.stringify({ json: linkPayload })
@@ -525,7 +526,7 @@ export async function createDokployApplication(input: CreateApplicationInput): P
 
                 // Enable Auto-Deploy
                 console.log(`[Dokploy] Enabling Auto-Deploy & Enforcing Dockerfile...`);
-                await fetch(`${DOKPLOY_URL}/api/trpc/application.update`, {
+                await fetch(`${getDokployUrl()}/api/trpc/application.update`, {
                     method: "POST",
                     headers: getHeaders(),
                     body: JSON.stringify({
@@ -564,7 +565,7 @@ export async function createDokployApplication(input: CreateApplicationInput): P
         // For generic git, usually update application is enough or there might be a saveGitProvider
         // But based on initial code, it seemed update/create keys work. 
         // Let's use application.update to set generic git details if saveGithubProvider is only for github.
-        await fetch(`${DOKPLOY_URL}/api/trpc/application.update`, {
+        await fetch(`${getDokployUrl()}/api/trpc/application.update`, {
             method: "POST",
             headers: getHeaders(),
             body: JSON.stringify({ json: linkPayload })
@@ -577,7 +578,7 @@ export async function createDokployApplication(input: CreateApplicationInput): P
 export async function updateApplicationBuildSettings(applicationId: string, settings: any) {
     if (!isDokployConfigured()) throw new Error("dokploy_not_configured");
     console.log(`[Dokploy] Updating build settings for ${applicationId}...`, JSON.stringify(settings));
-    await fetch(`${DOKPLOY_URL}/api/trpc/application.update`, {
+    await fetch(`${getDokployUrl()}/api/trpc/application.update`, {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({ json: { applicationId, ...settings } })
@@ -587,7 +588,7 @@ export async function updateApplicationBuildSettings(applicationId: string, sett
 export async function deleteDokployProject(projectId: string): Promise<boolean> {
     if (!isDokployConfigured()) return false;
 
-    const res = await fetch(`${DOKPLOY_URL}/api/trpc/project.remove`, {
+    const res = await fetch(`${getDokployUrl()}/api/trpc/project.remove`, {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({ json: { projectId } }),
@@ -606,7 +607,7 @@ export async function getLatestDeployment(applicationId: string): Promise<any | 
     try {
         const input = { json: { applicationId } };
         const res = await fetch(
-            `${DOKPLOY_URL}/api/trpc/deployment.all?input=${encodeURIComponent(JSON.stringify(input))}`,
+            `${getDokployUrl()}/api/trpc/deployment.all?input=${encodeURIComponent(JSON.stringify(input))}`,
             { method: "GET", headers: getHeaders() }
         );
 
@@ -644,7 +645,7 @@ export async function createDomain(
     console.log(`[Dokploy] Creating domain ${host} for application ${applicationId} (port ${port})...`);
 
     try {
-        const res = await fetch(`${DOKPLOY_URL}/api/trpc/domain.create`, {
+        const res = await fetch(`${getDokployUrl()}/api/trpc/domain.create`, {
             method: "POST",
             headers: getHeaders(),
             body: JSON.stringify({
