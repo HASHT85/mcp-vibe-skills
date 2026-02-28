@@ -333,7 +333,8 @@ Instructions techniques:
 
             // Push to GitHub
             if (p.github) {
-                await gitPush(p.workspace, `mod: ${instructions.slice(0, 50)}`);
+                const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
+                await gitPush(p.workspace, `mod: ${instructions.slice(0, 50)}`, authUrl);
                 this.addEvent(id, "Developer", "💻", "Push → modification appliquée", "success");
             }
 
@@ -449,35 +450,7 @@ Instructions techniques:
             this.abortControllers.delete(id);
             this.running.delete(id);
             await this.saveState();
-            // ─── Companion Dashboard: if worker completed, auto-launch a frontend
-            const finished = this.pipelines.get(id);
-            if (finished?.phase === "COMPLETED" && finished.projectType?.includes("worker")) {
-                this.launchCompanionDashboard(finished).catch(console.error);
-            }
         }
-    }
-
-    // ─── Companion Dashboard auto-launcher ───
-
-    private async launchCompanionDashboard(workerPipeline: Pipeline) {
-        const workerName = workerPipeline.name;
-        const workerDesc = workerPipeline.description;
-        const workerGithub = workerPipeline.github;
-
-        const dashboardDesc = `Crée un dashboard web React / SPA moderne qui affiche les données produites par ce worker en tâche de fond :
-"${workerDesc}"
-
-- Nom du worker: ${workerName}
-${workerGithub ? `- Repo worker: ${workerGithub.url}` : ""}
-- Le dashboard doit : afficher les données en temps réel (polling toutes les 30s), avoir des graphiques / tableaux modernes, permettre de voir l'état du worker (actif / en attente).
-- Technologie : React + Vite, fetch() vers une API REST simple, recharts pour les graphiques.
-- Design : dark mode, très modern, dashboard style Mission Control.`;
-
-        const dashboardName = `${workerName}-dashboard`;
-
-        this.addEvent(workerPipeline.id, "Orchestrator", "🌐", `Lancement automatique du companion Dashboard: "${dashboardName}"`, "info");
-
-        await this.launchIdea(dashboardDesc, dashboardName);
     }
 
     // ─── Phase Runners ───
@@ -724,7 +697,8 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
 
         // Push to GitHub
         if (p.github) {
-            const pushed = await gitPush(p.workspace, "feat: initial scaffold by VibeCraft AI");
+            const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
+            const pushed = await gitPush(p.workspace, "feat: initial scaffold by VibeCraft AI", authUrl);
             if (pushed) {
                 this.addEvent(id, "Developer", "💻", "Push GitHub → scaffold initial", "success");
             } else {
@@ -752,17 +726,16 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
                     applicationId: app.applicationId,
                 };
 
-                // Create domain only for web-facing apps
-                if (!p.projectType.includes("worker")) {
-                    const containerPort = (p.projectType === "static" || p.projectType === "spa") ? 80 : 3000;
-                    const domain = await createDomain(app.applicationId, repoName, containerPort);
-                    if (domain) {
-                        p.dokploy.url = `https://${domain.host}`;
-                        this.addEvent(id, "Dokploy", "🌐", `Domain créé → https://${domain.host}`, "success");
-                    }
-                } else {
-                    this.addEvent(id, "Dokploy", "⚙️", `Déploiement en tâche de fond (Daemon) sans nom de domaine`, "info");
+                // Create domain for all project types (workers now have embedded web server)
+                const containerPort = (p.projectType === "static" || p.projectType === "spa") ? 80
+                    : p.projectType === "python-worker" ? 8080
+                        : 3000; // node-worker, api, fullstack all use 3000
+                const domain = await createDomain(app.applicationId, repoName, containerPort);
+                if (domain) {
+                    p.dokploy.url = `https://${domain.host}`;
+                    this.addEvent(id, "Dokploy", "🌐", `Domain créé → https://${domain.host}`, "success");
                 }
+
 
                 this.addEvent(id, "Dokploy", "🚀", `Déployé dans Dokploy → ${repoName}`, "deploy");
             } catch (err: any) {
@@ -834,7 +807,8 @@ Instructions:
 
             // Push after each feature
             if (p.github) {
-                const pushed = await gitPush(p.workspace, `feat: ${feature}`);
+                const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
+                const pushed = await gitPush(p.workspace, `feat: ${feature}`, authUrl);
                 if (pushed) {
                     this.addEvent(id, "Developer", "💻", `Push → feat: ${feature}`, "success");
                 } else {
@@ -880,7 +854,8 @@ Instructions:
 
                     // Re-push and retry
                     if (p.github) {
-                        await gitPush(p.workspace, "fix: build error correction");
+                        const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
+                        await gitPush(p.workspace, "fix: build error correction", authUrl);
                         await triggerDeploy(p.dokploy.applicationId);
                         await this.sleep(15000);
                     }
@@ -950,7 +925,8 @@ Résumé: donne une note /10 et liste les problèmes trouvés.`,
 
         if (result.success) {
             if (p.github) {
-                await gitPush(p.workspace, "chore: QA fixes");
+                const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
+                await gitPush(p.workspace, "chore: QA fixes", authUrl);
             }
             this.addEvent(id, "QA", "🧪", "✓ Review complet", "success");
         }
@@ -1078,19 +1054,25 @@ CMD ["node", "index.js"]`;
             case "python-worker":
                 return `FROM python:3.11-slim
 WORKDIR /app
+# Install supervisor to run bot + web server concurrently
+RUN apt-get update && apt-get install -y supervisor && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
-# Utilisation de -u pour avoir les logs en temps réel non mis en cache (très important pour les daemons)
-CMD ["python", "-u", "main.py"]`;
+# Supervisor config must be created at /etc/supervisor/conf.d/app.conf by the agent
+EXPOSE 8080
+CMD ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]`;
 
             case "node-worker":
                 return `FROM node:20-slim
 WORKDIR /app
+RUN npm install -g concurrently
 COPY package*.json ./
 RUN npm ci --only=production
 COPY . .
-CMD ["node", "index.js"]`;
+EXPOSE 3000
+# Run bot worker + express dashboard server concurrently
+CMD ["npx", "concurrently", "node bot.js", "node server.js"]`;
 
             case "fullstack":
             default:
@@ -1140,18 +1122,28 @@ CMD ["node", "dist/index.js"]`;
 - Dockerfile: multi-stage build, port 3000`;
 
             case "python-worker":
-                return `CONTRAINTES ARCHITECTURE (Python Bot/Daemon):
-- Pas d'interface graphique ni de framework Web complexe (pas de Flask/Django inutile), c'est une tâche de fond (daemon).
-- Un fichier requirements.txt doit lister les dépendances (pandas, scikit-learn, web3.py, requests etc).
-- Le point d'entrée est main.py qui tourne en boucle (\`while True:\` avec un sleep) ou écoute des événements (WebSockets/Cron).
-- Ne PAS exposer de PORT (Expose).`;
+                return `CONTRAINTES ARCHITECTURE (Python Bot + Dashboard Web):
+- Ce projet contient DEUX composants dans le même container:
+  1. LE BOT (main.py) : logique principale (boucle, fetch API, traitement data, calculs IA, etc.)
+     - Le bot écrit ses résultats dans data/data.json après chaque cycle pour partager avec le serveur.
+  2. LE SERVEUR WEB (server.py) : Flask sur le port 8080 qui sert :
+     - GET / : page HTML dashboard (graphiques Chart.js, dark mode, auto-refresh)
+     - GET /api/data : retourne data/data.json en JSON
+- requirements.txt inclut: flask, requests + toutes les déps du bot.
+- supervisord lance main.py + server.py simultanément.
+- EXPOSE 8080.`;
 
             case "node-worker":
-                return `CONTRAINTES ARCHITECTURE (Node Bot/Daemon):
-- Pas d'interface web, c'est un agent backend autonome ou un scraper.
-- Un package.json avec { "main": "index.js" }.
-- Tourne en boucle infinie (setInterval) ou cron pour traiter des tâches background.
-- Pas de port web à exposer.`;
+                return `CONTRAINTES ARCHITECTURE (Node Bot + Dashboard Web):
+- Ce projet contient DEUX composants dans le même container:
+  1. LE BOT (bot.js) : logique principale (scraping, fetch API, traitement data, cron, etc.)
+     - Le bot écrit ses résultats dans data/data.json via fs.writeFileSync.
+  2. LE SERVEUR WEB (server.js) : Express.js sur le port 3000 qui sert :
+     - GET / : une page HTML dashboard (graphiques Chart.js, design dark mode moderne)
+     - GET /api/data : le contenu de data/data.json
+     - La page HTML fait du polling toutes les 10 secondes.
+- package.json démarre les deux via concurrently: "node bot.js" + "node server.js".
+- EXPOSE 3000 dans le Dockerfile.`;
 
             default:
                 return "";
@@ -1186,16 +1178,27 @@ CMD ["node", "dist/index.js"]`;
 3. Frontend: pages de base avec routing`;
 
             case "python-worker":
-                return `INSTRUCTIONS SCAFFOLD (Python Worker):
-1. Crée directement main.py contenant une boucle d'exécution (try/except avec asyncio ou time.sleep).
-2. Crée un requirements.txt basique.
-3. Le Dockerfile lance simplement CMD ["python", "-u", "main.py"]. Ne mets pas de bloc EXPOSE.`;
+                return `INSTRUCTIONS SCAFFOLD (Python Bot + Dashboard Web):
+1. Crée data/ avec un data.json vide: {"entries": [], "lastUpdate": null}
+2. Crée main.py: logique du bot qui écrit dans data/data.json après chaque cycle
+3. Crée server.py: Flask app sur port 8080 avec:
+   - Route GET / : sert le dashboard HTML (inline ou depuis templates/index.html)
+   - Route GET /api/data : lis et retourne data/data.json
+4. Crée templates/index.html: dashboard moderne dark mode avec Chart.js et auto-refresh
+5. requirements.txt: flask, requests + dépendances du bot (pandas, etc si nécessaire)
+6. supervisord.conf: deux programs [program:bot] et [program:server]
+7. IMPORTANT: Copie supervisord.conf vers /etc/supervisor/conf.d/app.conf dans le Dockerfile`;
 
             case "node-worker":
-                return `INSTRUCTIONS SCAFFOLD (Node Worker):
-1. Crée index.js avec la logique d'exécution périodique ou écouteur.
-2. Initialise un package.json avec 'npm init -y' puis modifie le au besoin.
-3. Aucun EXPOSE docker n'est nécessaire.`;
+                return `INSTRUCTIONS SCAFFOLD (Node Bot + Dashboard Web):
+1. Crée data/ avec un data.json vide: {"entries": [], "lastUpdate": null}
+2. Crée bot.js: logique du bot qui écrit dans data/data.json avec fs.writeFileSync
+3. Crée server.js: Express sur port 3000 avec:
+   - GET / : sert dashboard.html
+   - GET /api/data : lit et retourne data/data.json
+4. Crée dashboard.html: page moderne dark mode avec Chart.js et polling auto
+5. package.json: "start": "concurrently 'node bot.js' 'node server.js'"
+6. Dépendances: express, concurrently + déps du bot`;
 
             default:
                 return "";

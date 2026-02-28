@@ -498,13 +498,21 @@ export async function gitClone(repoUrl: string, targetDir: string): Promise<bool
     });
 }
 
-export async function gitPush(cwd: string, message: string): Promise<boolean> {
+export async function gitPush(cwd: string, message: string, authRemoteUrl?: string): Promise<boolean> {
     return new Promise((resolve) => {
-        const commands = [
-            ["git", ["add", "-A"]],
-            ["git", ["commit", "-m", message, "--allow-empty"]],
-            ["git", ["push", "origin", "main"]],
-        ] as const;
+        // If an authenticated URL is provided, update remote before push
+        const commands: [string, string[]][] = authRemoteUrl
+            ? [
+                ["git", ["remote", "set-url", "origin", authRemoteUrl]],
+                ["git", ["add", "-A"]],
+                ["git", ["commit", "-m", message, "--allow-empty"]],
+                ["git", ["push", "origin", "main"]],
+            ]
+            : [
+                ["git", ["add", "-A"]],
+                ["git", ["commit", "-m", message, "--allow-empty"]],
+                ["git", ["push", "origin", "main"]],
+            ];
 
         let idx = 0;
         function runNext() {
@@ -536,6 +544,7 @@ export async function gitPush(cwd: string, message: string): Promise<boolean> {
         runNext();
     });
 }
+
 
 export async function gitInit(cwd: string, remoteUrl: string): Promise<boolean> {
     return new Promise((resolve) => {
