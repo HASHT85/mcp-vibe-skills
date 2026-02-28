@@ -436,8 +436,8 @@ Règles pour le champ "type":
             systemPrompt: "Tu es un analyste produit senior. Sois concis et pragmatique.",
             cwd: p.workspace,
             maxTurns: 3,
-            attachedFileBase64: p.artifacts.initialFile?.base64,
-            attachedFileType: p.artifacts.initialFile?.type,
+            attachedFileBase64: (p.artifacts.initialFile as any)?.base64,
+            attachedFileType: (p.artifacts.initialFile as any)?.type,
         });
 
         if (result.success && result.finalResult) {
