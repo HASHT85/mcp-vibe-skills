@@ -35,8 +35,7 @@ export type PipelinePhase =
     | "COMPLETED"
     | "FAILED"
     | "PAUSED";
-
-export type ProjectType = "static" | "spa" | "fullstack" | "api" | "unknown";
+export type ProjectType = "static" | "spa" | "fullstack" | "api" | "python-worker" | "node-worker" | "unknown";
 
 export type AgentStatus = "waiting" | "active" | "done" | "error";
 
@@ -468,7 +467,7 @@ Réponds en JSON avec cette structure:
 {
   "name": "nom du projet",
   "summary": "résumé en 2-3 phrases",
-  "type": "static|spa|fullstack|api",
+  "type": "static|spa|fullstack|api|python-worker|node-worker",
   "features": ["feature 1", "feature 2", ...],
   "userStories": [{"story": "...", "priority": "High|Medium|Low"}],
   "stack": {"frontend": "...", "backend": "...", "database": "..."},
@@ -479,8 +478,10 @@ Règles pour le champ "type":
 - "static" : HTML/CSS/JS vanilla, pas de build tool, pas de backend
 - "spa" : React, Vue, Svelte, Angular, Vite, Next.js... (nécessite npm run build)
 - "fullstack" : frontend + backend (Express, Fastify, Django, etc.)
-- "api" : backend/API uniquement, pas d'interface utilisateur`,
-            systemPrompt: "Tu es un analyste produit senior. Sois concis et pragmatique.",
+- "api" : backend/API uniquement
+- "python-worker": script Python autonome (Daemon/Cron, IA, Scraper, Trading bot) sans port HTTP
+- "node-worker": script Node.js autonome (Daemon/Cron) sans port HTTP`,
+            systemPrompt: "Tu es un analyste produit senior. Sois concis et pragmatique. Détecte bien si le projet nécessite une interface web ou si c'est un agent/bot autonome de traitement Data/IA en fond.",
             cwd: p.workspace,
             maxTurns: 3,
             attachedFiles: (p.artifacts.initialFiles as any),
@@ -719,12 +720,16 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
                     applicationId: app.applicationId,
                 };
 
-                // Create domain — port depends on project type (nginx=80, node=3000)
-                const containerPort = (p.projectType === "static" || p.projectType === "spa") ? 80 : 3000;
-                const domain = await createDomain(app.applicationId, repoName, containerPort);
-                if (domain) {
-                    p.dokploy.url = `https://${domain.host}`;
-                    this.addEvent(id, "Dokploy", "🌐", `Domain créé → https://${domain.host}`, "success");
+                // Create domain only for web-facing apps
+                if (!p.projectType.includes("worker")) {
+                    const containerPort = (p.projectType === "static" || p.projectType === "spa") ? 80 : 3000;
+                    const domain = await createDomain(app.applicationId, repoName, containerPort);
+                    if (domain) {
+                        p.dokploy.url = `https://${domain.host}`;
+                        this.addEvent(id, "Dokploy", "🌐", `Domain créé → https://${domain.host}`, "success");
+                    }
+                } else {
+                    this.addEvent(id, "Dokploy", "⚙️", `Déploiement en tâche de fond (Daemon) sans nom de domaine`, "info");
                 }
 
                 this.addEvent(id, "Dokploy", "🚀", `Déployé dans Dokploy → ${repoName}`, "deploy");
@@ -765,8 +770,10 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
             const devSystemPrompt = p.projectType === "static"
                 ? "Tu es un développeur frontend expert HTML/CSS/JS vanilla. Écris du code moderne, sans framework, avec des animations CSS et du JS natif."
                 : p.projectType === "spa"
-                    ? "Tu es un développeur React/Vue senior. Écris des composants propres, typés, réutilisables."
-                    : "Tu es un développeur senior fullstack. Écris du code propre et fonctionnel. Gère les erreurs correctement.";
+                    ? "Tu es un développeur React/Vue senior."
+                    : p.projectType.includes("worker")
+                        ? "Tu es un Ingénieur Data/IA et Backend senior. Gère les boucles, les requêtes API (requests/fetch) de façon solide et propre."
+                        : "Tu es un développeur senior fullstack. Écris du code propre et fonctionnel. Gère les erreurs correctement.";
 
             const result = await runClaudeAgent({
                 prompt: `Implémente cette feature dans le projet existant (type: ${p.projectType}):
@@ -984,7 +991,7 @@ Résumé: donne une note /10 et liste les problèmes trouvés.`,
     private detectProjectType(analysis: any): ProjectType {
         // Trust the model's own detection first
         const declared = (analysis?.type || "").toLowerCase();
-        if (["static", "spa", "fullstack", "api"].includes(declared)) {
+        if (["static", "spa", "fullstack", "api", "python-worker", "node-worker"].includes(declared)) {
             return declared as ProjectType;
         }
 
@@ -995,6 +1002,9 @@ Résumé: donne une note /10 et liste les problèmes trouvés.`,
         const hasBackend = backend && !["none", "aucun", "n/a", "-", ""].includes(backend);
         const hasFrontend = frontend && !["none", "aucun", "n/a", "-", ""].includes(frontend);
         const isSPA = /react|vue|svelte|angular|vite|next|nuxt|remix/.test(frontend);
+
+        if (backend.includes('python') && !hasFrontend) return "python-worker";
+        if (backend.includes('node') && !hasFrontend) return "node-worker";
 
         if (!hasBackend) return isSPA ? "spa" : "static";
         if (!hasFrontend) return "api";
@@ -1031,6 +1041,23 @@ COPY package*.json ./
 RUN npm ci --only=production
 COPY . .
 EXPOSE 3000
+CMD ["node", "index.js"]`;
+
+            case "python-worker":
+                return `FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+# Utilisation de -u pour avoir les logs en temps réel non mis en cache (très important pour les daemons)
+CMD ["python", "-u", "main.py"]`;
+
+            case "node-worker":
+                return `FROM node:20-slim
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
 CMD ["node", "index.js"]`;
 
             case "fullstack":
@@ -1080,6 +1107,20 @@ CMD ["node", "dist/index.js"]`;
 - Frontend servi statiquement ou via le backend
 - Dockerfile: multi-stage build, port 3000`;
 
+            case "python-worker":
+                return `CONTRAINTES ARCHITECTURE (Python Bot/Daemon):
+- Pas d'interface graphique ni de framework Web complexe (pas de Flask/Django inutile), c'est une tâche de fond (daemon).
+- Un fichier requirements.txt doit lister les dépendances (pandas, scikit-learn, web3.py, requests etc).
+- Le point d'entrée est main.py qui tourne en boucle (\`while True:\` avec un sleep) ou écoute des événements (WebSockets/Cron).
+- Ne PAS exposer de PORT (Expose).`;
+
+            case "node-worker":
+                return `CONTRAINTES ARCHITECTURE (Node Bot/Daemon):
+- Pas d'interface web, c'est un agent backend autonome ou un scraper.
+- Un package.json avec { "main": "index.js" }.
+- Tourne en boucle infinie (setInterval) ou cron pour traiter des tâches background.
+- Pas de port web à exposer.`;
+
             default:
                 return "";
         }
@@ -1111,6 +1152,18 @@ CMD ["node", "dist/index.js"]`;
 1. Structure claire backend/ et frontend/ ou src/ avec routing
 2. Backend: Express sur port 3000, sert aussi le frontend en production
 3. Frontend: pages de base avec routing`;
+
+            case "python-worker":
+                return `INSTRUCTIONS SCAFFOLD (Python Worker):
+1. Crée directement main.py contenant une boucle d'exécution (try/except avec asyncio ou time.sleep).
+2. Crée un requirements.txt basique.
+3. Le Dockerfile lance simplement CMD ["python", "-u", "main.py"]. Ne mets pas de bloc EXPOSE.`;
+
+            case "node-worker":
+                return `INSTRUCTIONS SCAFFOLD (Node Worker):
+1. Crée index.js avec la logique d'exécution périodique ou écouteur.
+2. Initialise un package.json avec 'npm init -y' puis modifie le au besoin.
+3. Aucun EXPOSE docker n'est nécessaire.`;
 
             default:
                 return "";
