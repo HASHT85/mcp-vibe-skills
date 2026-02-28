@@ -307,22 +307,28 @@ export class Orchestrator extends EventEmitter {
 
             // Run developer agent with modification instructions
             const result = await runClaudeAgent({
-                prompt: `Tu as un projet web existant à modifier. Voici les instructions de modification:
+                prompt: `Tu as un projet existant à modifier. Voici les instructions:
 
 ${instructions}
 
-Instructions techniques:
-1. Lis le code existant pour comprendre la structure
-2. Applique les modifications demandées
-3. Assure-toi que le code compile sans erreur
-4. Ne casse pas les fonctionnalités existantes
-5. Si il y a un Dockerfile, assure-toi qu'il reste valide`,
+PROCESSUS OBLIGATOIRE - respecte cet ordre:
+1. Utilise ListDir sur ".": liste tous les fichiers du projet
+2. Utilise Read sur les fichiers clés (main.py, server.py, requirements.txt, package.json, etc.)
+3. IDENTIFIE ce qui doit changer
+4. UTILISE WRITE pour sauvegarder chaque fichier modifié (OBLIGATOIRE - sinon la tâche est un échec)
+5. Confirme la liste des fichiers écrits
+
+RÈGLES ABSOLUES:
+- Tu DOIS utiliser l'outil Write au moins une fois
+- Si tu détectes des imports cassés (ex: from src.xxx import), réécris le fichier entier avec le code corrigé
+- Vérifie que tous les packages importés sont dans requirements.txt
+- 0 fichier écrit = tâche invalide`,
                 attachedFiles: files,
-                systemPrompt: "Tu es un développeur senior. Applique les modifications demandées de manière propre et professionnelle.",
+                systemPrompt: "Tu es un développeur senior. Tu DOIS écrire des fichiers avec Write. Lire sans écrire = tâche échouée. Si tu vois un bug tu dois le corriger en écrivant le fichier fixé.",
                 cwd: p.workspace,
                 allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
-                maxTurns: 15,
-                timeoutMs: 10 * 60 * 1000,
+                maxTurns: 20,
+                timeoutMs: 15 * 60 * 1000,
                 abortSignal: this.abortControllers.get(id)?.signal,
             });
 
