@@ -434,9 +434,12 @@ Instructions techniques:
             // Done!
             this.setPhase(id, "COMPLETED");
             this.setAgentStatus(id, "QA", "done");
-            const completedMsg = this.pipelines.get(id)?.dokploy
-                ? "Projet terminé et déployé!"
-                : "Projet terminé! (configure GITHUB_TOKEN + DOKPLOY_URL pour le déploiement)";
+            const p_done = this.pipelines.get(id);
+            const completedMsg = p_done?.dokploy
+                ? `Projet terminé et déployé! → ${p_done.dokploy.url || "voir Dokploy"}`
+                : p_done?.github
+                    ? `Projet terminé! Repo GitHub: ${p_done.github.url} (Dokploy: vérifie DOKPLOY_URL dans les variables d'env)`
+                    : "Projet terminé! Configure GITHUB_TOKEN et DOKPLOY_URL pour le déploiement.";
             this.addEvent(id, "Orchestrator", "🎉", completedMsg, "success");
 
         } catch (err: any) {

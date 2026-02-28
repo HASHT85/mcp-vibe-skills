@@ -37,7 +37,7 @@ export type CreateApplicationInput = {
 };
 
 // Read at call-time so container .env vars are available after module init
-const getDokployUrl = () => process.env.DOKPLOY_URL || "";
+export const getDokployUrl = () => process.env.DOKPLOY_URL || "";
 const getDokployToken = () => process.env.DOKPLOY_TOKEN || "";
 
 function getHeaders() {
