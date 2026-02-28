@@ -508,13 +508,11 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
               />
 
               {file && (
-                <div className="file-preview-pill">
-                  <div className="file-info">
-                    <Paperclip size={14} />
-                    <span className="file-name">{file.name}</span>
-                    <span className="file-size">({Math.round(file.size / 1024)} KB)</span>
-                  </div>
-                  <button className="remove-file-btn" onClick={() => setFile(null)} title="Retirer le fichier">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: 8, marginBottom: 16 }}>
+                  <Paperclip size={14} />
+                  <span style={{ fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>({Math.round(file.size / 1024)} KB)</span>
+                  <button onClick={() => setFile(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }} title="Retirer le fichier">
                     <X size={14} />
                   </button>
                 </div>
@@ -530,7 +528,8 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
                 <button
-                  className="btn-attach"
+                  className="btn-cancel"
+                  style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                   onClick={() => fileInputRef.current?.click()}
                   title="Joindre une image ou un PDF"
                 >
