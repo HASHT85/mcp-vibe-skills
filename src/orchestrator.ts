@@ -528,7 +528,7 @@ Réponds en JSON:
         this.setAgentStatus(id, "Developer", "active", "Création du scaffold...");
 
         const p = this.pipelines.get(id)!;
-        const repoName = `vibecraft-${p.name}`;
+        const repoName = `vibecraft-${this.slugify(p.name)}`;
 
         // Create GitHub repo
         if (GITHUB_OWNER && GITHUB_TOKEN) {
@@ -704,8 +704,8 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
             const devSystemPrompt = p.projectType === "static"
                 ? "Tu es un développeur frontend expert HTML/CSS/JS vanilla. Écris du code moderne, sans framework, avec des animations CSS et du JS natif."
                 : p.projectType === "spa"
-                ? "Tu es un développeur React/Vue senior. Écris des composants propres, typés, réutilisables."
-                : "Tu es un développeur senior fullstack. Écris du code propre et fonctionnel. Gère les erreurs correctement.";
+                    ? "Tu es un développeur React/Vue senior. Écris des composants propres, typés, réutilisables."
+                    : "Tu es un développeur senior fullstack. Écris du code propre et fonctionnel. Gère les erreurs correctement.";
 
             const result = await runClaudeAgent({
                 prompt: `Implémente cette feature dans le projet existant (type: ${p.projectType}):
