@@ -161,8 +161,8 @@ function Dashboard() {
         {showModal && (
           <LaunchModal
             onClose={() => setShowModal(false)}
-            onLaunch={async (desc, name, fileBase64, fileType) => {
-              await launchIdea(desc, name, fileBase64, fileType);
+            onLaunch={async (desc, name, files) => {
+              await launchIdea(desc, name, files);
               setShowModal(false);
               load();
             }}
@@ -331,23 +331,11 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
     if ((!modifyText.trim() && files.length === 0) || modifying) return;
     setModifying(true);
     try {
-      let fileBase64: string | undefined;
-      let fileType: string | undefined;
+      const validFiles = files
+        .filter(f => !f.error && f.data)
+        .map(f => ({ base64: f.data, type: f.type }));
 
-      if (file) {
-        fileBase64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(',')[1]);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        fileType = file.type;
-      }
-
-      await modifyPipeline(p.id, modifyText.trim(), fileBase64, fileType);
+      await modifyPipeline(p.id, modifyText.trim(), validFiles.length > 0 ? validFiles : undefined);
       setShowModify(false);
       setModifyText('');
       setFiles([]);
@@ -438,7 +426,7 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
           )}
           {!['COMPLETED', 'FAILED'].includes(p.phase) && (
             <button className="btn-kill" onClick={handleKill} title="Forcer l'arrêt (Kill)">
-              <Pause size={14} color="var(--error)" />
+              <Bomb size={14} color="var(--error)" />
             </button>
           )}
           <button className="btn-back" onClick={handleDelete} title="Delete">
