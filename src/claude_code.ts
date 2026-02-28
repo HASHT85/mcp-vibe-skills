@@ -95,6 +95,41 @@ const TOOLS: Anthropic.Messages.Tool[] = [
             required: ["command"],
         },
     },
+    {
+        name: "replace_in_file",
+        description: "Replace a specific exact string block in a file with another string block. Use this instead of write_file when editing existing large files.",
+        input_schema: {
+            type: "object" as const,
+            properties: {
+                path: { type: "string", description: "Path to the file to modify" },
+                targetStr: { type: "string", description: "The EXACT current string in the file to replace (including indentation/newlines)" },
+                replacementStr: { type: "string", description: "The new string to put in its place" },
+            },
+            required: ["path", "targetStr", "replacementStr"],
+        },
+    },
+    {
+        name: "web_search",
+        description: "Search the web to find up-to-date documentation or fixes for errors.",
+        input_schema: {
+            type: "object" as const,
+            properties: {
+                query: { type: "string", description: "Search query (e.g. 'Next.js 14 app router middleware example')" },
+            },
+            required: ["query"],
+        },
+    },
+    {
+        name: "fetch_url",
+        description: "Fetch the text content of a generic URL. Useful for reading documentation pages or GitHub issues you found via web_search. Fails on heavy JS single-page-apps.",
+        input_schema: {
+            type: "object" as const,
+            properties: {
+                url: { type: "string", description: "The exact URL to scrape" },
+            },
+            required: ["url"],
+        },
+    }
 ];
 
 // ─── Tool Executor ───
@@ -122,6 +157,59 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
             }
             case "bash": {
                 return await runBash(input.command, cwd);
+            }
+            case "replace_in_file": {
+                const filePath = path.resolve(cwd, input.path);
+                let content = await fs.readFile(filePath, "utf-8");
+                if (!content.includes(input.targetStr)) {
+                    return `Error: Target string not found in file. Ensure exact match including whitespaces.`;
+                }
+                content = content.replace(input.targetStr, input.replacementStr);
+                await fs.writeFile(filePath, content, "utf-8");
+                return `Successfully replaced content in ${input.path}`;
+            }
+            case "web_search": {
+                try {
+                    // Primitive search parsing DuckDuckGo HTML using standard fetch
+                    const encodedQuery = encodeURIComponent(input.query);
+                    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodedQuery}`, {
+                        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36" }
+                    });
+                    const html = await res.text();
+
+                    const results: string[] = [];
+                    // Very basic regex to extract snippet results
+                    const snippetBoxes = html.split('class="result__snippet');
+                    for (let i = 1; i < Math.min(snippetBoxes.length, 6); i++) {
+                        const snippetMatch = snippetBoxes[i].match(/href="([^"]+)">([^<]+)<\/a>/i);
+                        const abstractMatch = snippetBoxes[i].match(/>\s*([^<]+)\s*<\/a>/);
+                        if (snippetMatch) {
+                            results.push(`[${snippetMatch[2]}] URL: ${snippetMatch[1]}`);
+                        }
+                    }
+                    if (results.length === 0) return `No search results found.`;
+                    return `Search Results for "${input.query}":\n\n${results.join('\n')}`;
+                } catch (e: any) {
+                    return `Search failed: ${e.message}`;
+                }
+            }
+            case "fetch_url": {
+                try {
+                    const res = await fetch(input.url, {
+                        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+                    });
+                    if (!res.ok) return `HTTP Error ${res.status} fetching ${input.url}`;
+                    let text = await res.text();
+                    // Strip HTML tags naively to save tokens
+                    text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                        .replace(/<[^>]+>/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    return text.slice(0, 8000); // 8k chars max to save tokens
+                } catch (e: any) {
+                    return `Fetch failed: ${e.message}`;
+                }
             }
             default:
                 return `Unknown tool: ${name}`;
