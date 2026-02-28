@@ -665,7 +665,7 @@ Réponds en JSON:
         this.setAgentStatus(id, "Developer", "active", "Création du scaffold...");
 
         const p = this.pipelines.get(id)!;
-        const repoName = `vibecraft - ${this.slugify(p.name)} `;
+        const repoName = `vibecraft-${this.slugify(p.name)}`;
 
         // Create GitHub repo
         const GITHUB_OWNER = getGithubOwner();
@@ -675,7 +675,7 @@ Réponds en JSON:
                 const createRes = await fetch("https://api.github.com/user/repos", {
                     method: "POST",
                     headers: {
-                        Authorization: `token ${GITHUB_TOKEN} `,
+                        Authorization: `token ${GITHUB_TOKEN}`,
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
