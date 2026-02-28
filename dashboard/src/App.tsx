@@ -3,7 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Rocket, FolderKanban, Bot, Sparkles, Server,
   ChevronLeft, Plus, ExternalLink, Github, Play, Bomb,
-  Trash2, LayoutGrid, Coins, Edit, Paperclip, X
+  Trash2, LayoutGrid, Coins, Edit, Paperclip, X,
+  Globe, Cpu, Database
 } from 'lucide-react';
 import {
   checkAuth, setAuth, listPipelines, launchIdea,
@@ -42,7 +43,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
         animate={{ opacity: 1, y: 0 }}
       >
         <h1>⚡ VibeCraft HQ</h1>
-        <p>Multi-Agent Orchestrator Dashboard</p>
+        <p>Universal AI & Software Builder</p>
         <input
           className="login-input"
           placeholder="Username"
@@ -260,10 +261,19 @@ function ProjectList({ pipelines, onSelect }: { pipelines: Pipeline[]; onSelect:
 
 function ProjectCard({ pipeline: p, onClick }: { pipeline: Pipeline; onClick: () => void }) {
   const totalTokens = (p.tokenUsage?.inputTokens || 0) + (p.tokenUsage?.outputTokens || 0);
+
+  const getTypeIcon = () => {
+    if (p.projectType === 'spa' || p.projectType === 'static') return <Globe size={14} />;
+    if (p.projectType?.includes('worker')) return <Cpu size={14} />;
+    return <Database size={14} />; // api or fullstack
+  };
+
   return (
     <div className="project-card" onClick={onClick}>
       <div className="card-header">
-        <span className="card-name">{p.name}</span>
+        <span className="card-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {getTypeIcon()} {p.name}
+        </span>
         <span className={`phase-badge ${p.phase.toLowerCase()}`}>{p.phase}</span>
       </div>
       <div className="card-desc">{p.description}</div>
@@ -414,7 +424,10 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
           <ChevronLeft size={16} />
         </button>
         <div className="detail-info">
-          <h2>{p.name}</h2>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {p.projectType === 'spa' || p.projectType === 'static' ? <Globe size={18} /> : p.projectType?.includes('worker') ? <Cpu size={18} /> : <Database size={18} />}
+            {p.name}
+          </h2>
           <div className="detail-desc">{p.description}</div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -459,9 +472,9 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
           </div>
         )}
         {p.dokploy && !p.dokploy.url && (
-          <div className="link-row">
-            <Rocket size={12} />
-            <span>Dokploy: {p.dokploy.applicationId?.slice(0, 8)}...</span>
+          <div className="link-row" style={{ color: p.projectType?.includes('worker') ? 'var(--info)' : 'inherit' }}>
+            {p.projectType?.includes('worker') ? <Cpu size={12} /> : <Rocket size={12} />}
+            <span>{p.projectType?.includes('worker') ? '⚙️ Background Daemon (Actif 24/7, pas d\'URL)' : `Dokploy: ${p.dokploy.applicationId?.slice(0, 8)}...`}</span>
           </div>
         )}
         {totalTokens > 0 && (
@@ -509,7 +522,7 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
               <textarea
                 autoFocus
                 rows={6}
-                placeholder="Ex: Change le titre en 'Mon Portfolio', ajoute un mode dark, corrige le footer... (Ctrl+V pour coller une image)"
+                placeholder="Ex: Change le titre en 'Mon Portfolio', OU (si Worker Analytics): Ajoute l'import de Pandas pour nettoyer le CSV... (Ctrl+V pour coller une image)"
                 value={modifyText}
                 onChange={(e) => setModifyText(e.target.value)}
                 onPaste={handlePaste}
@@ -937,7 +950,7 @@ function LaunchModal({ onClose, onLaunch }: {
           style={{ marginBottom: '12px', width: '100%' }}
         />
         <textarea
-          placeholder="Ex: Un dashboard analytics pour tracker les ventes e-commerce en temps réel avec des graphiques interactifs... (Vous pouvez aussi coller une image Ctrl+V)"
+          placeholder="Ex: Un dashboard React analytique, OU un Bot Python autonome pour scraper des annonces Web 24/7... (Vous pouvez aussi coller une image Ctrl+V)"
           value={desc}
           onChange={(e) => setDesc(e.target.value)}
           onPaste={handlePaste}

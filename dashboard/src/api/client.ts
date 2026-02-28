@@ -156,6 +156,7 @@ export type Pipeline = {
     progress: number;
     agents: PipelineAgent[];
     events: PipelineEvent[];
+    projectType?: string;
     github?: {
         owner: string;
         repo: string;
