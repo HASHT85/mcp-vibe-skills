@@ -37,7 +37,7 @@ export type CreateApplicationInput = {
 };
 
 // Read at call-time so container .env vars are available after module init
-const getDokployUrl = () => process.env.getDokployUrl() || "";
+const getDokployUrl = () => process.env.DOKPLOY_URL || "";
 const getDokployToken = () => process.env.DOKPLOY_TOKEN || "";
 
 function getHeaders() {
@@ -338,7 +338,7 @@ export async function triggerDeploy(applicationId: string): Promise<boolean> {
 export async function createDokployProject(name: string, description?: string): Promise<DokployProject> {
     if (!isDokployConfigured()) {
         console.error("Dokploy Config Missing:", {
-            URL: process.env.getDokployUrl(),
+            URL: process.env.DOKPLOY_URL,
             TOKEN_SET: !!process.env.DOKPLOY_TOKEN
         });
         throw new Error("dokploy_not_configured");
