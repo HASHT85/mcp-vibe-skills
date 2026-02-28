@@ -14,11 +14,13 @@ import { findSkillsForContext } from "./skills.js";
 import {
     isDokployConfigured,
     createDokployProject,
+    createDokployApplication,
     createDomain,
     triggerDeploy,
     getBuildLogs,
     getLatestDeployment,
     getApplicationLogs,
+    getDokployUrl,
 } from "./dokploy.js";
 
 // ─── Types ───
@@ -1294,12 +1296,13 @@ REGLE ABSOLUE: Aucun import depuis un module local (pas de from src.xxx import, 
 
     // ─── Post-Deploy Auto-Fix ───
 
-    private async verifyWebDisplay(url: string, maxRetries = 10, delayMs = 5000): Promise<{ ok: boolean, status: number, error?: string }> {
+    private async verifyWebDisplay(url: string, maxRetries = 10, delayMs = 5000): Promise<{ ok: boolean, status: number, error?: string, html?: string }> {
         for (let i = 0; i < maxRetries; i++) {
             try {
                 const res = await fetch(url, { redirect: "follow" });
                 if (res.status !== 502 && res.status !== 503 && res.status !== 404) {
-                    return { ok: true, status: res.status };
+                    const html = await res.text().catch(() => "");
+                    return { ok: true, status: res.status, html: html.slice(0, 3000) };
                 }
             } catch (err: any) {
                 console.log(`[HealthCheck] Attempt ${i + 1} failed: ${err.message}`);
@@ -1308,7 +1311,8 @@ REGLE ABSOLUE: Aucun import depuis un module local (pas de from src.xxx import, 
         }
         try {
             const res = await fetch(url, { redirect: "follow" });
-            return { ok: res.status !== 502 && res.status !== 503 && res.status !== 404, status: res.status };
+            const html = await res.text().catch(() => "");
+            return { ok: res.status !== 502 && res.status !== 503 && res.status !== 404, status: res.status, html: html.slice(0, 3000) };
         } catch (err: any) {
             return { ok: false, status: 0, error: err.message };
         }
@@ -1368,10 +1372,15 @@ echo "Dokploy port updated to $1 and deployment triggered."
 (Ne commite surtout pas ce fichier script update_dokploy_port.sh dans git!)`;
             }
 
-            const instructions = `URGENT AUTO-FIX: Le projet vient d'être déployé mais une erreur grave est détectée en production.
-Symptôme actuel : ${!health.ok ? 'Le site web retourne une erreur ' + (health.status || health.error) + ' (Bad Gateway / Plantage).' : 'Le site retourne 200 OK, mais le backend/bot a crashé de manière silencieuse (voir logs).'}
+            const instructions = `URGENT AUTO-FIX: Le projet vient d'être déployé mais une erreur est détectée en production.
+Symptôme actuel : ${!health.ok ? 'Le site web retourne une erreur ' + (health.status || health.error) + ' (Bad Gateway / Plantage).' : 'Le site retourne 200 OK, mais le contenu semble vide ou le backend/bot a crashé de manière silencieuse.'}
 
-Voici les logs du serveur en production (les dernières lignes):
+Voici l'aperçu du code HTML tel qu'il est renvoyé par le site (te permet de voir si l'UI a chargé, ou si c'est une vue d'erreur) :
+<html>
+${health.html || 'Aucun contenu HTML retourné.'}
+</html>
+
+Voici les logs du serveur en production (les dernières lignes) :
 <logs>
 ${logs || 'Aucun log disponible.'}
 </logs>
