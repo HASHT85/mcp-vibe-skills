@@ -77,6 +77,7 @@ export type Pipeline = {
     dokploy?: {
         projectId: string;
         applicationId: string;
+        domainId?: string;
         url?: string;
     };
     artifacts: Record<string, unknown>;
@@ -769,6 +770,7 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
                 const domain = await createDomain(app.applicationId, repoName, containerPort);
                 if (domain) {
                     p.dokploy.url = `https://${domain.host}`;
+                    p.dokploy.domainId = domain.domainId;
                     this.addEvent(id, "Dokploy", "🌐", `Domain créé → https://${domain.host}`, "success");
                 }
 
@@ -1328,13 +1330,35 @@ REGLE ABSOLUE: Aucun import depuis un module local (pas de from src.xxx import, 
 
             this.addEvent(id, "QA", "⚠️", `Erreur HTTP ${health.status || health.error}. Auto-Correction (Essai ${attempt}/${maxFixRetries})...`, "warning");
 
+            // Injection du script pour changer le port sur Dokploy si besoin
+            let dokployScriptInfo = "";
+            if (p.dokploy.domainId) {
+                const apiScriptPath = path.join(p.workspace, "update_dokploy_port.sh");
+                const apiScriptContent = `#!/bin/bash
+if [ -z "$1" ]; then echo "Usage: ./update_dokploy_port.sh <POST_NUMBER>"; exit 1; fi
+curl -X POST "${getDokployUrl()}/api/trpc/domain.update" \\
+     -H "Content-Type: application/json" -H "x-api-key: $DOKPLOY_TOKEN" \\
+     -d '{"json": {"domainId": "${p.dokploy.domainId}", "port": '$1', "https": true, "certificateType": "letsencrypt", "path": "/"}}'
+curl -X POST "${getDokployUrl()}/api/trpc/application.deploy" \\
+     -H "Content-Type: application/json" -H "x-api-key: $DOKPLOY_TOKEN" \\
+     -d '{"json": {"applicationId": "${p.dokploy.applicationId}"}}'
+echo "Dokploy port updated to $1 and deployment triggered."
+`;
+                await fs.writeFile(apiScriptPath, apiScriptContent, { mode: 0o755 });
+                dokployScriptInfo = `ATTENTION: Par défaut, le service Dokploy a été configuré pour pointer sur un port spécifique. Si tu découvres que ton code écoute sur un port différent (ex: app.run(port=5000) mais Dokploy pointe vers autre chose), tu peux SOIT corriger le code pour correspondre à Dokploy, SOIT modifier le port de Dokploy lui-même en exécutant:
+./update_dokploy_port.sh <NOUVEAU_PORT> (ex: ./update_dokploy_port.sh 5000)
+(Ne commite surtout pas ce fichier script update_dokploy_port.sh dans git!)`;
+            }
+
             const instructions = `URGENT AUTO-FIX: Le projet vient d'être déployé mais le site web retourne une erreur HTTP ${health.status || health.error} (Bad Gateway / Plantage). 
 Vérifie les points suivants :
 1. Le code refuse de démarrer (erreur syntaxe ou import d'un module inexistant comme src.xxx).
-2. Le port exposé (ex: 8080 pour python, 3000 pour node) ne correspond pas au port serveur (app.run ou app.listen).
+2. Le port exposé dans le code (ex: 8080 ou 5000) ne correspond pas au port configuré dans le conteneur/Dokploy.
 3. Une dépendance manque dans requirements.txt ou package.json (ex: flask-socketio).
 
-Corrige le code pour que le projet démarre correctement sans erreur 502.`;
+${dokployScriptInfo}
+
+Corrige le problème pour que le projet démarre correctement sans erreur 502.`;
 
             this.setAgentStatus(id, "Developer", "active", "Auto-Correction en cours...");
 
@@ -1342,18 +1366,17 @@ Corrige le code pour que le projet démarre correctement sans erreur 502.`;
                 prompt: `Tu as un projet existant à modifier pour corriger un crash en prod. (Tentative ${attempt}/${maxFixRetries})
 Voici le problème:
 ${instructions}
-${attempt > 1 ? '\nATTENTION: Ta tentative précédente n\'a rien écrit. Tu DOIS ESSAYER UNE AUTRE APPROCHE et écrire au moins un fichier.\n' : ''}
+${attempt > 1 ? '\nATTENTION: Ta tentative précédente n\'a rien écrit ou n\'a pas résolu le souci. Tu DOIS ESSAYER UNE AUTRE APPROCHE (comme changer le port via ./update_dokploy_port.sh ou fixer les imports).\n' : ''}
 PROCESSUS OBLIGATOIRE - respecte cet ordre:
 1. Utilise ListDir sur "." pour comprendre la structure.
 2. Utilise Read sur main.py, server.py, package.json, requirements.txt, supervisord.conf, etc.
 3. IDENTIFIE la cause du crash (regarde attentivement les imports et le port serveur).
-4. UTILISE WRITE pour sauvegarder chaque fichier corrigé (OBLIGATOIRE).
-5. Confirme la liste des fichiers écrits.
+4. UTILISE WRITE pour sauvegarder chaque fichier corrigé (OBLIGATOIRE) ou exécute le script bash pour changer de port.
+5. Confirme l'action effectuée.
 
 RÈGLES ABSOLUES:
-- Si imports cassés, réécris le fichier entier avec les imports corrigés.
-- Assure-toi que tous les modules externes sont dans le fichier de dépendances.
-- IMPORTANT: Si 0 fichier est écrit, la tâche échoue. Tu DOIS modifier le code.`,
+- Si tu utilises ./update_dokploy_port.sh, tu dois quand même t'assurer que le code écoute bien sur ce port.
+- IMPORTANT: Si 0 fichier est écrit ET aucune commande de port n'est exécutée, la tâche échoue.`,
                 systemPrompt: "Tu es un développeur de crise. Tu DOIS utiliser l'outil Write pour sauvegarder tes correctifs et fixer le bug.",
                 cwd: p.workspace,
                 allowedTools: ["Read", "Write", "Bash", "ListDir"],
