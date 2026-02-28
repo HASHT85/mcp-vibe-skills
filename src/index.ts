@@ -77,14 +77,13 @@ app.post("/pipeline/launch", async (req: Request, res: Response) => {
     try {
         const description = String(req.body?.description ?? "").trim();
         const name = req.body?.name ? String(req.body.name).trim() : undefined;
-        const fileBase64 = req.body?.fileBase64 ? String(req.body.fileBase64) : undefined;
-        const fileType = req.body?.fileType ? String(req.body.fileType) : undefined;
+        const files = req.body?.files as { base64: string; type: string }[] | undefined;
 
         if (!description) {
             return res.status(400).json({ error: "missing_description" });
         }
 
-        const pipeline = await orchestrator.launchIdea(description, name, fileBase64, fileType);
+        const pipeline = await orchestrator.launchIdea(description, name, files);
         res.json({ pipeline });
     } catch (err: any) {
         console.error("Pipeline launch error:", err);
@@ -191,19 +190,31 @@ app.delete("/pipeline/:id", async (req: Request, res: Response) => {
 app.post("/pipeline/:id/modify", async (req: Request, res: Response) => {
     try {
         const instructions = String(req.body?.instructions ?? "").trim();
-        const fileBase64 = req.body?.fileBase64 as string | undefined;
-        const fileType = req.body?.fileType as string | undefined;
+        const files = req.body?.files as { base64: string; type: string }[] | undefined;
 
-        if (!instructions && !fileBase64) {
-            return res.status(400).json({ error: "instructions_required" });
+        if (!instructions && (!files || files.length === 0)) {
+            return res.status(400).json({ error: "instructions_or_files_required" });
         }
-        const pipeline = await orchestrator.modifyPipeline(req.params.id, instructions, fileBase64, fileType);
+        const pipeline = await orchestrator.modifyPipeline(req.params.id, instructions, files);
         if (!pipeline) {
             return res.status(404).json({ error: "pipeline_not_found" });
         }
         res.json({ pipeline });
     } catch (err: any) {
         res.status(400).json({ error: err.message });
+    }
+});
+
+app.post("/pipeline/:id/kill", async (req: Request, res: Response) => {
+    try {
+        const success = await orchestrator.killPipeline(req.params.id);
+        if (success) {
+            res.json({ success: true, message: "Pipeline arrêté avec succès." });
+        } else {
+            res.status(404).json({ error: "pipeline_not_found" });
+        }
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
     }
 });
 

@@ -36,10 +36,10 @@ async function api<T = unknown>(path: string, options?: RequestInit): Promise<T>
 
 // ─── Pipeline (Orchestrator) ───
 
-export async function launchIdea(description: string, name?: string, fileBase64?: string, fileType?: string) {
+export async function launchIdea(description: string, name?: string, files?: { base64: string; type: string }[]) {
     return api<{ pipeline: Pipeline }>('/pipeline/launch', {
         method: 'POST',
-        body: JSON.stringify({ description, name, fileBase64, fileType }),
+        body: JSON.stringify({ description, name, files }),
     });
 }
 
@@ -57,6 +57,10 @@ export async function pausePipeline(id: string) {
 
 export async function resumePipeline(id: string) {
     return api('/pipeline/' + id + '/resume', { method: 'POST' });
+}
+
+export async function killPipeline(id: string) {
+    return api('/pipeline/' + id + '/kill', { method: 'POST' });
 }
 
 export async function deletePipeline(id: string) {
@@ -103,10 +107,10 @@ export function connectAllSSE(onEvent: (event: PipelineEvent) => void): () => vo
     return () => es.close();
 }
 
-export async function modifyPipeline(id: string, instructions: string, fileBase64?: string, fileType?: string) {
+export async function modifyPipeline(id: string, instructions: string, files?: { base64: string; type: string }[]) {
     return api<{ pipeline: Pipeline }>(`/pipeline/${id}/modify`, {
         method: 'POST',
-        body: JSON.stringify({ instructions, fileBase64, fileType }),
+        body: JSON.stringify({ instructions, files }),
     });
 }
 

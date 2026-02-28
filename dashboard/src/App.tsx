@@ -2,12 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Rocket, FolderKanban, Bot, Sparkles, Server,
-  ChevronLeft, Plus, ExternalLink, Github, Pause, Play,
+  ChevronLeft, Plus, ExternalLink, Github, Play, Bomb,
   Trash2, LayoutGrid, Coins, Edit, Paperclip, X
 } from 'lucide-react';
 import {
   checkAuth, setAuth, listPipelines, launchIdea,
-  pausePipeline, resumePipeline, deletePipeline, connectAllSSE, modifyPipeline,
+  killPipeline, deletePipeline, connectAllSSE, modifyPipeline,
 } from './api/client';
 import type { Pipeline, PipelineEvent, PipelineAgent } from './api/client';
 import './index.css';
@@ -306,19 +306,17 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
 }) {
   const [showModify, setShowModify] = useState(false);
   const [modifyText, setModifyText] = useState('');
+  const [files, setFiles] = useState<{ name: string; type: string; data: string; size: number; error?: string; thumbnail?: string }[]>([]);
   const [modifying, setModifying] = useState(false);
 
   // File state
-  const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handlePause = async () => {
-    if (p.phase === 'PAUSED') {
-      await resumePipeline(p.id);
-    } else {
-      await pausePipeline(p.id);
+  const handleKill = async () => {
+    if (confirm(`Es-tu sûr de vouloir forcer l'arrêt de "${p.name}" ?`)) {
+      await killPipeline(p.id);
+      onRefresh();
     }
-    onRefresh();
   };
 
   const handleDelete = async () => {
@@ -330,7 +328,7 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
   };
 
   const handleModify = async () => {
-    if (!modifyText.trim() && !file) return;
+    if ((!modifyText.trim() && files.length === 0) || modifying) return;
     setModifying(true);
     try {
       let fileBase64: string | undefined;
@@ -352,7 +350,7 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
       await modifyPipeline(p.id, modifyText.trim(), fileBase64, fileType);
       setShowModify(false);
       setModifyText('');
-      setFile(null);
+      setFiles([]);
       onRefresh();
     } catch (err: any) {
       alert(`Erreur: ${err.message}`);
@@ -361,18 +359,41 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
     }
   };
 
-  const processFile = (selectedFile: File) => {
-    if (selectedFile.type.startsWith('image/') || selectedFile.type === 'application/pdf') {
-      setFile(selectedFile);
+  const processFile = (f: File) => {
+    const MAX_MB = 10;
+    const isTooLarge = f.size > MAX_MB * 1024 * 1024;
+
+    if (isTooLarge) {
+      setFiles(prev => [...prev, { name: f.name, type: f.type, data: '', size: f.size, error: `Trop lourd (Max ${MAX_MB}MB)` }]);
+      return;
+    }
+
+    if (f.type.startsWith('image/') || f.type === 'application/pdf') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        const base64 = result.split(',')[1];
+        if (base64) {
+          let thumbnail: string | undefined = undefined;
+          if (f.type.startsWith('image/')) thumbnail = result;
+          setFiles(prev => [...prev, { name: f.name, type: f.type, data: base64, size: f.size, thumbnail }]);
+        }
+      };
+      reader.readAsDataURL(f);
     } else {
       alert("Seuls les images et les PDF sont supportés.");
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      processFile(e.target.files[0]);
+    if (e.target.files) {
+      Array.from(e.target.files).forEach(processFile);
     }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
@@ -416,8 +437,8 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
             </button>
           )}
           {!['COMPLETED', 'FAILED'].includes(p.phase) && (
-            <button className="btn-back" onClick={handlePause} title={p.phase === 'PAUSED' ? 'Resume' : 'Pause'}>
-              {p.phase === 'PAUSED' ? <Play size={14} /> : <Pause size={14} />}
+            <button className="btn-kill" onClick={handleKill} title="Forcer l'arrêt (Kill)">
+              <Pause size={14} color="var(--error)" />
             </button>
           )}
           <button className="btn-back" onClick={handleDelete} title="Delete">
@@ -484,7 +505,7 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => { setShowModify(false); setFile(null); setModifyText(''); }}
+            onClick={() => { setShowModify(false); setFiles([]); setModifyText(''); }}
           >
             <motion.div
               className="modal modify-modal"
@@ -507,19 +528,30 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
                 className="modify-textarea"
               />
 
-              {file && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: 8, marginBottom: 16 }}>
-                  <Paperclip size={14} />
-                  <span style={{ fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>({Math.round(file.size / 1024)} KB)</span>
-                  <button onClick={() => setFile(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }} title="Retirer le fichier">
-                    <X size={14} />
-                  </button>
+              {files.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                  {files.map((f, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: 8, border: f.error ? '1px solid var(--error)' : '1px solid transparent' }}>
+                      {f.thumbnail ? (
+                        <img src={f.thumbnail} alt="preview" style={{ width: 24, height: 24, objectFit: 'cover', borderRadius: 4 }} />
+                      ) : (
+                        <Paperclip size={14} />
+                      )}
+                      <span style={{ fontSize: 12, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: f.error ? 'var(--error)' : 'inherit' }}>
+                        {f.name}
+                        {f.error && <span style={{ display: 'block', fontSize: 10, marginTop: 2 }}>{f.error}</span>}
+                      </span>
+                      <button onClick={() => removeFile(i)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }} title="Retirer le fichier">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
 
               <input
                 type="file"
+                multiple
                 ref={fileInputRef}
                 style={{ display: 'none' }}
                 accept="image/*,application/pdf"
@@ -537,11 +569,11 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
                 </button>
 
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn-cancel" onClick={() => { setShowModify(false); setFile(null); setModifyText(''); }}>Annuler</button>
+                  <button className="btn-cancel" onClick={() => { setShowModify(false); setFiles([]); setModifyText(''); }}>Annuler</button>
                   <button
                     className="btn-launch"
                     onClick={handleModify}
-                    disabled={modifying || (!modifyText.trim() && !file)}
+                    disabled={modifying || (!modifyText.trim() && files.length === 0)}
                   >
                     {modifying ? 'Envoi...' : '🚀 Lancer la modification'}
                   </button>
@@ -824,17 +856,20 @@ function LiveActivityPanel({ events, pipelines }: { events: PipelineEvent[]; pip
 
 function LaunchModal({ onClose, onLaunch }: {
   onClose: () => void;
-  onLaunch: (desc: string, name?: string, fileBase64?: string, fileType?: string) => void;
+  onLaunch: (desc: string, name?: string, files?: { base64: string; type: string }[]) => void;
 }) {
   const [desc, setDesc] = useState('');
   const [name, setName] = useState('');
-  const [file, setFile] = useState<{ name: string; type: string; data: string } | null>(null);
+  const [files, setFiles] = useState<{ name: string; type: string; data: string; size: number; error?: string; thumbnail?: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) processFile(f);
+    if (e.target.files) {
+      Array.from(e.target.files).forEach(processFile);
+    }
+    // clear input so same file can be selected again if needed
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
@@ -844,29 +879,46 @@ function LaunchModal({ onClose, onLaunch }: {
       if (item.type.indexOf('image/') === 0 || item.type === 'application/pdf') {
         const f = item.getAsFile();
         if (f) processFile(f);
-        break;
       }
     }
   };
 
   const processFile = (f: File) => {
+    const MAX_MB = 10;
+    const isTooLarge = f.size > MAX_MB * 1024 * 1024;
+
+    if (isTooLarge) {
+      setFiles(prev => [...prev, { name: f.name, type: f.type, data: '', size: f.size, error: `Trop lourd (Max ${MAX_MB}MB)` }]);
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       const result = e.target?.result as string;
-      // Extract just the base64 part, dropping the data url prefix
       const base64 = result.split(',')[1];
       if (base64) {
-        setFile({ name: f.name, type: f.type, data: base64 });
+        let thumbnail: string | undefined = undefined;
+        // If image, use the data URL directly as thumbnail
+        if (f.type.startsWith('image/')) {
+          thumbnail = result;
+        }
+
+        setFiles(prev => [...prev, { name: f.name, type: f.type, data: base64, size: f.size, thumbnail }]);
       }
     };
     reader.readAsDataURL(f);
+  };
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const submit = async () => {
     if (!desc.trim()) return;
     setLoading(true);
     try {
-      await onLaunch(desc.trim(), name.trim() || undefined, file?.data, file?.type);
+      const validFiles = files.filter(f => !f.error).map(f => ({ base64: f.data, type: f.type }));
+      await onLaunch(desc.trim(), name.trim() || undefined, validFiles.length > 0 ? validFiles : undefined);
     } finally {
       setLoading(false);
     }
@@ -904,13 +956,24 @@ function LaunchModal({ onClose, onLaunch }: {
           autoFocus
         />
 
-        {file && (
-          <div className="file-preview-pill" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-layer-2)', borderRadius: 8, marginBottom: 16 }}>
-            <Paperclip size={14} />
-            <span style={{ fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
-            <button onClick={() => setFile(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
-              <X size={14} />
-            </button>
+        {files.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            {files.map((f, i) => (
+              <div key={i} className="file-preview-pill" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-layer-2)', borderRadius: 8, border: f.error ? '1px solid var(--error)' : '1px solid transparent' }}>
+                {f.thumbnail ? (
+                  <img src={f.thumbnail} alt="preview" style={{ width: 24, height: 24, objectFit: 'cover', borderRadius: 4 }} />
+                ) : (
+                  <Paperclip size={14} />
+                )}
+                <span style={{ fontSize: 12, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: f.error ? 'var(--error)' : 'inherit' }}>
+                  {f.name}
+                  {f.error && <span style={{ display: 'block', fontSize: 10, marginTop: 2 }}>{f.error}</span>}
+                </span>
+                <button onClick={() => removeFile(i)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 

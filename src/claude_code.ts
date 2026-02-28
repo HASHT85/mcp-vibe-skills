@@ -38,8 +38,8 @@ export type AgentOptions = {
     maxTurns?: number;
     appendPrompt?: string;
     timeoutMs?: number;
-    attachedFileBase64?: string;
-    attachedFileType?: string;
+    attachedFiles?: { base64: string; type: string }[];
+    abortSignal?: AbortSignal;
 };
 
 // ─── Event Emitter for live streaming ───
@@ -209,28 +209,30 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
         { type: "text", text: fullPromptText }
     ];
 
-    if (options.attachedFileBase64 && options.attachedFileType) {
-        const isImage = options.attachedFileType.startsWith("image/");
-        if (isImage) {
-            initialContent.push({
-                type: "image",
-                source: {
-                    type: "base64",
-                    media_type: options.attachedFileType as any,
-                    data: options.attachedFileBase64,
-                }
-            });
-            console.log(`[Agent] 📎 Attached Image: ${options.attachedFileType}`);
-        } else if (options.attachedFileType === "application/pdf") {
-            initialContent.push({
-                type: "document",
-                source: {
-                    type: "base64",
-                    media_type: "application/pdf",
-                    data: options.attachedFileBase64,
-                }
-            });
-            console.log(`[Agent] 📎 Attached Document: PDF`);
+    if (options.attachedFiles && options.attachedFiles.length > 0) {
+        for (const file of options.attachedFiles) {
+            const isImage = file.type.startsWith("image/");
+            if (isImage) {
+                initialContent.push({
+                    type: "image",
+                    source: {
+                        type: "base64",
+                        media_type: file.type as any,
+                        data: file.base64,
+                    }
+                });
+                console.log(`[Agent] 📎 Attached Image: ${file.type}`);
+            } else if (file.type === "application/pdf") {
+                initialContent.push({
+                    type: "document",
+                    source: {
+                        type: "base64",
+                        media_type: "application/pdf",
+                        data: file.base64,
+                    }
+                });
+                console.log(`[Agent] 📎 Attached Document: PDF`);
+            }
         }
     }
 
@@ -249,13 +251,19 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
 
             console.log(`[Agent] Turn ${turn + 1}/${maxTurns}`);
 
+            // Create API request init with signal if provided
+            const requestOptions: any = {};
+            if (options.abortSignal) {
+                requestOptions.signal = options.abortSignal;
+            }
+
             const response = await client.messages.create({
                 model: DEFAULT_MODEL,
                 max_tokens: 8192,
                 system: systemPrompt + "\n\nRÈGLES ABSOLUES: Ne crée JAMAIS de fichiers de documentation (.md), de tests, de rapports ou de scripts de validation. Concentre-toi uniquement sur le code fonctionnel demandé. Sois concis dans tes réponses textuelles.",
                 tools: TOOLS,
                 messages,
-            });
+            }, requestOptions);
 
             console.log(`[Agent] Response: stop_reason=${response.stop_reason}, ${response.content.length} blocks, tokens: ${response.usage.input_tokens}in/${response.usage.output_tokens}out`);
 

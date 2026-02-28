@@ -122,6 +122,7 @@ const PHASE_PROGRESS: Record<PipelinePhase, number> = {
 export class Orchestrator extends EventEmitter {
     private pipelines: Map<string, Pipeline> = new Map();
     private running: Set<string> = new Set();
+    private abortControllers: Map<string, AbortController> = new Map();
 
     constructor() {
         super();
@@ -136,7 +137,7 @@ export class Orchestrator extends EventEmitter {
 
     // ─── Pipeline Management ───
 
-    async launchIdea(description: string, name?: string, fileBase64?: string, fileType?: string): Promise<Pipeline> {
+    async launchIdea(description: string, name?: string, files?: { base64: string; type: string }[]): Promise<Pipeline> {
         const id = crypto.randomUUID().slice(0, 8);
         const projectName = name || this.slugify(description);
         const workspace = path.join(WORKSPACE_ROOT, id);
@@ -159,8 +160,8 @@ export class Orchestrator extends EventEmitter {
             updatedAt: new Date().toISOString(),
         };
 
-        if (fileBase64 && fileType) {
-            pipeline.artifacts.initialFile = { base64: fileBase64, type: fileType };
+        if (files && files.length > 0) {
+            pipeline.artifacts.initialFiles = files;
         }
 
         this.pipelines.set(id, pipeline);
@@ -212,15 +213,37 @@ export class Orchestrator extends EventEmitter {
     }
 
     async deletePipeline(id: string): Promise<boolean> {
+        this.killPipeline(id);
         this.running.delete(id);
         this.pipelines.delete(id);
         await this.saveState();
         return true;
     }
 
+    async killPipeline(id: string): Promise<boolean> {
+        const p = this.pipelines.get(id);
+        if (!p) return false;
+
+        // Abort running Anthropic streams or scripts
+        const controller = this.abortControllers.get(id);
+        if (controller) {
+            controller.abort();
+            this.abortControllers.delete(id);
+        }
+
+        this.running.delete(id);
+
+        if (p.phase !== "COMPLETED" && p.phase !== "FAILED") {
+            this.setPhase(id, "FAILED", "Pipeline arrêté manuellement via le Kill Switch.");
+            this.addEvent(id, "Orchestrator", "🛑", "Processus arrêté de force.", "error");
+        }
+        await this.saveState();
+        return true;
+    }
+
     // ─── Modify Existing Pipeline ───
 
-    async modifyPipeline(id: string, instructions: string, fileBase64?: string, fileType?: string): Promise<Pipeline | null> {
+    async modifyPipeline(id: string, instructions: string, files?: { base64: string; type: string }[]): Promise<Pipeline | null> {
         const p = this.pipelines.get(id);
         if (!p) return null;
         if (this.running.has(id)) throw new Error("Pipeline is already running");
@@ -233,9 +256,8 @@ export class Orchestrator extends EventEmitter {
         p.progress = 50;
         p.error = undefined;
         p.artifacts.pendingModification = instructions; // used by resumePipeline
-        if (fileBase64 && fileType) {
-            (p.artifacts as any).pendingModificationFileBase64 = fileBase64;
-            (p.artifacts as any).pendingModificationFileType = fileType;
+        if (files && files.length > 0) {
+            (p.artifacts as any).pendingModificationFiles = files;
         }
 
         p.events.push({
@@ -244,22 +266,25 @@ export class Orchestrator extends EventEmitter {
             timestamp: new Date().toISOString(),
             agentRole: "Orchestrator",
             agentEmoji: "✏️",
-            action: `Modification demandée: ${instructions.slice(0, 100)}...${fileBase64 ? ' (avec fichier)' : ''}`,
+            action: `Modification demandée: ${instructions.slice(0, 100)}...${(files && files.length > 0) ? ` (avec ${files.length} fichiers)` : ''}`,
             type: "info",
         });
         await this.saveState();
 
         // Run modification in background
-        this.executeModification(id, instructions, fileBase64, fileType).catch(err => {
+        this.executeModification(id, instructions, files).catch(err => {
             console.error(`[Orchestrator] Modify error for ${id}:`, err);
         });
 
         return p;
     }
 
-    private async executeModification(id: string, instructions: string, fileBase64?: string, fileType?: string) {
+    private async executeModification(id: string, instructions: string, files?: { base64: string; type: string }[]) {
         if (this.running.has(id)) return;
         this.running.add(id);
+
+        const abortController = new AbortController();
+        this.abortControllers.set(id, abortController);
 
         const p = this.pipelines.get(id)!;
 
@@ -291,12 +316,13 @@ Instructions techniques:
 3. Assure-toi que le code compile sans erreur
 4. Ne casse pas les fonctionnalités existantes
 5. Si il y a un Dockerfile, assure-toi qu'il reste valide`,
-                attachedFileBase64: fileBase64,
-                attachedFileType: fileType,
+                attachedFiles: files,
                 systemPrompt: "Tu es un développeur senior. Applique les modifications demandées de manière propre et professionnelle.",
                 cwd: p.workspace,
                 allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
                 maxTurns: 15,
+                timeoutMs: 10 * 60 * 1000,
+                abortSignal: this.abortControllers.get(id)?.signal,
             });
 
             if (!result.success) {
@@ -330,6 +356,7 @@ Instructions techniques:
                 cwd: p.workspace,
                 allowedTools: ["Read", "Bash", "ListDir"],
                 maxTurns: 10,
+                abortSignal: abortController.signal,
             });
             this.addTokens(id, qaResult);
             this.setAgentStatus(id, "QA", "done");
@@ -340,9 +367,14 @@ Instructions techniques:
             this.addEvent(id, "Orchestrator", "🎉", "Modification terminée et déployée!", "success");
 
         } catch (err: any) {
-            this.setPhase(id, "FAILED", err.message);
-            this.addEvent(id, "Orchestrator", "❌", `Erreur modification: ${err.message}`, "error");
+            if (err.name === 'AbortError') {
+                this.addEvent(id, "Orchestrator", "🛑", "Modification annulée.", "error");
+            } else {
+                this.setPhase(id, "FAILED", err.message);
+                this.addEvent(id, "Orchestrator", "❌", `Erreur modification: ${err.message}`, "error");
+            }
         } finally {
+            this.abortControllers.delete(id);
             this.running.delete(id);
             await this.saveState();
         }
@@ -371,6 +403,9 @@ Instructions techniques:
     private async executePipeline(id: string) {
         if (this.running.has(id)) return;
         this.running.add(id);
+
+        const abortController = new AbortController();
+        this.abortControllers.set(id, abortController);
 
         const p = this.pipelines.get(id)!;
 
@@ -403,9 +438,14 @@ Instructions techniques:
             this.addEvent(id, "Orchestrator", "🎉", completedMsg, "success");
 
         } catch (err: any) {
-            this.setPhase(id, "FAILED", err.message);
-            this.addEvent(id, "Orchestrator", "❌", `Erreur: ${err.message}`, "error");
+            if (err.name === 'AbortError') {
+                this.addEvent(id, "Orchestrator", "🛑", "Pipeline annulé.", "error");
+            } else {
+                this.setPhase(id, "FAILED", err.message);
+                this.addEvent(id, "Orchestrator", "❌", `Erreur: ${err.message}`, "error");
+            }
         } finally {
+            this.abortControllers.delete(id);
             this.running.delete(id);
             await this.saveState();
         }
@@ -443,8 +483,8 @@ Règles pour le champ "type":
             systemPrompt: "Tu es un analyste produit senior. Sois concis et pragmatique.",
             cwd: p.workspace,
             maxTurns: 3,
-            attachedFileBase64: (p.artifacts.initialFile as any)?.base64,
-            attachedFileType: (p.artifacts.initialFile as any)?.type,
+            attachedFiles: (p.artifacts.initialFiles as any),
+            abortSignal: this.abortControllers.get(id)?.signal,
         });
 
         if (result.success && result.finalResult) {
@@ -526,6 +566,7 @@ Réponds en JSON:
             cwd: p.workspace,
             maxTurns: 3,
             appendPrompt: skillsContext,
+            abortSignal: this.abortControllers.get(id)?.signal,
         });
 
         if (result.success && result.finalResult) {
@@ -640,6 +681,7 @@ RÈGLES CRITIQUES POUR LE DOCKERFILE:
             cwd: p.workspace,
             allowedTools: ["Write", "Edit", "Bash"],
             maxTurns: 12,
+            abortSignal: this.abortControllers.get(id)?.signal,
         });
 
         if (!result.success) {
@@ -743,6 +785,7 @@ Instructions:
                 cwd: p.workspace,
                 allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
                 maxTurns: 12,
+                abortSignal: this.abortControllers.get(id)?.signal,
             });
 
             if (!result.success) {
@@ -778,6 +821,8 @@ Instructions:
         await this.sleep(10000);
 
         for (let attempt = 0; attempt < maxRetries; attempt++) {
+            if (this.shouldStop(id)) return; // Check for abort signal during long wait
+
             try {
                 const deployment = await getLatestDeployment(p.dokploy.applicationId);
                 if (!deployment) continue;
@@ -815,7 +860,7 @@ Instructions:
 
         const p = this.pipelines.get(id)!;
 
-        const result = await runClaudeAgent({
+        const debugResult = await runClaudeAgent({
             prompt: `Le build Docker a échoué. Voici les logs d'erreur:
 
 ${errorLogs}
@@ -828,16 +873,17 @@ Instructions:
             systemPrompt: "Tu es un debugger expert. Analyse les erreurs de build et corrige-les de manière ciblée.",
             cwd: p.workspace,
             allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
-            maxTurns: 8,
+            maxTurns: 5,
+            abortSignal: this.abortControllers.get(id)?.signal,
         });
 
-        if (result.success) {
+        if (debugResult.success) {
             this.setAgentStatus(id, "Debugger", "done", "Corrections appliquées");
             this.addEvent(id, "Debugger", "🔧", "✓ Corrections appliquées", "success");
         } else {
-            this.addEvent(id, "Debugger", "🔧", `Erreur debugger: ${result.error}`, "error");
+            this.addEvent(id, "Debugger", "🔧", `Erreur debugger: ${debugResult.error}`, "error");
         }
-        this.addTokens(id, result);
+        this.addTokens(id, debugResult);
     }
 
     private async runQA(id: string) {
@@ -856,14 +902,17 @@ Instructions:
 5. Assure-toi que le Dockerfile est correct
 
 Résumé: donne une note /10 et liste les problèmes trouvés.`,
-            systemPrompt: "Tu es un QA engineer senior. Sois thorough mais pragmatique.",
+            systemPrompt: "Tu es un Architecte Logiciel Senior. Structure le code logiquement et proprement.",
             cwd: p.workspace,
-            allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
-            maxTurns: 8,
+            allowedTools: ["Read", "ListDir"],
+            maxTurns: 5,
+            abortSignal: this.abortControllers.get(id)?.signal,
         });
 
-        if (result.success && p.github) {
-            await gitPush(p.workspace, "chore: QA fixes");
+        if (result.success) {
+            if (p.github) {
+                await gitPush(p.workspace, "chore: QA fixes");
+            }
             this.addEvent(id, "QA", "🧪", "✓ Review complet", "success");
         }
         this.addTokens(id, result);
