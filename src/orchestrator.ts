@@ -802,11 +802,10 @@ RÈGLES CRITIQUES POUR LES DOCKERFILE:
                         repo: p.github.repo,
                         branch: "main",
                         buildType: "dockerfile",
-                        // point Dokploy to the sub-folder for this service
-                        env: `DOKPLOY_SUB_PATH=/${service.name}` // (pseudo env, Dokploy requires UI config for subpaths if not root, or docker-compose)
-                        // Actually Dokploy UI lets you specify 'buildPath'. In our generic API it might just build from root if not specified.
-                        // We will rely on Claude creating docker-compose OR we create multiple apps and ask user to set build paths if needed.
-                        // For now we just create the Apps.
+                        buildPath: `/${service.name}/Dockerfile`,
+                        contextPath: `/${service.name}`,
+                        dockerPath: `./Dockerfile`,
+                        env: `DOKPLOY_SUB_PATH=/${service.name}`
                     });
 
                     // Port logic

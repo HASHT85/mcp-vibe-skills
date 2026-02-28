@@ -21,18 +21,16 @@ export type DokployApplication = {
     createdAt: string;
 };
 
-export type CreateApplicationInput = {
+export interface CreateApplicationInput {
     name: string;
     projectId: string;
-    description?: string;
-    repository?: string; // Full URL
-    owner?: string; // Repo owner (required for github provider)
-    repo?: string; // Repo name (required for github provider)
+    environmentId: string;
+    buildType?: "dockerfile" | "nixpacks" | "heroku";
+    owner?: string;
+    repo?: string;
     branch?: string;
-    buildType?: "dockerfile" | "heroku_buildpacks" | "nixpacks";
+    description?: string;
     env?: string;
-    environmentId: string; // Required by Dokploy
-    provider?: "git" | "github" | "gitlab" | "bitbucket" | "docker";
     sourceType?: "git" | "github" | "gitlab" | "bitbucket" | "docker";
 };
 
@@ -504,7 +502,7 @@ export async function createDokployApplication(input: CreateApplicationInput): P
                 owner: input.owner,
                 repository: input.repo,
                 branch: input.branch || "main",
-                buildPath: "/Dockerfile", // Fix: Point to file, not dir
+                buildPath: input.buildPath || "/Dockerfile",
                 githubId,
                 enableSubmodules: false,
                 triggerType: "push",
@@ -535,8 +533,8 @@ export async function createDokployApplication(input: CreateApplicationInput): P
                             sourceType: "github",
                             autoDeploy: true,
                             buildType: "dockerfile",
-                            contextPath: ".",
-                            dockerPath: "./Dockerfile",
+                            contextPath: input.contextPath || ".",
+                            dockerPath: input.dockerPath || "./Dockerfile",
                             cleanCache: false
                         }
                     })
@@ -556,7 +554,7 @@ export async function createDokployApplication(input: CreateApplicationInput): P
             applicationId,
             repository: input.repository,
             branch: input.branch || "main",
-            buildPath: "/Dockerfile",
+            buildPath: input.buildPath || "/Dockerfile",
             sourceType: "git",
             provider: "git",
             buildType: "dockerfile",
