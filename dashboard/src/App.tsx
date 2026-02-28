@@ -745,13 +745,14 @@ function LaunchModal({ onClose, onLaunch }: {
   onLaunch: (desc: string, name?: string) => void;
 }) {
   const [desc, setDesc] = useState('');
+  const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
     if (!desc.trim()) return;
     setLoading(true);
     try {
-      await onLaunch(desc.trim());
+      await onLaunch(desc.trim(), name.trim() || undefined);
     } finally {
       setLoading(false);
     }
@@ -774,6 +775,13 @@ function LaunchModal({ onClose, onLaunch }: {
       >
         <h2>🚀 Lancer une idée</h2>
         <p>Décris ton projet. Les agents IA vont l'analyser, le concevoir, le développer et le déployer automatiquement.</p>
+        <input
+          className="login-input"
+          placeholder="Titre du projet (optionnel)"
+          value={name}
+          onChange={(e: any) => setName(e.target.value)}
+          style={{ marginBottom: '12px', width: '100%' }}
+        />
         <textarea
           placeholder="Ex: Un dashboard analytics pour tracker les ventes e-commerce en temps réel avec des graphiques interactifs..."
           value={desc}
