@@ -352,7 +352,12 @@ RÈGLES ABSOLUES:
             });
 
             if (!result.success) {
-                this.addEvent(id, "Developer", "💻", `Erreur modification: ${result.error}`, "warning");
+                this.addEvent(id, "Developer", "⚠️", `Erreur agent: ${result.error}`, "warning");
+                if (p.github) {
+                    const { execSync } = await import("node:child_process");
+                    try { execSync("git reset --hard && git clean -fd", { cwd: p.workspace }); } catch { }
+                }
+                throw new Error(`Developer agent failed to complete: ${result.error}`);
             }
             this.addTokens(id, result);
 
@@ -403,6 +408,14 @@ RÈGLES ABSOLUES:
                 maxTurns: 100,
                 abortSignal: abortController.signal,
             });
+            if (!qaResult.success) {
+                this.addEvent(id, "QA", "⚠️", `Erreur agent QA: ${qaResult.error}`, "warning");
+                if (p.github) {
+                    const { execSync } = await import("node:child_process");
+                    try { execSync("git reset --hard && git clean -fd", { cwd: p.workspace }); } catch { }
+                }
+                throw new Error(`QA agent failed to complete: ${qaResult.error}`);
+            }
             this.addTokens(id, qaResult);
             this.setAgentStatus(id, "QA", "done");
 
@@ -1552,6 +1565,15 @@ RÈGLES ABSOLUES:
                 });
 
                 this.addTokens(id, result);
+
+                if (!result.success) {
+                    this.addEvent(id, "Developer", "⚠️", `Erreur agent: ${result.error}`, "warning");
+                    if (p.github) {
+                        const { execSync } = await import("node:child_process");
+                        try { execSync("git reset --hard && git clean -fd", { cwd: p.workspace }); } catch { }
+                    }
+                    continue; // Skip the push and go straight to the next retry attempt
+                }
 
                 const { execSync } = await import("node:child_process");
                 let hasChanges = false;
