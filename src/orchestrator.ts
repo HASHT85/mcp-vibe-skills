@@ -406,6 +406,26 @@ RÈGLES ABSOLUES:
             this.addTokens(id, qaResult);
             this.setAgentStatus(id, "QA", "done");
 
+            // Push any fixes applied during QA
+            if (p.github) {
+                const { execSync } = await import("node:child_process");
+                let hasQhanges = false;
+                try {
+                    const status = execSync("git status --porcelain", { cwd: p.workspace }).toString().trim();
+                    hasQhanges = status.length > 0;
+                } catch { hasQhanges = false; }
+
+                if (hasQhanges) {
+                    const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
+                    const pushed = await gitPush(p.workspace, `fix: QA auto-corrections applied`, authUrl);
+                    if (pushed) {
+                        this.addEvent(id, "QA", "💻", "Push → correctifs QA appliqués", "success");
+                    } else {
+                        this.addEvent(id, "QA", "⚠️", "Push QA échoué", "warning");
+                    }
+                }
+            }
+
             // Auto-fix loop if website is down
             if (p.dokploy) {
                 await this.verifyAndAutoFix(id);
