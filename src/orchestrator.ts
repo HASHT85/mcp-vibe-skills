@@ -7,7 +7,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { EventEmitter } from "node:events";
+import { EventEmitter, setMaxListeners } from "node:events";
 
 import { runClaudeAgent, gitInit, gitPush, gitClone, agentEvents, type AgentAction } from "./claude_code.js";
 import { findSkillsForContext } from "./skills.js";
@@ -303,6 +303,7 @@ export class Orchestrator extends EventEmitter {
         this.running.add(id);
 
         const abortController = new AbortController();
+        setMaxListeners(50, abortController.signal);
         this.abortControllers.set(id, abortController);
 
         const p = this.pipelines.get(id)!;
@@ -474,6 +475,7 @@ RÈGLES ABSOLUES:
         this.running.add(id);
 
         const abortController = new AbortController();
+        setMaxListeners(50, abortController.signal);
         this.abortControllers.set(id, abortController);
 
         const p = this.pipelines.get(id)!;
