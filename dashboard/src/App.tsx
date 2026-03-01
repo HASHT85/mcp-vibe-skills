@@ -14,19 +14,15 @@ import type { Pipeline, PipelineEvent, PipelineAgent } from './api/client';
 import './index.css';
 
 const MODEL_OPTIONS = [
-  { value: '', label: '🤖 Auto (Défaut - Claude 3.7 Sonnet)' },
+  { value: 'claude-sonnet-4-6', label: 'Claude 4.6 Sonnet' },
+  { value: 'claude-opus-4-6', label: 'Claude 4.6 Opus' },
+  { value: 'claude-haiku-4-5', label: 'Claude 4.5 Haiku' },
   { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet' },
-  { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
-  { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
-  { value: 'claude-4-5-haiku', label: 'Claude 4.5 Haiku' },
-  { value: 'claude-4-6-opus', label: 'Claude 4.6 Opus' },
-  { value: 'claude-4-6-sonnet', label: 'Claude 4.6 Sonnet' },
   { value: 'gpt-4o', label: 'GPT-4o (OpenAI)' },
   { value: 'o1', label: 'o1 (OpenAI)' },
   { value: 'o3-mini', label: 'o3-mini (OpenAI)' },
-  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-  { value: 'gemini-3.0-pro', label: 'Gemini 3.0 Pro' },
-  { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' }
+  { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' },
+  { value: 'gemini-3.0-pro', label: 'Gemini 3.0 Pro' }
 ];
 
 // ─── App ───
@@ -551,16 +547,19 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
                 className="modify-textarea"
                 style={{ marginBottom: '12px' }}
               />
-              <select
+              <input
+                list="model-options"
                 className="login-input"
+                placeholder="Modèle IA (Laisse vide pour modèle par défaut, ex: claude-3-7-sonnet-20250219)"
                 value={modifyModel}
                 onChange={(e) => setModifyModel(e.target.value)}
-                style={{ marginBottom: '16px', width: '100%', cursor: 'pointer', padding: '12px', background: 'var(--bg-layer-2)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-color, white)', borderRadius: '8px' }}
-              >
+                style={{ marginBottom: '16px', width: '100%', padding: '12px', background: 'var(--bg-layer-2)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: '8px' }}
+              />
+              <datalist id="model-options">
                 {MODEL_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value} style={{ color: 'white', background: '#1a1a1a' }}>{opt.label}</option>
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
-              </select>
+              </datalist>
 
               {files.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
@@ -983,16 +982,19 @@ function LaunchModal({ onClose, onLaunch }: {
           onChange={(e: any) => setName(e.target.value)}
           style={{ marginBottom: '12px', width: '100%' }}
         />
-        <select
+        <input
+          list="model-options-launch"
           className="login-input"
+          placeholder="Modèle IA (Laisse vide pour claude-4-6-sonnet, ou tape ton modèle API proxy)"
           value={model}
           onChange={(e: any) => setModel(e.target.value)}
-          style={{ marginBottom: '12px', width: '100%', cursor: 'pointer', padding: '12px', background: 'var(--bg-layer-2)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-color, white)', borderRadius: '8px' }}
-        >
+          style={{ marginBottom: '12px', width: '100%', padding: '12px', background: 'var(--bg-layer-2)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: '8px' }}
+        />
+        <datalist id="model-options-launch">
           {MODEL_OPTIONS.map(opt => (
-            <option key={opt.value} value={opt.value} style={{ color: 'white', background: '#1a1a1a' }}>{opt.label}</option>
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
-        </select>
+        </datalist>
         <textarea
           placeholder="Ex: Un dashboard React analytique, OU un Bot Python autonome pour scraper des annonces Web 24/7... (Vous pouvez aussi coller une image Ctrl+V)"
           value={desc}
