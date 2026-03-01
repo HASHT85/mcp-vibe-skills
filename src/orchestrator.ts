@@ -1545,7 +1545,7 @@ RÈGLES ABSOLUES:
                     - IMPORTANT: Si 0 fichier est écrit ET aucune commande de port n'est exécutée, la tâche échoue.`,
                     systemPrompt: "Tu es un développeur de crise. Tu DOIS utiliser l'outil Write pour sauvegarder tes correctifs et fixer le bug.",
                     cwd: p.workspace,
-                    allowedTools: ["Read", "Write", "Bash", "ListDir"],
+                    allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir"],
                     maxTurns: 15,
                     timeoutMs: 10 * 60 * 1000,
                     abortSignal: this.abortControllers.get(id)?.signal,
