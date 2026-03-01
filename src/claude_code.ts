@@ -169,12 +169,40 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
             case "replace_in_file": {
                 const filePath = path.resolve(cwd, input.path);
                 let content = await fs.readFile(filePath, "utf-8");
-                if (!content.includes(input.targetStr)) {
-                    return `Error: Target string not found in file. Ensure exact match including whitespaces.`;
+                if (content.includes(input.targetStr)) {
+                    content = content.replace(input.targetStr, input.replacementStr);
+                    await fs.writeFile(filePath, content, "utf-8");
+                    return `Successfully replaced content in ${input.path}`;
                 }
-                content = content.replace(input.targetStr, input.replacementStr);
-                await fs.writeFile(filePath, content, "utf-8");
-                return `Successfully replaced content in ${input.path}`;
+
+                // Fallback: Fuzzy matching ignoring exact whitespace/newlines
+                const normalize = (str: string) => str.replace(/\s+/g, ' ').trim();
+                const normTarget = normalize(input.targetStr);
+
+                // Extremely simple fuzzy replace for agent convenience
+                const lines = content.split('\n');
+                let found = false;
+
+                // Try to find a window of lines that matches the normalized target
+                for (let windowSize = 1; windowSize <= 20; windowSize++) {
+                    for (let i = 0; i <= lines.length - windowSize; i++) {
+                        const windowContent = lines.slice(i, i + windowSize).join('\n');
+                        if (normalize(windowContent) === normTarget) {
+                            lines.splice(i, windowSize, input.replacementStr);
+                            content = lines.join('\n');
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (found) break;
+                }
+
+                if (found) {
+                    await fs.writeFile(filePath, content, "utf-8");
+                    return `Successfully replaced content in ${input.path} (using secondary fuzzy whitespace match).`;
+                }
+
+                return `Error: Target string not found in file. Ensure exact match including whitespaces or use sed via bash.`;
             }
             case "web_search": {
                 try {
