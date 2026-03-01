@@ -18,11 +18,15 @@ const MODEL_OPTIONS = [
   { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet' },
   { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
   { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
+  { value: 'claude-4-5-haiku', label: 'Claude 4.5 Haiku' },
+  { value: 'claude-4-6-opus', label: 'Claude 4.6 Opus' },
+  { value: 'claude-4-6-sonnet', label: 'Claude 4.6 Sonnet' },
   { value: 'gpt-4o', label: 'GPT-4o (OpenAI)' },
   { value: 'o1', label: 'o1 (OpenAI)' },
   { value: 'o3-mini', label: 'o3-mini (OpenAI)' },
   { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-  { value: 'gemini-3.0-pro', label: 'Gemini 3.0 Pro' }
+  { value: 'gemini-3.0-pro', label: 'Gemini 3.0 Pro' },
+  { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' }
 ];
 
 // ─── App ───
@@ -551,10 +555,10 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
                 className="login-input"
                 value={modifyModel}
                 onChange={(e) => setModifyModel(e.target.value)}
-                style={{ marginBottom: '16px', width: '100%', cursor: 'pointer', padding: '12px', background: 'var(--bg-layer-2)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: '8px' }}
+                style={{ marginBottom: '16px', width: '100%', cursor: 'pointer', padding: '12px', background: 'var(--bg-layer-2)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-color, white)', borderRadius: '8px' }}
               >
                 {MODEL_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  <option key={opt.value} value={opt.value} style={{ color: 'white', background: '#1a1a1a' }}>{opt.label}</option>
                 ))}
               </select>
 
@@ -983,10 +987,10 @@ function LaunchModal({ onClose, onLaunch }: {
           className="login-input"
           value={model}
           onChange={(e: any) => setModel(e.target.value)}
-          style={{ marginBottom: '12px', width: '100%', cursor: 'pointer', padding: '12px', background: 'var(--bg-layer-2)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: '8px' }}
+          style={{ marginBottom: '12px', width: '100%', cursor: 'pointer', padding: '12px', background: 'var(--bg-layer-2)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-color, white)', borderRadius: '8px' }}
         >
           {MODEL_OPTIONS.map(opt => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option key={opt.value} value={opt.value} style={{ color: 'white', background: '#1a1a1a' }}>{opt.label}</option>
           ))}
         </select>
         <textarea

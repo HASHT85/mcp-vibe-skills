@@ -566,7 +566,7 @@ export async function gitInit(cwd: string, remoteUrl: string): Promise<boolean> 
 
 // ─── Multi-Model Adapter ───
 
-async function invokeModel(
+export async function invokeModel(
     model: string,
     systemPrompt: string,
     tools: Anthropic.Messages.Tool[],
@@ -578,6 +578,12 @@ async function invokeModel(
     content: Anthropic.Messages.ContentBlock[];
     usage: { input_tokens: number; output_tokens: number };
 }> {
+    // Intercept user-friendly aliases and map them to real API identifiers
+    if (model === 'claude-4-5-haiku') model = 'claude-3-5-haiku-20241022';
+    if (model === 'claude-4-6-opus') model = 'claude-3-opus-20240229';
+    if (model === 'claude-4-6-sonnet') model = 'claude-3-7-sonnet-20250219';
+    if (model === 'gemini-3.1-pro') model = 'gemini-exp-1206'; // fallback to experimental model if 3.1 is not officially rolled out natively yet
+
     if (model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3")) {
         // OpenAI Adapter
         const OpenAI = (await import("openai")).default;
