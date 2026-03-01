@@ -331,22 +331,22 @@ export class Orchestrator extends EventEmitter {
 ${instructions}
 
 PROCESSUS OBLIGATOIRE - respecte cet ordre:
-1. Utilise ListDir sur ".": liste tous les fichiers du projet
-2. Utilise Read sur les fichiers clés (main.py, server.py, requirements.txt, package.json, etc.)
+1. Utilise list_dir sur ".": liste tous les fichiers du projet
+2. Utilise read_file sur les fichiers clés (main.py, server.py, requirements.txt, package.json, etc.)
 3. IDENTIFIE ce qui doit changer
-4. UTILISE WRITE pour sauvegarder chaque fichier modifié (OBLIGATOIRE - sinon la tâche est un échec)
+4. UTILISE write_file ou replace_in_file pour sauvegarder chaque fichier modifié (OBLIGATOIRE - sinon la tâche est un échec)
 5. Confirme la liste des fichiers écrits
 
 RÈGLES ABSOLUES:
-- Tu DOIS utiliser l'outil Write au moins une fois
+- Tu DOIS utiliser l'outil write_file ou replace_in_file au moins une fois
 - Si tu détectes des imports cassés (ex: from src.xxx import), réécris le fichier entier avec le code corrigé
 - Vérifie que tous les packages importés sont dans requirements.txt
 - 0 fichier écrit = tâche invalide`,
                 attachedFiles: files,
-                systemPrompt: "Tu es un développeur senior. Tu DOIS écrire des fichiers avec Write. Lire sans écrire = tâche échouée. Si tu vois un bug tu dois le corriger en écrivant le fichier fixé.",
+                systemPrompt: "Tu es un développeur senior. Tu DOIS écrire des fichiers avec write_file ou replace_in_file. Lire sans écrire = tâche échouée. Si tu vois un bug tu dois le corriger en écrivant le fichier fixé.",
                 cwd: p.workspace,
-                allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
-                maxTurns: 60,
+                allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir"],
+                maxTurns: 150,
                 timeoutMs: 15 * 60 * 1000,
                 abortSignal: this.abortControllers.get(id)?.signal,
             });
@@ -399,8 +399,8 @@ RÈGLES ABSOLUES:
 3. Vérifie que les modifications sont correctes`,
                 systemPrompt: "Tu es un QA engineer. Vérifie le code de manière rigoureuse.",
                 cwd: p.workspace,
-                allowedTools: ["Read", "Bash", "ListDir"],
-                maxTurns: 10,
+                allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir"],
+                maxTurns: 50,
                 abortSignal: abortController.signal,
             });
             this.addTokens(id, qaResult);
@@ -763,7 +763,7 @@ RÈGLES CRITIQUES POUR LES DOCKERFILE:
 - Pour les api/worker/fullstack: expose le port 3000 ou 8080 en fonction du code`,
             systemPrompt: "Tu es un développeur senior. Crée un scaffold propre avec une arborescence claire (un dossier par service).",
             cwd: p.workspace,
-            allowedTools: ["Write", "Edit", "Bash", "ListDir"],
+            allowedTools: ["write_file", "replace_in_file", "bash", "list_dir"],
             maxTurns: 15,
             abortSignal: this.abortControllers.get(id)?.signal,
         });
@@ -900,7 +900,7 @@ Instructions:
 5. NE modifie pas le Dockerfile sauf si absolument nécessaire`,
                 systemPrompt: devSystemPrompt,
                 cwd: p.workspace,
-                allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
+                allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir"],
                 maxTurns: 12,
                 abortSignal: this.abortControllers.get(id)?.signal,
             });
@@ -999,19 +999,19 @@ Instructions:
 
         const debugResult = await runClaudeAgent({
             model: p.model,
-            prompt: `Le build Docker a échoué pour le service ${appName}.Voici les logs d'erreur:
+            prompt: `Tu dois implémenter ces directives d'architecture:
 
-${errorLogs}
+${p.description}
 
-                            Instructions:
-                            1. Analyse les erreurs
-                            2. Corrige les fichiers problématiques
-                            3. Assure - toi que les Dockerfiles et le code sont corrects
-                            4. Le build doit passer après ta correction`,
+Règles:
+1. Utilise read_file pour vérifier le code généré
+2. Utilise bash pour installer les dépendances (npm, pip)
+3. Utilise write_file/replace_in_file pour corriger les bugs
+4. Ne sors que si c'est parfait`,
             systemPrompt: "Tu es un debugger expert. Analyse les erreurs de build et corrige-les de manière ciblée.",
             cwd: p.workspace,
-            allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
-            maxTurns: 5,
+            allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir", "web_search", "fetch_url"],
+            maxTurns: 150,
             abortSignal: this.abortControllers.get(id)?.signal,
         });
 
