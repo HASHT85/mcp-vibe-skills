@@ -76,6 +76,7 @@ export type Pipeline = {
     agents: PipelineAgent[];
     events: PipelineEvent[];
     workspace: string;         // /workspace/<id>
+    model?: string;
     github?: {
         owner: string;
         repo: string;
@@ -153,7 +154,7 @@ export class Orchestrator extends EventEmitter {
 
     // ─── Pipeline Management ───
 
-    async launchIdea(description: string, name?: string, files?: { base64: string; type: string }[]): Promise<Pipeline> {
+    async launchIdea(description: string, name?: string, model?: string, files?: { base64: string; type: string }[]): Promise<Pipeline> {
         const id = crypto.randomUUID().slice(0, 8);
         const projectName = name || this.slugify(description);
         const workspace = path.join(WORKSPACE_ROOT, id);
@@ -164,6 +165,7 @@ export class Orchestrator extends EventEmitter {
             id,
             name: projectName,
             description,
+            model,
             phase: "QUEUED",
             progress: 0,
             services: [],
@@ -259,8 +261,9 @@ export class Orchestrator extends EventEmitter {
 
     // ─── Modify Existing Pipeline ───
 
-    async modifyPipeline(id: string, instructions: string, files?: { base64: string; type: string }[]): Promise<Pipeline | null> {
+    async modifyPipeline(id: string, instructions: string, model?: string, files?: { base64: string; type: string }[]): Promise<Pipeline | null> {
         const p = this.pipelines.get(id);
+        if (p && model) p.model = model;
         if (!p) return null;
         if (this.running.has(id)) throw new Error("Pipeline is already running");
         if (!["COMPLETED", "FAILED"].includes(p.phase)) {
@@ -322,6 +325,7 @@ export class Orchestrator extends EventEmitter {
 
             // Run developer agent with modification instructions
             const result = await runClaudeAgent({
+                model: p.model,
                 prompt: `Tu as un projet existant à modifier. Voici les instructions:
 
 ${instructions}
@@ -386,6 +390,7 @@ RÈGLES ABSOLUES:
             this.setAgentStatus(id, "QA", "active", "Vérification post-modification...");
 
             const qaResult = await runClaudeAgent({
+                model: p.model,
                 prompt: `Vérifie que le projet fonctionne correctement après les modifications:
 "${instructions}"
 
@@ -513,6 +518,7 @@ RÈGLES ABSOLUES:
         const p = this.pipelines.get(id)!;
 
         const result = await runClaudeAgent({
+            model: p.model,
             prompt: `Analyse cette idée de projet et crée un document PRD (Product Requirements Document) concis.
 
 Idée: "${p.description}"
@@ -613,6 +619,7 @@ SI le projet est simple, tu PEUX ne lister qu'un seul service dans le tableau.`,
             : "";
 
         const result = await runClaudeAgent({
+            model: p.model,
             prompt: `Conçois l'architecture technique multi-services pour ce projet.
 
 PRD: ${JSON.stringify(analysis, null, 2)}
@@ -739,6 +746,7 @@ Réponds en JSON:
         }).join("\n\n---\n\n");
 
         const result = await runClaudeAgent({
+            model: p.model,
             prompt: `Crée le scaffold initial de ce projet multi-services dans le répertoire courant.
 
 Types de services à créer: ${p.services.map(s => s.type).join(', ')}
@@ -877,6 +885,7 @@ RÈGLES CRITIQUES POUR LES DOCKERFILE:
             const devSystemPrompt = "Tu es un développeur senior fullstack. Écris du code propre et fonctionnel pour implémenter la feature demandée. Gère proprement le code pour les différents services.";
 
             const result = await runClaudeAgent({
+                model: p.model,
                 prompt: `Implémente cette feature dans le projet existant (services: ${projectTypes}):
 
 Feature: "${feature}"
@@ -989,6 +998,7 @@ Instructions:
         const p = this.pipelines.get(id)!;
 
         const debugResult = await runClaudeAgent({
+            model: p.model,
             prompt: `Le build Docker a échoué pour le service ${appName}.Voici les logs d'erreur:
 
 ${errorLogs}
@@ -1021,6 +1031,7 @@ ${errorLogs}
         const p = this.pipelines.get(id)!;
 
         const result = await runClaudeAgent({
+            model: p.model,
             prompt: `Fais un review complet du projet:
 
                             1. Vérifie que le code compile sans erreur
@@ -1489,6 +1500,7 @@ Corrige le problème pour que le serveur (et le bot) démarre(nt) correctement s
                 this.setAgentStatus(id, "Developer", "active", "Auto-Correction en cours...");
 
                 const result = await runClaudeAgent({
+                    model: p.model,
                     prompt: `Tu as un projet existant à modifier pour corriger un crash en prod. (Tentative ${attempt} / ${maxFixRetries})
 Voici le problème:
                         ${instructions}

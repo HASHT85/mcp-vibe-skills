@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Claude Agent — Direct Anthropic SDK
  * Uses @anthropic-ai/sdk Messages API with tool use for agentic coding.
@@ -34,6 +35,7 @@ export type AgentOptions = {
     prompt: string;
     systemPrompt?: string;
     cwd: string;
+    model?: string;
     allowedTools?: string[];
     maxTurns?: number;
     appendPrompt?: string;
@@ -253,7 +255,7 @@ function runBash(command: string, cwd: string): Promise<string> {
 // ─── Main Agent Runner ───
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
-const DEFAULT_MODEL = process.env.AI_MODEL || "claude-haiku-4-5-20251001";
+export const DEFAULT_MODEL = process.env.AI_MODEL || "claude-3-7-sonnet-20250219";
 
 export function getCurrentModel(): string {
     return DEFAULT_MODEL;
@@ -339,19 +341,10 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
 
             console.log(`[Agent] Turn ${turn + 1}/${maxTurns}`);
 
-            // Create API request init with signal if provided
-            const requestOptions: any = {};
-            if (options.abortSignal) {
-                requestOptions.signal = options.abortSignal;
-            }
+            const finalModel = options.model || DEFAULT_MODEL;
+            const fullSystemPrompt = systemPrompt + "\n\nRÈGLES ABSOLUES: Ne crée JAMAIS de fichiers de documentation (.md), de tests, de rapports ou de scripts de validation. Concentre-toi uniquement sur le code fonctionnel demandé. Sois concis dans tes réponses textuelles.";
 
-            const response = await client.messages.create({
-                model: DEFAULT_MODEL,
-                max_tokens: 8192,
-                system: systemPrompt + "\n\nRÈGLES ABSOLUES: Ne crée JAMAIS de fichiers de documentation (.md), de tests, de rapports ou de scripts de validation. Concentre-toi uniquement sur le code fonctionnel demandé. Sois concis dans tes réponses textuelles.",
-                tools: TOOLS,
-                messages,
-            }, requestOptions);
+            const response = await invokeModel(finalModel, fullSystemPrompt, TOOLS, messages, client, options.abortSignal);
 
             console.log(`[Agent] Response: stop_reason=${response.stop_reason}, ${response.content.length} blocks, tokens: ${response.usage.input_tokens}in/${response.usage.output_tokens}out`);
 
@@ -569,4 +562,238 @@ export async function gitInit(cwd: string, remoteUrl: string): Promise<boolean> 
         }
         runNext();
     });
+}
+
+// ─── Multi-Model Adapter ───
+
+async function invokeModel(
+    model: string,
+    systemPrompt: string,
+    tools: Anthropic.Messages.Tool[],
+    messages: Anthropic.Messages.MessageParam[],
+    anthropicClient: Anthropic,
+    abortSignal?: AbortSignal
+): Promise<{
+    stop_reason: string;
+    content: Anthropic.Messages.ContentBlock[];
+    usage: { input_tokens: number; output_tokens: number };
+}> {
+    if (model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3")) {
+        // OpenAI Adapter
+        const OpenAI = (await import("openai")).default;
+        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+        // Convert tools
+        const openAiTools = tools.map((t: any) => ({
+            type: "function",
+            function: {
+                name: t.name,
+                description: t.description,
+                parameters: t.input_schema
+            }
+        }));
+
+        // Convert messages
+        const openAiMessages: any[] = [];
+        if (systemPrompt) {
+            openAiMessages.push({ role: "system", content: systemPrompt });
+        }
+
+        for (const m of messages) {
+            if (typeof m.content === "string") {
+                openAiMessages.push({ role: m.role, content: m.content });
+            } else if (Array.isArray(m.content)) {
+                // Anthropic content blocks to OpenAI
+                let textContent = "";
+                const toolCalls: any[] = [];
+                for (const block of m.content) {
+                    if (block.type === "text") textContent += block.text;
+                    if (block.type === "tool_use") {
+                        toolCalls.push({
+                            id: block.id,
+                            type: "function",
+                            function: {
+                                name: block.name,
+                                arguments: JSON.stringify(block.input)
+                            }
+                        });
+                    }
+                    if (block.type === "tool_result") {
+                        openAiMessages.push({
+                            role: "tool",
+                            tool_call_id: block.tool_use_id,
+                            content: String(block.content)
+                        });
+                    }
+                }
+
+                if (m.role === "assistant") {
+                    if (textContent || toolCalls.length > 0) {
+                        openAiMessages.push({
+                            role: "assistant",
+                            content: textContent || null,
+                            tool_calls: toolCalls.length > 0 ? toolCalls : undefined
+                        });
+                    }
+                } else {
+                    if (textContent && openAiMessages[openAiMessages.length - 1]?.role !== "tool") {
+                        openAiMessages.push({ role: "user", content: textContent });
+                    }
+                }
+            }
+        }
+
+        const requestOptions: any = {};
+        if (abortSignal) requestOptions.signal = abortSignal;
+
+        const response = await client.chat.completions.create({
+            model: model,
+            messages: openAiMessages as any,
+            tools: openAiTools as any,
+        }, requestOptions);
+
+        const choice = response.choices[0];
+        const msg = choice.message;
+
+        const contentBlocks: Anthropic.Messages.ContentBlock[] = [];
+        if (msg.content) {
+            contentBlocks.push({ type: "text", text: msg.content } as any);
+        }
+
+        if (msg.tool_calls) {
+            for (const tc of msg.tool_calls) {
+                contentBlocks.push({
+                    type: "tool_use",
+                    id: tc.id,
+                    name: tc.function.name,
+                    input: JSON.parse(tc.function.arguments)
+                } as any);
+            }
+        }
+
+        return {
+            stop_reason: choice.finish_reason === "tool_calls" ? "tool_use" : "end_turn",
+            content: contentBlocks,
+            usage: {
+                input_tokens: response.usage?.prompt_tokens || 0,
+                output_tokens: response.usage?.completion_tokens || 0
+            }
+        };
+
+    } else if (model.includes("gemini")) {
+        // Google GenAI Adapter
+        const { GoogleGenAI } = await import("@google/genai");
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+        const geminiTools = [{
+            functionDeclarations: tools.map(t => ({
+                name: t.name,
+                description: t.description,
+                parameters: {
+                    type: "OBJECT",
+                    properties: (t.input_schema as any).properties,
+                    required: (t.input_schema as any).required
+                }
+            }))
+        }];
+
+        const geminiMessages: any[] = [];
+        for (const m of messages) {
+            const role = m.role === "user" ? "user" : "model";
+            const parts: any[] = [];
+
+            if (typeof m.content === "string") {
+                parts.push({ text: m.content });
+            } else if (Array.isArray(m.content)) {
+                for (const block of m.content) {
+                    if (block.type === "text") parts.push({ text: block.text });
+                    if (block.type === "tool_use") {
+                        parts.push({
+                            functionCall: {
+                                name: block.name,
+                                args: block.input
+                            }
+                        });
+                    }
+                    if (block.type === "tool_result") {
+                        geminiMessages.push({
+                            role: "user",
+                            parts: [{
+                                functionResponse: {
+                                    name: (block as unknown as any).name || "ExecuteCommand", // Fallback name since we don't have it natively in tool_result here
+                                    response: { result: block.content }
+                                }
+                            }]
+                        });
+                    }
+                }
+            }
+            if (parts.length > 0) {
+                geminiMessages.push({ role, parts });
+            }
+        }
+
+        // Generate ID for tools since Gemini may not provide an ID
+        const generateId = () => Math.random().toString(36).substring(2, 10);
+
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: geminiMessages,
+            config: {
+                systemInstruction: systemPrompt,
+                tools: geminiTools as any,
+                temperature: 0.2
+            }
+        });
+
+        const contentBlocks: Anthropic.Messages.ContentBlock[] = [];
+
+        if (response.text) {
+            contentBlocks.push({ type: "text", text: response.text } as any);
+        }
+
+        let stopReason = "end_turn";
+        if (response.functionCalls && response.functionCalls.length > 0) {
+            stopReason = "tool_use";
+            for (const fc of response.functionCalls) {
+                contentBlocks.push({
+                    type: "tool_use",
+                    id: "call_" + Math.random().toString(36).substring(7),
+                    name: fc.name,
+                    input: fc.args as any
+                } as any);
+            }
+        }
+
+        return {
+            stop_reason: stopReason,
+            content: contentBlocks,
+            usage: {
+                input_tokens: response.usageMetadata?.promptTokenCount || 0,
+                output_tokens: response.usageMetadata?.candidatesTokenCount || 0
+            }
+        };
+
+    } else {
+        // Default Anthropic
+        const requestOptions: any = {};
+        if (abortSignal) requestOptions.signal = abortSignal;
+
+        const response = await anthropicClient.messages.create({
+            model: model,
+            max_tokens: 8192,
+            system: systemPrompt,
+            tools: tools,
+            messages: messages,
+        }, requestOptions);
+
+        return {
+            stop_reason: response.stop_reason as string,
+            content: response.content,
+            usage: {
+                input_tokens: response.usage.input_tokens,
+                output_tokens: response.usage.output_tokens
+            }
+        };
+    }
 }

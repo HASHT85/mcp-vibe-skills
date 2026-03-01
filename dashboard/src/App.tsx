@@ -13,6 +13,18 @@ import {
 import type { Pipeline, PipelineEvent, PipelineAgent } from './api/client';
 import './index.css';
 
+const MODEL_OPTIONS = [
+  { value: '', label: '🤖 Auto (Défaut - Claude 3.7 Sonnet)' },
+  { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet' },
+  { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
+  { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
+  { value: 'gpt-4o', label: 'GPT-4o (OpenAI)' },
+  { value: 'o1', label: 'o1 (OpenAI)' },
+  { value: 'o3-mini', label: 'o3-mini (OpenAI)' },
+  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+  { value: 'gemini-3.0-pro', label: 'Gemini 3.0 Pro' }
+];
+
 // ─── App ───
 
 export default function App() {
@@ -162,8 +174,8 @@ function Dashboard() {
         {showModal && (
           <LaunchModal
             onClose={() => setShowModal(false)}
-            onLaunch={async (desc, name, files) => {
-              await launchIdea(desc, name, files);
+            onLaunch={async (desc, name, model, files) => {
+              await launchIdea(desc, name, model, files);
               setShowModal(false);
               load();
             }}
@@ -316,6 +328,7 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
 }) {
   const [showModify, setShowModify] = useState(false);
   const [modifyText, setModifyText] = useState('');
+  const [modifyModel, setModifyModel] = useState('');
   const [files, setFiles] = useState<{ name: string; type: string; data: string; size: number; error?: string; thumbnail?: string }[]>([]);
   const [modifying, setModifying] = useState(false);
 
@@ -345,9 +358,10 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
         .filter(f => !f.error && f.data)
         .map(f => ({ base64: f.data, type: f.type }));
 
-      await modifyPipeline(p.id, modifyText.trim(), validFiles.length > 0 ? validFiles : undefined);
+      await modifyPipeline(p.id, modifyText.trim(), modifyModel || undefined, validFiles.length > 0 ? validFiles : undefined);
       setShowModify(false);
       setModifyText('');
+      setModifyModel('');
       setFiles([]);
       onRefresh();
     } catch (err: any) {
@@ -525,13 +539,24 @@ function ProjectDetail({ pipeline: p, onBack, onRefresh }: {
               </p>
               <textarea
                 autoFocus
-                rows={6}
+                rows={4}
                 placeholder="Ex: Change le titre en 'Mon Portfolio', OU (si Worker Analytics): Ajoute l'import de Pandas pour nettoyer le CSV... (Ctrl+V pour coller une image)"
                 value={modifyText}
                 onChange={(e) => setModifyText(e.target.value)}
                 onPaste={handlePaste}
                 className="modify-textarea"
+                style={{ marginBottom: '12px' }}
               />
+              <select
+                className="login-input"
+                value={modifyModel}
+                onChange={(e) => setModifyModel(e.target.value)}
+                style={{ marginBottom: '16px', width: '100%', cursor: 'pointer', padding: '12px', background: 'var(--bg-layer-2)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: '8px' }}
+              >
+                {MODEL_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
 
               {files.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
@@ -861,10 +886,11 @@ function LiveActivityPanel({ events, pipelines }: { events: PipelineEvent[]; pip
 
 function LaunchModal({ onClose, onLaunch }: {
   onClose: () => void;
-  onLaunch: (desc: string, name?: string, files?: { base64: string; type: string }[]) => void;
+  onLaunch: (desc: string, name?: string, model?: string, files?: { base64: string; type: string }[]) => void;
 }) {
   const [desc, setDesc] = useState('');
   const [name, setName] = useState('');
+  const [model, setModel] = useState('');
   const [files, setFiles] = useState<{ name: string; type: string; data: string; size: number; error?: string; thumbnail?: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -923,7 +949,7 @@ function LaunchModal({ onClose, onLaunch }: {
     setLoading(true);
     try {
       const validFiles = files.filter(f => !f.error).map(f => ({ base64: f.data, type: f.type }));
-      await onLaunch(desc.trim(), name.trim() || undefined, validFiles.length > 0 ? validFiles : undefined);
+      await onLaunch(desc.trim(), name.trim() || undefined, model || undefined, validFiles.length > 0 ? validFiles : undefined);
     } finally {
       setLoading(false);
     }
@@ -953,6 +979,16 @@ function LaunchModal({ onClose, onLaunch }: {
           onChange={(e: any) => setName(e.target.value)}
           style={{ marginBottom: '12px', width: '100%' }}
         />
+        <select
+          className="login-input"
+          value={model}
+          onChange={(e: any) => setModel(e.target.value)}
+          style={{ marginBottom: '12px', width: '100%', cursor: 'pointer', padding: '12px', background: 'var(--bg-layer-2)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: '8px' }}
+        >
+          {MODEL_OPTIONS.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
         <textarea
           placeholder="Ex: Un dashboard React analytique, OU un Bot Python autonome pour scraper des annonces Web 24/7... (Vous pouvez aussi coller une image Ctrl+V)"
           value={desc}

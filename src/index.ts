@@ -77,13 +77,14 @@ app.post("/pipeline/launch", async (req: Request, res: Response) => {
     try {
         const description = String(req.body?.description ?? "").trim();
         const name = req.body?.name ? String(req.body.name).trim() : undefined;
+        const model = req.body?.model ? String(req.body.model).trim() : undefined;
         const files = req.body?.files as { base64: string; type: string }[] | undefined;
 
         if (!description) {
             return res.status(400).json({ error: "missing_description" });
         }
 
-        const pipeline = await orchestrator.launchIdea(description, name, files);
+        const pipeline = await orchestrator.launchIdea(description, name, model, files);
         res.json({ pipeline });
     } catch (err: any) {
         console.error("Pipeline launch error:", err);
@@ -190,12 +191,13 @@ app.delete("/pipeline/:id", async (req: Request, res: Response) => {
 app.post("/pipeline/:id/modify", async (req: Request, res: Response) => {
     try {
         const instructions = String(req.body?.instructions ?? "").trim();
+        const model = req.body?.model ? String(req.body.model).trim() : undefined;
         const files = req.body?.files as { base64: string; type: string }[] | undefined;
 
         if (!instructions && (!files || files.length === 0)) {
             return res.status(400).json({ error: "instructions_or_files_required" });
         }
-        const pipeline = await orchestrator.modifyPipeline(req.params.id, instructions, files);
+        const pipeline = await orchestrator.modifyPipeline(req.params.id, instructions, model, files);
         if (!pipeline) {
             return res.status(404).json({ error: "pipeline_not_found" });
         }
