@@ -31,6 +31,8 @@ export interface CreateApplicationInput {
     branch?: string;
     description?: string;
     env?: string;
+    buildPath?: string;
+    repository?: string;
     sourceType?: "git" | "github" | "gitlab" | "bitbucket" | "docker";
 };
 
