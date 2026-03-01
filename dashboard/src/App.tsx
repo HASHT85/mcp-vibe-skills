@@ -756,7 +756,7 @@ function TokensView({ pipelines }: { pipelines: Pipeline[] }) {
           <div className="token-card-value">{formatTokenCount(totalOutput)}</div>
         </div>
         <div className="token-card highlight">
-          <div className="token-card-label">Coût estimé (Haiku 4.5)</div>
+          <div className="token-card-label">Estimation (Moyenne)</div>
           <div className="token-card-value">${estimatedCost.toFixed(4)}</div>
         </div>
       </div>
