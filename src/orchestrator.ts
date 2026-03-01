@@ -309,11 +309,94 @@ export class Orchestrator extends EventEmitter {
         const p = this.pipelines.get(id)!;
 
         try {
+            // 1. Analyst Phase: Classification & Planning
+            this.setPhase(id, "ANALYSIS");
+            this.addEvent(id, "Analyst", "🧠", "Analyse de la demande de modification...", "info");
+            this.setAgentStatus(id, "Analyst", "active", "Analyse de la modification...");
+
+            const analystResult = await runClaudeAgent({
+                model: p.model,
+                prompt: `Un utilisateur veut modifier ce projet existant.
+Voici ses instructions :
+"${instructions}"
+
+Analyse la demande et retourne UNIQUEMENT un objet JSON valide avec ce format :
+{
+  "type": "structural" | "bugfix",
+  "plan": "Instructions étape par étape claires pour le développeur. Ex: 1. Modifier le fichier X... 2. Créer Y..."
+}
+
+"structural" : Ajout de micro-services, changement de framework, nouvelle base de données, restructuration majeure.
+"bugfix" : Correction de bug, petite feature, modification UI, refacto de code existant.`,
+                systemPrompt: "Tu es un Analyste IA. Tu ne réponds que par un objet JSON valide, sans bloc de markdown ni texte autour.",
+                cwd: p.workspace,
+                allowedTools: ["list_dir", "read_file", "bash"],
+                maxTurns: 10,
+                timeoutMs: 5 * 60 * 1000,
+                abortSignal: this.abortControllers.get(id)?.signal,
+            });
+
+            this.addTokens(id, analystResult);
+            if (!analystResult.success) {
+                this.addEvent(id, "Analyst", "⚠️", `Erreur d'analyse: ${analystResult.error}`, "warning");
+                throw new Error("Analyst failed");
+            }
+
+            let modType = "bugfix";
+            let modPlan = instructions;
+            try {
+                const jsonMatch = analystResult.output.match(/\{[\s\S]*?\}/);
+                if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    modType = parsed.type === "structural" ? "structural" : "bugfix";
+                    if (parsed.plan) modPlan = parsed.plan;
+                    this.addEvent(id, "Analyst", "🧠", `Type identifié: ${modType}. Plan généré.`, "success");
+                }
+            } catch (e) {
+                this.addEvent(id, "Analyst", "⚠️", "Impossible de parser l'analyse, mode bugfix par défaut.", "warning");
+            }
+            this.setAgentStatus(id, "Analyst", "done");
+
+            // 2. Architect Phase (only if structural)
+            if (modType === "structural") {
+                this.setPhase(id, "ARCHITECTURE");
+                this.setAgentStatus(id, "Architect", "active", "Restructuration (Architecture)...");
+                const archResult = await runClaudeAgent({
+                    model: p.model,
+                    prompt: `L'utilisateur a demandé une modification structurelle majeure : "${instructions}".
+Le plan de l'Analyste est :
+${modPlan}
+
+Exécute les commandes ou crée les fichiers nécessaires (nouveaux dossiers, docker-compose.yml mis à jour, nouveaux Dockerfile).
+N'ÉCRASE PAS les fichiers de code logique existants. Contente-toi du Scaffolding pour préparer le terrain au développeur.
+Ne boucle pas indéfiniment. Arrête-toi dès que le Scaffolding est prêt.`,
+                    systemPrompt: "Tu es l'Architecte. Structure le projet en suivant le plan. Utilise write_file ou bash (npx, pip) pour le Scaffolding.",
+                    cwd: p.workspace,
+                    allowedTools: ["bash", "list_dir", "read_file", "write_file"],
+                    maxTurns: 20,
+                    timeoutMs: 8 * 60 * 1000,
+                    abortSignal: this.abortControllers.get(id)?.signal,
+                });
+
+                this.addTokens(id, archResult);
+                if (!archResult.success) {
+                    this.addEvent(id, "Architect", "⚠️", `Erreur architecture: ${archResult.error}`, "warning");
+                    if (p.github) {
+                        const { execSync } = await import("node:child_process");
+                        try { execSync("git reset --hard && git clean -fd", { cwd: p.workspace }); } catch { }
+                    }
+                    throw new Error("Architect failed");
+                }
+                this.addEvent(id, "Architect", "🏗️", "Scaffolding structurel terminé.", "success");
+                this.setAgentStatus(id, "Architect", "done");
+            }
+
+            // 3. Developer Phase
             this.setPhase(id, "DEVELOPMENT");
             this.setAgentStatus(id, "Developer", "active", "Modification en cours...");
 
-            // Clone the repo if workspace doesn't exist (container was rebuilt)
             if (p.github) {
+                const { promises: fs } = await import("node:fs");
                 const workspaceExists = await fs.access(p.workspace).then(() => true).catch(() => false);
                 if (!workspaceExists) {
                     this.addEvent(id, "Developer", "💻", "Re-clonage du workspace...", "info");
@@ -324,26 +407,26 @@ export class Orchestrator extends EventEmitter {
                 }
             }
 
-            // Run developer agent with modification instructions
+            // Run developer agent with modification plan
             const result = await runClaudeAgent({
                 model: p.model,
-                prompt: `Tu as un projet existant à modifier. Voici les instructions:
+                prompt: `Tu dois implémenter ces modifications dans le projet :
+Demande originale: "${instructions}"
 
-${instructions}
+PLAN D'EXÉCUTION DE L'ANALYSTE :
+${modPlan}
 
 PROCESSUS OBLIGATOIRE - respecte cet ordre:
-1. Utilise list_dir sur ".": liste tous les fichiers du projet
-2. Utilise read_file sur les fichiers clés pour COMPRENDRE le code actuel
-3. IDENTIFIE le bug potentiel
-4. SI tu trouves un bug, UTILISE write_file ou replace_in_file pour le corriger
-5. SI LE CODE EST DÉJÀ PARFAIT et ne nécessite AUCUNE correction (car il a déjà été corrigé), STOPPE IMMÉDIATEMENT tes recherches, réponds en texte que tout est bon, et termine le tour sans rien écrire.
+1. Utilise list_dir sur ".": liste tous les fichiers
+2. Utilise read_file sur les fichiers clés pour COMPRENDRE le code
+3. UTILISE write_file ou replace_in_file pour appliquer le PLAN D'EXÉCUTION
+4. SI tous les points du PLAN sont DÉJÀ complétés, STOPPE IMMÉDIATEMENT tes recherches et réponds en texte que tout est fait.
 
 RÈGLES ABSOLUES:
-- Ne boucle pas indéfiniment. Si tu as vérifié les fichiers pertinents et trouvé la solution (ou vu que c'est déjà fixé), arrête-toi.
-- Si tu modifies du code, utilise write_file ou replace_in_file.
-- Vérifie que tous les packages importés sont dans requirements.txt`,
+- Ne boucle pas indéfiniment. Si tu as implémenté le PLAN, arrête-toi.
+- Vérifie que tous les packages importés sont dans le requirements.txt ou package.json du service ciblé.`,
                 attachedFiles: files,
-                systemPrompt: "Tu es un développeur senior. Ton but est de corriger la demande précise. Si le code répond DÉJÀ à la demande (bug déjà corrigé), dis-le dans un message texte et ARRÊTE tes recherches pour ne pas perdre de temps.",
+                systemPrompt: "Tu es un développeur senior. Ton but est de suivre le PLAN D'EXÉCUTION généré par l'Analyste et de l'implémenter exactement. Tu dois modifier ou écrire les fichiers demandés, et arrêter dès que le plan est entièrement implémenté.",
                 cwd: p.workspace,
                 allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir"],
                 maxTurns: 150,
