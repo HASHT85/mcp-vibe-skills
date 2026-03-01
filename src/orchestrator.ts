@@ -346,7 +346,7 @@ RÈGLES ABSOLUES:
                 systemPrompt: "Tu es un développeur senior. Tu DOIS écrire des fichiers avec Write. Lire sans écrire = tâche échouée. Si tu vois un bug tu dois le corriger en écrivant le fichier fixé.",
                 cwd: p.workspace,
                 allowedTools: ["Read", "Write", "Edit", "Bash", "ListDir"],
-                maxTurns: 20,
+                maxTurns: 60,
                 timeoutMs: 15 * 60 * 1000,
                 abortSignal: this.abortControllers.get(id)?.signal,
             });

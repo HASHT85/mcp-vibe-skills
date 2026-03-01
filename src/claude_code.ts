@@ -264,7 +264,7 @@ export function getCurrentModel(): string {
 export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult> {
     const startTime = Date.now();
     const actions: AgentAction[] = [];
-    const maxTurns = options.maxTurns || 10;
+    const maxTurns = options.maxTurns || 150;
     const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
 
     // Pre-flight check
@@ -281,7 +281,7 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
     }
 
     console.log(`[Agent] Starting in ${options.cwd}`);
-    console.log(`[Agent] Model: ${DEFAULT_MODEL}, Max turns: ${maxTurns}, Timeout: ${timeoutMs / 1000}s`);
+    console.log(`[Agent] Model: ${DEFAULT_MODEL}, Max turns: unbounded, Timeout: ${timeoutMs / 1000}s`);
 
     const client = new Anthropic();
     let totalInputTokens = 0;
@@ -339,7 +339,7 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
                 break;
             }
 
-            console.log(`[Agent] Turn ${turn + 1}/${maxTurns}`);
+            console.log(`[Agent] Turn ${turn + 1}`);
 
             const finalModel = options.model || DEFAULT_MODEL;
             const fullSystemPrompt = systemPrompt + "\n\nRÈGLES ABSOLUES: Ne crée JAMAIS de fichiers de documentation (.md), de tests, de rapports ou de scripts de validation. Concentre-toi uniquement sur le code fonctionnel demandé. Sois concis dans tes réponses textuelles.";
