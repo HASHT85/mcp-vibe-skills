@@ -255,7 +255,7 @@ function runBash(command: string, cwd: string): Promise<string> {
 // ─── Main Agent Runner ───
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
-export const DEFAULT_MODEL = process.env.AI_MODEL || "claude-3-5-sonnet-20241022";
+export const DEFAULT_MODEL = process.env.AI_MODEL || "claude-4-6-sonnet";
 
 export function getCurrentModel(): string {
     return DEFAULT_MODEL;
@@ -578,11 +578,7 @@ export async function invokeModel(
     content: Anthropic.Messages.ContentBlock[];
     usage: { input_tokens: number; output_tokens: number };
 }> {
-    // Intercept user-friendly aliases and map them to real API identifiers
-    if (model === 'claude-4-5-haiku') model = 'claude-3-5-haiku-20241022';
-    if (model === 'claude-4-6-opus') model = 'claude-3-opus-20240229';
-    if (model === 'claude-4-6-sonnet' || model === 'claude-3-7-sonnet-20250219') model = 'claude-3-5-sonnet-20241022';
-    if (model === 'gemini-3.1-pro') model = 'gemini-exp-1206';
+    // Pass the exact model string from the UI directly to the underlying proxy/client
 
     if (model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3")) {
         // OpenAI Adapter
