@@ -579,9 +579,9 @@ export async function invokeModel(
     usage: { input_tokens: number; output_tokens: number };
 }> {
     // Intercept user-friendly aliases and map them to real API identifiers
-    if (model === 'claude-4-5-haiku') model = 'claude-3-5-haiku-20241022';
+    if (model === 'claude-4-5-haiku') model = 'claude-3-haiku-20240307'; // Fallback to 3 Haiku if 3.5 Haiku is not available
     if (model === 'claude-4-6-opus') model = 'claude-3-opus-20240229';
-    if (model === 'claude-4-6-sonnet' || model === 'claude-3-7-sonnet-20250219') model = 'claude-3-5-sonnet-20241022'; // fallback to 3.5 since 3.7 is generating 404 on this tier
+    if (model === 'claude-4-6-sonnet' || model === 'claude-3-7-sonnet-20250219' || model === 'claude-3-5-sonnet-20241022') model = 'claude-3-5-sonnet-20240620'; // fallback to older 3.5 since 3.7 and new 3.5 are generating 404 on this tier
     if (model === 'gemini-3.1-pro') model = 'gemini-exp-1206'; // fallback to experimental model if 3.1 is not officially rolled out natively yet
 
     if (model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3")) {
