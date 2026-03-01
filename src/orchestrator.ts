@@ -420,6 +420,13 @@ RÈGLES ABSOLUES:
                     const pushed = await gitPush(p.workspace, `fix: QA auto-corrections applied`, authUrl);
                     if (pushed) {
                         this.addEvent(id, "QA", "💻", "Push → correctifs QA appliqués", "success");
+                        // Trigger Dokploy deploy + wait for it to finish before verifyAndAutoFix
+                        if (p.dokploy?.apps) {
+                            for (const app of p.dokploy.apps) {
+                                try { await triggerDeploy(app.applicationId); } catch { /* ignore */ }
+                            }
+                            await this.waitForBuild(id);
+                        }
                     } else {
                         this.addEvent(id, "QA", "⚠️", "Push QA échoué", "warning");
                     }

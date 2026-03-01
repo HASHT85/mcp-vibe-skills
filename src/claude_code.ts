@@ -142,6 +142,12 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
             case "read_file": {
                 const filePath = path.resolve(cwd, input.path);
                 const content = await fs.readFile(filePath, "utf-8");
+                const lines = content.split("\n");
+                const MAX_LINES = 200;
+                if (lines.length > MAX_LINES) {
+                    const chunk = lines.slice(0, MAX_LINES).join("\n");
+                    return `${chunk}\n\n[⚠️ FILE TRUNCATED: ${lines.length} total lines, showing first ${MAX_LINES}. Use bash with sed to read specific line ranges: sed -n '201,400p' ${input.path}]`;
+                }
                 return content;
             }
             case "write_file": {
