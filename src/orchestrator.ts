@@ -332,18 +332,17 @@ ${instructions}
 
 PROCESSUS OBLIGATOIRE - respecte cet ordre:
 1. Utilise list_dir sur ".": liste tous les fichiers du projet
-2. Utilise read_file sur les fichiers clés (main.py, server.py, requirements.txt, package.json, etc.)
-3. IDENTIFIE ce qui doit changer
-4. UTILISE write_file ou replace_in_file pour sauvegarder chaque fichier modifié (OBLIGATOIRE - sinon la tâche est un échec)
-5. Confirme la liste des fichiers écrits
+2. Utilise read_file sur les fichiers clés pour COMPRENDRE le code actuel
+3. IDENTIFIE le bug potentiel
+4. SI tu trouves un bug, UTILISE write_file ou replace_in_file pour le corriger
+5. SI LE CODE EST DÉJÀ PARFAIT et ne nécessite AUCUNE correction (car il a déjà été corrigé), STOPPE IMMÉDIATEMENT tes recherches, réponds en texte que tout est bon, et termine le tour sans rien écrire.
 
 RÈGLES ABSOLUES:
-- Tu DOIS utiliser l'outil write_file ou replace_in_file au moins une fois
-- Si tu détectes des imports cassés (ex: from src.xxx import), réécris le fichier entier avec le code corrigé
-- Vérifie que tous les packages importés sont dans requirements.txt
-- 0 fichier écrit = tâche invalide`,
+- Ne boucle pas indéfiniment. Si tu as vérifié les fichiers pertinents et trouvé la solution (ou vu que c'est déjà fixé), arrête-toi.
+- Si tu modifies du code, utilise write_file ou replace_in_file.
+- Vérifie que tous les packages importés sont dans requirements.txt`,
                 attachedFiles: files,
-                systemPrompt: "Tu es un développeur senior. Tu DOIS écrire des fichiers avec write_file ou replace_in_file. Lire sans écrire = tâche échouée. Si tu vois un bug tu dois le corriger en écrivant le fichier fixé.",
+                systemPrompt: "Tu es un développeur senior. Ton but est de corriger la demande précise. Si le code répond DÉJÀ à la demande (bug déjà corrigé), dis-le dans un message texte et ARRÊTE tes recherches pour ne pas perdre de temps.",
                 cwd: p.workspace,
                 allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir"],
                 maxTurns: 150,
@@ -400,7 +399,7 @@ RÈGLES ABSOLUES:
                 systemPrompt: "Tu es un QA engineer. Vérifie le code de manière rigoureuse.",
                 cwd: p.workspace,
                 allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir"],
-                maxTurns: 50,
+                maxTurns: 100,
                 abortSignal: abortController.signal,
             });
             this.addTokens(id, qaResult);
