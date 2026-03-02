@@ -10,6 +10,7 @@ import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { EventEmitter } from "node:events";
+import * as cheerio from "cheerio";
 
 // ─── Types ───
 
@@ -131,6 +132,29 @@ const TOOLS: Anthropic.Messages.Tool[] = [
             },
             required: ["url"],
         },
+    },
+    {
+        name: "read_memory",
+        description: "Read a value from the shared project memory space.",
+        input_schema: {
+            type: "object" as const,
+            properties: {
+                key: { type: "string", description: "The memory key to read" },
+            },
+            required: ["key"],
+        },
+    },
+    {
+        name: "write_memory",
+        description: "Write a value to the shared project memory space so that other agents can see it.",
+        input_schema: {
+            type: "object" as const,
+            properties: {
+                key: { type: "string", description: "The memory key to write" },
+                value: { type: "string", description: "The string value to save" },
+            },
+            required: ["key", "value"],
+        },
     }
 ];
 
@@ -206,25 +230,34 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
             }
             case "web_search": {
                 try {
-                    // Primitive search parsing DuckDuckGo HTML using standard fetch
+                    // Primitive search parsing DuckDuckGo HTML using cheerio
                     const encodedQuery = encodeURIComponent(input.query);
                     const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodedQuery}`, {
                         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36" }
                     });
                     const html = await res.text();
 
+                    const $ = cheerio.load(html);
                     const results: string[] = [];
-                    // Very basic regex to extract snippet results
-                    const snippetBoxes = html.split('class="result__snippet');
-                    for (let i = 1; i < Math.min(snippetBoxes.length, 6); i++) {
-                        const snippetMatch = snippetBoxes[i].match(/href="([^"]+)">([^<]+)<\/a>/i);
-                        const abstractMatch = snippetBoxes[i].match(/>\s*([^<]+)\s*<\/a>/);
-                        if (snippetMatch) {
-                            results.push(`[${snippetMatch[2]}] URL: ${snippetMatch[1]}`);
+
+                    $('.result').each((i, el) => {
+                        if (i >= 5) return false;
+                        const title = $(el).find('.result__title a').text().trim();
+                        const url = $(el).find('.result__url').attr('href') || $(el).find('a.result__url').attr('href') || $(el).find('.result__a').attr('href');
+                        const snippet = $(el).find('.result__snippet').text().trim();
+
+                        if (title && url) {
+                            // Extract actual URL from DuckDuckGo redirect if needed
+                            let realUrl = url;
+                            if (url.startsWith('//duckduckgo.com/l/?uddg=')) {
+                                realUrl = decodeURIComponent(url.split('uddg=')[1].split('&')[0]);
+                            }
+                            results.push(`[${title}] URL: ${realUrl}\nSnippet: ${snippet}`);
                         }
-                    }
-                    if (results.length === 0) return `No search results found.`;
-                    return `Search Results for "${input.query}":\n\n${results.join('\n')}`;
+                    });
+
+                    if (results.length === 0) return `No search results found. Try alternative keywords or a different language.`;
+                    return `Search Results for "${input.query}":\n\n${results.join('\n\n')}`;
                 } catch (e: any) {
                     return `Search failed: ${e.message}`;
                 }
@@ -232,26 +265,58 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
             case "fetch_url": {
                 try {
                     const res = await fetch(input.url, {
-                        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+                        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
                     });
                     if (!res.ok) return `HTTP Error ${res.status} fetching ${input.url}`;
-                    let text = await res.text();
-                    // Strip HTML tags naively to save tokens
-                    text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-                        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-                        .replace(/<[^>]+>/g, ' ')
-                        .replace(/\s+/g, ' ')
-                        .trim();
-                    return text.slice(0, 8000); // 8k chars max to save tokens
+                    const text = await res.text();
+
+                    const $ = cheerio.load(text);
+                    // Remove useless noisy tags
+                    $('script, style, noscript, svg, nav, footer, header, aside, .sidebar, #sidebar, .ad, .advertisement').remove();
+
+                    // Extract text
+                    let cleanText = $('body').text().replace(/\s+/g, ' ').trim();
+                    if (!cleanText) {
+                        cleanText = $.text().replace(/\s+/g, ' ').trim();
+                    }
+
+                    return cleanText.slice(0, 10000); // 10k chars max to save tokens but read plenty of context
                 } catch (e: any) {
-                    return `Fetch failed: ${e.message}`;
+                    return `Fetch failed: ${e.message} `;
+                }
+            }
+            case "read_memory": {
+                try {
+                    const memPath = path.resolve(cwd, ".vibecraft_memory.json");
+                    let memStr = "{}";
+                    try { memStr = await fs.readFile(memPath, "utf-8"); } catch { }
+                    const mem = JSON.parse(memStr);
+                    if (mem[input.key] !== undefined) {
+                        return String(mem[input.key]);
+                    }
+                    return `Memory key "${input.key}" is empty/undefined.`;
+                } catch (err: any) {
+                    return `Memory read error: ${err.message}`;
+                }
+            }
+            case "write_memory": {
+                try {
+                    const memPath = path.resolve(cwd, ".vibecraft_memory.json");
+                    let memStr = "{}";
+                    try { memStr = await fs.readFile(memPath, "utf-8"); } catch { }
+                    const mem = JSON.parse(memStr);
+                    mem[input.key] = input.value;
+                    await fs.writeFile(memPath, JSON.stringify(mem, null, 2), "utf-8");
+                    return `Saved "${input.key}" to shared memory.`;
+                } catch (err: any) {
+                    return `Memory write error: ${err.message}`;
                 }
             }
             default:
-                return `Unknown tool: ${name}`;
+                return `Unknown tool: ${name} `;
         }
     } catch (err: any) {
-        return `Error: ${err.message}`;
+        return `Error: ${err.message} `;
     }
 }
 
@@ -271,17 +336,17 @@ function runBash(command: string, cwd: string): Promise<string> {
         // Timeout for bash commands: 60s
         const timeout = setTimeout(() => {
             proc.kill("SIGTERM");
-            resolve(`Command timed out after 60s.\nStdout: ${stdout}\nStderr: ${stderr}`);
+            resolve(`Command timed out after 60s.\nStdout: ${stdout} \nStderr: ${stderr} `);
         }, 60000);
 
         proc.on("close", (code) => {
             clearTimeout(timeout);
-            const output = stdout + (stderr ? `\nStderr: ${stderr}` : "");
-            resolve(code === 0 ? output : `Exit code ${code}\n${output}`);
+            const output = stdout + (stderr ? `\nStderr: ${stderr} ` : "");
+            resolve(code === 0 ? output : `Exit code ${code} \n${output} `);
         });
         proc.on("error", (err) => {
             clearTimeout(timeout);
-            resolve(`Spawn error: ${err.message}`);
+            resolve(`Spawn error: ${err.message} `);
         });
     });
 }
@@ -314,9 +379,9 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
         };
     }
 
-    console.log(`[Agent] Starting in ${options.cwd}`);
+    console.log(`[Agent] Starting in ${options.cwd} `);
     const finalModel = options.model || DEFAULT_MODEL;
-    console.log(`[Agent] Model: ${finalModel}, Max turns: unbounded, Timeout: ${timeoutMs / 1000}s`);
+    console.log(`[Agent] Model: ${finalModel}, Max turns: unbounded, Timeout: ${timeoutMs / 1000} s`);
 
     const client = new Anthropic();
     let totalInputTokens = 0;
@@ -346,7 +411,7 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
                         data: file.base64,
                     }
                 });
-                console.log(`[Agent] 📎 Attached Image: ${file.type}`);
+                console.log(`[Agent] 📎 Attached Image: ${file.type} `);
             } else if (file.type === "application/pdf") {
                 initialContent.push({
                     type: "document",
@@ -374,13 +439,13 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
                 break;
             }
 
-            console.log(`[Agent] Turn ${turn + 1}`);
+            console.log(`[Agent] Turn ${turn + 1} `);
 
             const fullSystemPrompt = systemPrompt + "\n\nRÈGLES ABSOLUES: Ne crée JAMAIS de fichiers de documentation (.md), de tests, de rapports ou de scripts de validation. Concentre-toi uniquement sur le code fonctionnel demandé. Sois concis dans tes réponses textuelles.";
 
             const response = await invokeModel(finalModel, fullSystemPrompt, TOOLS, messages, client, options.abortSignal);
 
-            console.log(`[Agent] Response: stop_reason=${response.stop_reason}, ${response.content.length} blocks, tokens: ${response.usage.input_tokens}in/${response.usage.output_tokens}out`);
+            console.log(`[Agent] Response: stop_reason = ${response.stop_reason}, ${response.content.length} blocks, tokens: ${response.usage.input_tokens}in/${response.usage.output_tokens}out`);
 
             totalInputTokens += response.usage.input_tokens;
             totalOutputTokens += response.usage.output_tokens;

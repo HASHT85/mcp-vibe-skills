@@ -1,0 +1,42 @@
+services:
+  orchestrator:
+    build: .
+    container_name: mcp-vibe-skills
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+      - STORE_PATH=/data/store.json
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_OWNER=${GITHUB_OWNER}
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASS=${ADMIN_PASS:-vibe123}
+      - WORKSPACE_ROOT=/workspace
+      - PIPELINES_STORE=/data/pipelines.json
+    volumes:
+      - orchestrator-data:/data
+      - orchestrator-workspace:/workspace
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vibecraft.rule=Host(`vibecraft.hach.dev`)"
+      - "traefik.http.routers.vibecraft.entrypoints=websecure"
+      - "traefik.http.routers.vibecraft.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vibecraft.loadbalancer.server.port=8080"
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  orchestrator-data:
+    driver: local
+  orchestrator-workspace:
+    driver: local
+
+networks:
+  web:
+    external: true

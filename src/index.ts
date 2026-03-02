@@ -8,14 +8,6 @@ import { fetchTrending, searchSkills } from "./skills.js";
 import { fetchSkillDetail } from "./skills_get.js";
 import { PROFILES, getProfile } from "./profiles.js";
 import { TEMPLATES } from "./templates.js";
-import {
-    isDokployConfigured,
-    listDokployProjects,
-    getDokployProject,
-    listDokployApplications,
-    triggerDeploy,
-} from "./dokploy.js";
-
 import { getOrchestrator, type PipelineEvent } from "./orchestrator.js";
 import { getCurrentModel } from "./claude_code.js";
 
@@ -55,8 +47,6 @@ const authMiddleware = (req: Request, res: Response, next: Function) => {
 app.use('/projects', authMiddleware);
 app.use('/pipeline', authMiddleware);
 app.use('/agents', authMiddleware);
-app.use('/dokploy', authMiddleware);
-
 // Initialize Stores
 const agentsStore = new AgentsStore(storePath);
 const projectsStore = new ProjectsStore(storePath);
@@ -239,34 +229,11 @@ app.get("/projects", async (_req: Request, res: Response) => {
                 progress: p.progress,
                 agents: p.agents,
                 github: p.github,
-                dokploy: p.dokploy,
                 createdAt: p.createdAt,
                 type: 'pipeline'
             });
         }
 
-        // 2. Get Dokploy Projects (Deployed, not managed by orchestrator)
-        if (isDokployConfigured()) {
-            try {
-                const dokployProjs = await listDokployProjects();
-                for (const dp of dokployProjs) {
-                    if (!projects.find(p => p.id === dp.projectId || p.name === dp.name)) {
-                        projects.push({
-                            id: dp.projectId,
-                            name: dp.name,
-                            description: dp.description || "Managed by Dokploy",
-                            phase: 'COMPLETED',
-                            progress: 100,
-                            agents: [],
-                            createdAt: dp.createdAt,
-                            type: 'dokploy'
-                        });
-                    }
-                }
-            } catch (e: any) {
-                console.warn("Error fetching Dokploy projects:", e);
-            }
-        }
 
         res.json({ projects });
     } catch (err) {
@@ -288,16 +255,6 @@ app.delete("/projects/:id", async (req: Request, res: Response) => {
                 await deleteRepo(pipeline.github.owner, pipeline.github.repo);
             } catch (err) {
                 console.error("Failed to delete GitHub repo:", err);
-            }
-        }
-
-        // Delete Dokploy project
-        if (pipeline.dokploy?.projectId) {
-            try {
-                const { deleteDokployProject } = await import('./dokploy.js');
-                await deleteDokployProject(pipeline.dokploy.projectId);
-            } catch (err) {
-                console.error("Failed to delete Dokploy project:", err);
             }
         }
 
@@ -431,52 +388,6 @@ app.delete("/agents/:id/skills", async (req: Request, res: Response) => {
     }
 });
 
-// ─────────────────────────────────────
-// Dokploy Integration
-// ─────────────────────────────────────
-
-app.get("/dokploy/status", (_req: Request, res: Response) => {
-    res.json({ configured: isDokployConfigured() });
-});
-
-app.get("/dokploy/projects", async (_req: Request, res: Response) => {
-    try {
-        if (!isDokployConfigured()) {
-            return res.status(503).json({ error: "dokploy_not_configured" });
-        }
-        const projects = await listDokployProjects();
-        res.json({ projects });
-    } catch (e: any) {
-        res.status(500).json({ error: String(e?.message || "dokploy_error") });
-    }
-});
-
-app.get("/dokploy/projects/:id", async (req: Request, res: Response) => {
-    try {
-        if (!isDokployConfigured()) {
-            return res.status(503).json({ error: "dokploy_not_configured" });
-        }
-        const project = await getDokployProject(req.params.id);
-        if (!project) return res.status(404).json({ error: "project_not_found" });
-
-        const applications = await listDokployApplications(req.params.id);
-        res.json({ project, applications });
-    } catch (e: any) {
-        res.status(500).json({ error: String(e?.message || "dokploy_error") });
-    }
-});
-
-app.post("/dokploy/deploy/:applicationId", async (req: Request, res: Response) => {
-    try {
-        if (!isDokployConfigured()) {
-            return res.status(503).json({ error: "dokploy_not_configured" });
-        }
-        const ok = await triggerDeploy(req.params.applicationId);
-        res.json({ ok, applicationId: req.params.applicationId });
-    } catch (e: any) {
-        res.status(500).json({ error: String(e?.message || "dokploy_error") });
-    }
-});
 
 // ─────────────────────────────────────
 // Events
@@ -492,7 +403,7 @@ app.get("/events", async (req: Request, res: Response) => {
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 VibeCraft HQ listening on port ${PORT}`);
-    console.log(`   Dokploy: ${isDokployConfigured() ? "✓ configured" : "✗ not configured"}`);
+    console.log(`   Docker/Traefik Mode: ✓ Active`);
     console.log(`   GitHub: ${process.env.GITHUB_TOKEN ? "✓ configured" : "✗ not configured"}`);
     console.log(`   AI Model: ${getCurrentModel()}`);
 });
