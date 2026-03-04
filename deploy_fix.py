@@ -4,7 +4,12 @@ import os
 print("Connecting to VPS...")
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('72.61.101.24', username='root', password='GPL?root85420', timeout=30)
+host = os.environ.get('VPS_HOST')
+password = os.environ.get('VPS_PASS')
+if not host or not password:
+    print("Error: VPS_HOST and VPS_PASS environment variables must be set.")
+    exit(1)
+client.connect(host, username='root', password=password, timeout=30)
 
 print("Uploading docker-compose.prod.yml...")
 sftp = client.open_sftp()

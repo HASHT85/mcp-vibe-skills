@@ -5,7 +5,7 @@ import io
 
 VPS_IP = "72.61.101.24"
 VPS_USER = "root"
-VPS_PASS = "GPL?root85420"
+VPS_PASS = os.environ.get("VPS_PASS")
 APP_DIR = "/opt/vibecraft"
 LOCAL_DIR = r"c:\Projet\mcp-vibe-skills\mcp-vibe-skills"
 
