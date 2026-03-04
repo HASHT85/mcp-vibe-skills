@@ -5,7 +5,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "mcp": "node dist/mcp_stdio.js"
+    "mcp": "node dist/mcp_stdio.js",
+    "prepare": "husky",
+    "pre-commit": "node scripts/check-secrets.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",
@@ -19,9 +21,10 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
     "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
     "@types/node": "^20.14.10",
+    "husky": "^9.1.7",
     "typescript": "^5.5.4"
   }
 }
