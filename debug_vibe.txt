@@ -1,0 +1,95 @@
+=== CONTAINER STATE ===
+{
+  "Status": "running",
+  "Running": true,
+  "Paused": false,
+  "Restarting": false,
+  "OOMKilled": false,
+  "Dead": false,
+  "Pid": 17689,
+  "ExitCode": 0,
+  "Error": "",
+  "StartedAt": "2026-03-02T21:27:57.150691175Z",
+  "FinishedAt": "2026-03-02T21:27:57.054634489Z",
+  "Health": {
+    "Status": "unhealthy",
+    "FailingStreak": 5339,
+    "Log": [
+      {
+        "Start": "2026-03-04T18:01:25.133973423Z",
+        "End": "2026-03-04T18:01:25.202555689Z",
+        "ExitCode": -1,
+        "Output": "OCI runtime exec failed: exec failed: unable to start container process: exec: \"wget\": executable file not found in $PATH"
+      },
+      {
+        "Start": "2026-03-04T18:01:55.204292487Z",
+        "End": "2026-03-04T18:01:55.281739625Z",
+        "ExitCode": -1,
+        "Output": "OCI runtime exec failed: exec failed: unable to start container process: exec: \"wget\": executable file not found in $PATH"
+      },
+      {
+        "Start": "2026-03-04T18:02:25.282350521Z",
+        "End": "2026-03-04T18:02:25.343291815Z",
+        "ExitCode": -1,
+        "Output": "OCI runtime exec failed: exec failed: unable to start container process: exec: \"wget\": executable file not found in $PATH"
+      },
+      {
+        "Start": "2026-03-04T18:02:55.344659928Z",
+        "End": "2026-03-04T18:02:55.402788475Z",
+        "ExitCode": -1,
+        "Output": "OCI runtime exec failed: exec failed: unable to start container process: exec: \"wget\": executable file not found in $PATH"
+      },
+      {
+        "Start": "2026-03-04T18:03:25.403803337Z",
+        "End": "2026-03-04T18:03:25.463958611Z",
+        "ExitCode": -1,
+        "Output": "OCI runtime exec failed: exec failed: unable to start container process: exec: \"wget\": executable file not found in $PATH"
+      }
+    ]
+  }
+}
+
+=== CONTAINER NETWORKS ===
+{
+  "SandboxID": "a953ba4c4b9c518c478004f0203e17d1e7b4d13217fcf9398fcb2d04a66d1acd",
+  "SandboxKey": "/var/run/docker/netns/a953ba4c4b9c",
+  "Ports": {
+    "8080/tcp": null
+  },
+  "Networks": {
+    "web": {
+      "IPAMConfig": null,
+      "Links": null,
+      "Aliases": [
+        "mcp-vibe-skills",
+        "orchestrator"
+      ],
+      "DriverOpts": null,
+      "GwPriority": 0,
+      "NetworkID": "94f7646db7e7264d8a4fa89ea3fc0815d67b097c75bbd58cd6ec6cc79c3e614a",
+      "EndpointID": "a796b7cd1e134d97c3a7c674ed077117eb4b9f3f8923c163f5df1bc5609cd0ad",
+      "Gateway": "172.18.0.1",
+      "IPAddress": "172.18.0.2",
+      "MacAddress": "36:a7:5b:78:75:46",
+      "IPPrefixLen": 16,
+      "IPv6Gateway": "",
+      "GlobalIPv6Address": "",
+      "GlobalIPv6PrefixLen": 0,
+      "DNSNames": [
+        "mcp-vibe-skills",
+        "orchestrator",
+        "19d728628997"
+      ]
+    }
+  }
+}
+
+=== CONTAINER LOGS ===
+🚀 VibeCraft HQ listening on port 8080
+   Docker/Traefik Mode: ✓ Active
+   GitHub: ✓ configured
+   AI Model: claude-sonnet-4-6
+🚀 VibeCraft HQ listening on port 8080
+   Docker/Traefik Mode: ✓ Active
+   GitHub: ✓ configured
+   AI Model: claude-sonnet-4-6
