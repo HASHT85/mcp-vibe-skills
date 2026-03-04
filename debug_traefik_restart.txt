@@ -1,0 +1,8 @@
+=== RESTARTING TRAEFIK ===
+traefik-traefik-1
+
+=== RECENT LOGS ===
+
+
+=== ROUTERS STATE (API) ===
+API disabled

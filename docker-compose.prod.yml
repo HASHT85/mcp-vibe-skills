@@ -20,16 +20,31 @@ services:
       - web
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.vibecraft.rule=Host(`vibecraft.hach.dev`)"
-      - "traefik.http.routers.vibecraft.entrypoints=websecure"
-      - "traefik.http.routers.vibecraft.tls.certresolver=letsencrypt"
-      - "traefik.http.services.vibecraft.loadbalancer.server.port=8080"
+      - "traefik.http.routers.vibecraft-api.rule=Host(`api.vibecraft.hach.dev`)"
+      - "traefik.http.routers.vibecraft-api.entrypoints=websecure"
+      - "traefik.http.routers.vibecraft-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vibecraft-api.loadbalancer.server.port=8080"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  dashboard:
+    build: ./dashboard
+    container_name: mcp-vibe-dashboard
+    restart: unless-stopped
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vibecraft-dashboard.rule=Host(`vibecraft.hach.dev`)"
+      - "traefik.http.routers.vibecraft-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.vibecraft-dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vibecraft-dashboard.loadbalancer.server.port=80"
+    healthcheck:
+      disable: true
 
 volumes:
   orchestrator-data:
