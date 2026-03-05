@@ -47,11 +47,25 @@ export default function App() {
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAuth(user, pass);
-    onLogin();
+    setError('');
+    setLoading(true);
+    try {
+      // Set credentials first, then test them against the API
+      setAuth(user, pass);
+      await listPipelines(); // This will throw 'Unauthorized' if credentials are wrong
+      onLogin();
+    } catch (err: any) {
+      // Clear bad credentials
+      localStorage.removeItem('vibe_auth');
+      setError('Invalid credentials');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -64,6 +78,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       >
         <h1>⚡ VibeCraft HQ</h1>
         <p>Universal AI & Software Builder</p>
+        {error && <p style={{ color: '#ff6b6b', fontSize: '0.9rem', margin: '0 0 0.5rem' }}>{error}</p>}
         <input
           className="login-input"
           placeholder="Username"
@@ -77,7 +92,9 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
           value={pass}
           onChange={(e) => setPass(e.target.value)}
         />
-        <button type="submit" className="btn-login">Enter HQ</button>
+        <button type="submit" className="btn-login" disabled={loading}>
+          {loading ? 'Connecting...' : 'Enter HQ'}
+        </button>
       </motion.form>
     </div>
   );
