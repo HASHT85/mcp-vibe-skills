@@ -651,6 +651,9 @@ export async function gitInit(cwd: string, remoteUrl: string): Promise<boolean> 
             ["git", ["init"]],
             ["git", ["remote", "add", "origin", remoteUrl]],
             ["git", ["checkout", "-b", "main"]],
+            // Configure git user for commits
+            ["git", ["config", "user.email", "vibecraft@auto.dev"]],
+            ["git", ["config", "user.name", "VibeCraft"]],
         ] as const;
 
         let idx = 0;

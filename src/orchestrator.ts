@@ -521,6 +521,20 @@ RÈGLES ABSOLUES:
                 if (hasProdCompose) {
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", "Déploiement du container projet...", "info");
 
+                    // Ensure .env exists so docker compose build doesn't fail on missing vars
+                    const envPath = path.join(p.workspace, ".env");
+                    const envExamplePath = path.join(p.workspace, ".env.example");
+                    const hasEnv = await fs.access(envPath).then(() => true).catch(() => false);
+                    if (!hasEnv) {
+                        const hasEnvExample = await fs.access(envExamplePath).then(() => true).catch(() => false);
+                        if (hasEnvExample) {
+                            await fs.copyFile(envExamplePath, envPath);
+                        } else {
+                            // Create a minimal .env with placeholder values for any VITE_ vars
+                            await fs.writeFile(envPath, "# Auto-generated placeholder env\nVITE_OPENWEATHER_API_KEY=placeholder\n");
+                        }
+                    }
+
                     // Use host path for the build context so Docker daemon can access the files
                     const hostWorkspace = process.env.HOST_WORKSPACE_PATH || "/opt/vibecraft/workspace";
                     const hostProjectPath = path.join(hostWorkspace, id);
@@ -536,7 +550,6 @@ RÈGLES ABSOLUES:
                             env: {
                                 ...process.env,
                                 COMPOSE_PROJECT_NAME: projectName,
-                                // Pass host path for any build context resolution
                                 HOST_PROJECT_PATH: hostProjectPath,
                             },
                             timeout: 5 * 60 * 1000, // 5 min timeout for build
