@@ -130,7 +130,46 @@ export class DevelopmentNode extends AgentNode {
         const analysis = context.pipeline.artifacts.analysis;
         const architecture = context.pipeline.artifacts.architecture;
 
-        let prompt = `Tu dois implémenter toutes les fonctionnalités décrites dans l'analyse de ce projet.\n\nAnalyse:\n${JSON.stringify(analysis, null, 2)}\n\nArchitecture:\n${JSON.stringify(architecture, null, 2)}\n\nInstructions:\n1. Lis le code de scaffold existant\n2. Vérifie s'il manque des fichiers source (App.jsx, composants, index.html, etc.)\n3. Crée TOUS les fichiers source manquants — le scaffold n'a créé que les fichiers de config\n4. Implémente la logique fonctionnelle complète du projet\n5. IMPORTANT: Tu DOIS créer App.jsx/App.tsx et TOUS les composants React/Vue requis\n6. Assure-toi que les services communiquent bien entre eux si besoin (via docker-compose)\n7. N'écrase pas le Dockerfile ou docker-compose sauvagement sans vérifier\n8. Fais npm install si node_modules est vide`;
+        let prompt = `Tu dois implémenter toutes les fonctionnalités de ce projet.
+
+Analyse:
+${JSON.stringify(analysis, null, 2)}
+
+Architecture:
+${JSON.stringify(architecture, null, 2)}
+
+=== WORKFLOW STRICT (suis cet ordre) ===
+
+ÉTAPE 0: Lis la mémoire partagée pour savoir où tu en es:
+  → read_memory(key: "dev_progress")
+  → Si elle contient une liste de fichiers déjà créés, NE LES RECRÉE PAS.
+
+ÉTAPE 1 - TYPES: Crée src/types/ (interfaces, types API)
+  → Après: write_memory(key: "dev_progress", value: "DONE: types")
+
+ÉTAPE 2 - UTILS + CONSTANTS: Crée src/utils/ et src/constants/
+  → Après: write_memory(key: "dev_progress", value: "DONE: types, utils, constants")
+
+ÉTAPE 3 - SERVICES/API: Crée src/services/ ou src/api/ (clients API, cache)
+  → Après: write_memory(key: "dev_progress", value: "DONE: types, utils, constants, services")
+
+ÉTAPE 4 - HOOKS: Crée src/hooks/ (useWeather, useForecast, etc.)
+  → Après: write_memory(key: "dev_progress", value: "DONE: types, utils, constants, services, hooks")
+
+ÉTAPE 5 - COMPOSANTS UI: Crée src/components/ (TOUS les composants React)
+  → Après: write_memory(key: "dev_progress", value: "DONE: types, utils, constants, services, hooks, components")
+
+ÉTAPE 6 - APP + STYLES: Crée/modifie src/App.tsx, src/index.css, src/main.tsx
+  → Après: write_memory(key: "dev_progress", value: "DONE: all source files")
+
+ÉTAPE 7 - BUILD: npm install && npm run build → corrige les erreurs
+  → Après: write_memory(key: "dev_progress", value: "DONE: all source files, build OK")
+
+⚠️ RÈGLES CRITIQUES:
+- JAMAIS réécrire un fichier déjà créé sauf pour corriger un bug de build
+- Après chaque groupe de fichiers, utilise write_memory pour sauvegarder ta progression
+- Si le sliding window te fait perdre le contexte, lis dev_progress pour savoir où reprendre
+- Concentre-toi sur ÉCRIRE du code, pas sur lire/lister les fichiers en boucle`;
 
         if ((this as any).supervisorFeedback) {
             prompt += `\n\n⚠️ ATTENTION: Lors de ta précédente tentative, le superviseur a REJETÉ ton travail et émis la critique suivante:\n\n${(this as any).supervisorFeedback}\n\nApplique ces corrections IMMÉDIATEMENT.`;
@@ -139,7 +178,14 @@ export class DevelopmentNode extends AgentNode {
     }
 
     protected getSystemPrompt(context: NodeContext): string {
-        let base = "Tu es un Développeur Senior Fullstack. Écris du code propre. Utilise read_memory pour connaître les ports et write_memory si tu ajoutes/changes une variable d'environnement ou un endpoint important. Tu DOIS créer TOUS les fichiers source (composants, pages, styles) — ne suppose jamais qu'ils existent déjà.";
+        let base = `Tu es un Développeur Senior Fullstack. Tu DOIS suivre le workflow par étapes et utiliser write_memory pour tracker ta progression.
+
+RÈGLES:
+1. Commence TOUJOURS par read_memory("dev_progress") pour savoir ce qui est déjà fait
+2. Ne réécris JAMAIS un fichier que tu as déjà créé (sauf bug de build)
+3. Après chaque batch de fichiers, fais write_memory("dev_progress", "DONE: ...")
+4. Crée TOUS les fichiers en une seule passe, ne reviens pas en arrière
+5. Utilise read_memory pour les ports et write_memory pour les endpoints`;
         const skills = context.pipeline.artifacts.skills as SkillContent[] | undefined;
         if (skills?.length) {
             base += "\n\n📚 BEST PRACTICES (from skills.sh):\n";
