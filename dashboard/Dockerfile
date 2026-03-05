@@ -15,9 +15,9 @@ FROM nginx:alpine
 # Install apache2-utils for htpasswd
 RUN apk add --no-cache apache2-utils
 
-# Create .htpasswd from env vars (default: admin/vibe123)
-ARG DASHBOARD_USER=admin
-ARG DASHBOARD_PASS=vibe123
+# Create .htpasswd from env vars
+ARG DASHBOARD_USER
+ARG DASHBOARD_PASS
 RUN htpasswd -cb /etc/nginx/.htpasswd ${DASHBOARD_USER} ${DASHBOARD_PASS}
 
 COPY --from=build /app/dist /usr/share/nginx/html

@@ -18,8 +18,12 @@ app.use(cors()); // Enable CORS for all routes
 app.use(express.json({ limit: "1mb" }));
 
 // Basic Auth Middleware
-const ADMIN_USER = process.env.ADMIN_USER || "admin";
-const ADMIN_PASS = process.env.ADMIN_PASS || "vibe123";
+const ADMIN_USER = process.env.ADMIN_USER;
+const ADMIN_PASS = process.env.ADMIN_PASS;
+
+if (!ADMIN_USER || !ADMIN_PASS) {
+    console.warn("⚠️ WARNING: ADMIN_USER or ADMIN_PASS is not set. API is secure but might be inaccessible.");
+}
 
 const authMiddleware = (req: Request, res: Response, next: Function) => {
     // Support auth via header OR query param (needed for SSE/EventSource)

@@ -9,8 +9,8 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - GITHUB_OWNER=${GITHUB_OWNER}
-      - ADMIN_USER=${ADMIN_USER:-admin}
-      - ADMIN_PASS=${ADMIN_PASS:-vibe123}
+      - ADMIN_USER=${ADMIN_USER}
+      - ADMIN_PASS=${ADMIN_PASS}
       - WORKSPACE_ROOT=/workspace
       - PIPELINES_STORE=/data/pipelines.json
     volumes:
@@ -32,7 +32,11 @@ services:
       start_period: 10s
 
   dashboard:
-    build: ./dashboard
+    build:
+      context: ./dashboard
+      args:
+        DASHBOARD_USER: ${ADMIN_USER}
+        DASHBOARD_PASS: ${ADMIN_PASS}
     container_name: mcp-vibe-dashboard
     restart: unless-stopped
     networks:
