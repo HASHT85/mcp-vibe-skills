@@ -507,14 +507,21 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
                 messages.push({ role: "assistant", content: assistantContent });
                 messages.push({ role: "user", content: toolResults });
 
-                // Sliding window: keep initial user message + last 3 exchange pairs
-                // to prevent quadratic token growth over many turns
-                const KEEP_PAIRS = 3;
+                // Sliding window: keep initial user message + last N exchange pairs
+                // to prevent quadratic token growth over many turns.
+                // NOTE: 3 was too aggressive — agents forgot their own reads and looped.
+                const KEEP_PAIRS = 15;
                 if (messages.length > 1 + KEEP_PAIRS * 2) {
                     const initial = messages[0];
                     const tail = messages.slice(-(KEEP_PAIRS * 2));
+                    // Insert a summary so the model knows some context was dropped
+                    const droppedCount = messages.length - 1 - KEEP_PAIRS * 2;
+                    const summaryMsg: Anthropic.Messages.MessageParam = {
+                        role: "user",
+                        content: `[SYSTEM: ${droppedCount} earlier message(s) were trimmed to save context. Do NOT re-read files you already processed. Focus on WRITING code and making progress.]`
+                    };
                     messages.length = 0;
-                    messages.push(initial, ...tail);
+                    messages.push(initial, summaryMsg, ...tail);
                 }
             } else {
                 break;
