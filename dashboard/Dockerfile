@@ -14,15 +14,18 @@ FROM nginx:alpine
 
 # Install apache2-utils for htpasswd
 RUN apk add --no-cache apache2-utils
-
-# Create .htpasswd from env vars
-ARG DASHBOARD_USER
-ARG DASHBOARD_PASS
-RUN htpasswd -cb /etc/nginx/.htpasswd ${DASHBOARD_USER} ${DASHBOARD_PASS}
+# We don't create htpasswd at build time anymore
+# ARG DASHBOARD_USER
+# ARG DASHBOARD_PASS
 
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Copy entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 80
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]
