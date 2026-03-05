@@ -1,13 +1,3 @@
-FROM node:20-alpine AS build
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm install
-
-COPY tsconfig.json ./
-COPY src ./src
-RUN npm run build
-
 FROM node:20-alpine
 WORKDIR /app
 
@@ -15,16 +5,22 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV STORE_PATH=/data/store.json
 
+# Install OS utilities
+RUN apk add --no-cache git curl bash
+
 RUN mkdir -p /data /workspace
 
-# Install Node dependencies first
+# Install all dependencies (including dev for compilation)
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install
 
-# Install OS utilities (alpine version)
-RUN apk update && apk add --no-cache git curl bash
+# Copy source and compile TypeScript
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build
 
-COPY --from=build /app/dist ./dist
+# Remove dev dependencies
+RUN npm prune --omit=dev
 
 EXPOSE 8080
 
