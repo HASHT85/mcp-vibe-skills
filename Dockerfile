@@ -1,4 +1,4 @@
-FROM node:20-slim AS build
+FROM node:20-alpine AS build
 WORKDIR /app
 
 COPY package*.json ./
@@ -8,7 +8,7 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
-FROM node:20-slim
+FROM node:20-alpine
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -21,8 +21,8 @@ RUN mkdir -p /data /workspace
 COPY package*.json ./
 RUN npm install --omit=dev
 
-# Install OS utilities
-RUN apt-get update && apt-get install -y git curl bash && rm -rf /var/lib/apt/lists/*
+# Install OS utilities (alpine version)
+RUN apk update && apk add --no-cache git curl bash
 
 COPY --from=build /app/dist ./dist
 
