@@ -13,9 +13,11 @@ services:
       - ADMIN_PASS=${ADMIN_PASS}
       - WORKSPACE_ROOT=/workspace
       - PIPELINES_STORE=/data/pipelines.json
+      - HOST_WORKSPACE_PATH=${HOST_WORKSPACE_PATH:-/opt/vibecraft/workspace}
     volumes:
       - orchestrator-data:/data
-      - orchestrator-workspace:/workspace
+      - ${HOST_WORKSPACE_PATH:-/opt/vibecraft/workspace}:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - web
     labels:
@@ -52,9 +54,8 @@ services:
 volumes:
   orchestrator-data:
     driver: local
-  orchestrator-workspace:
-    driver: local
 
 networks:
   web:
     external: true
+

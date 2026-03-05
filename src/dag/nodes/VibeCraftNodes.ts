@@ -1,5 +1,6 @@
 import { AgentNode, type AgentNodeOptions } from "./AgentNode.js";
 import type { NodeContext } from "../Node.js";
+import type { SkillContent } from "../../skills.js";
 import { tryParseJson, detectProjectType, getArchitectureGuidance, getScaffoldGuidance, getDockerfileTemplate } from "../../utils/project_helpers.js";
 
 // --- ANALYSIS NODE ---
@@ -46,7 +47,7 @@ export class ArchitectureNode extends AgentNode {
             name: "Conception de l'architecture",
             role: "Architect",
             emoji: "🏗️",
-            dependencies: ["analysis"],
+            dependencies: ["skills_enrichment"],
             allowedTools: ["web_search", "fetch_url", "read_memory", "write_memory"]
         });
     }
@@ -57,7 +58,15 @@ export class ArchitectureNode extends AgentNode {
     }
 
     protected getSystemPrompt(context: NodeContext): string {
-        return "Tu es un Architecte Logiciel Senior. Rends UNIQUEMENT un objet JSON décrivant l'architecture. Utilise write_memory pour enregistrer les ports convenus et les endpoints vitaux pour les autres agents.";
+        let base = "Tu es un Architecte Logiciel Senior. Rends UNIQUEMENT un objet JSON décrivant l'architecture. Utilise write_memory pour enregistrer les ports convenus et les endpoints vitaux pour les autres agents.";
+        const skills = context.pipeline.artifacts.skills as SkillContent[] | undefined;
+        if (skills?.length) {
+            base += "\n\n📚 BEST PRACTICES (from skills.sh):\n";
+            for (const s of skills) {
+                base += `\n### ${s.title}\n${s.content?.slice(0, 1500) || "(pas de contenu détaillé)"}\n`;
+            }
+        }
+        return base;
     }
 
     protected processResult(output: string, context: NodeContext): any {
@@ -92,7 +101,15 @@ export class ScaffoldNode extends AgentNode {
     }
 
     protected getSystemPrompt(context: NodeContext): string {
-        return "Tu es un Développeur Senior. Utilise bash pour initier les projets et crée un docker-compose.yml fonctionnant en local sur 0.0.0.0 avec des binds de ports.";
+        let base = "Tu es un Développeur Senior. Utilise bash pour initier les projets et crée un docker-compose.yml fonctionnant en local sur 0.0.0.0 avec des binds de ports.";
+        const skills = context.pipeline.artifacts.skills as SkillContent[] | undefined;
+        if (skills?.length) {
+            base += "\n\n📚 BEST PRACTICES (from skills.sh):\n";
+            for (const s of skills) {
+                base += `\n### ${s.title}\n${s.content?.slice(0, 1500) || "(pas de contenu détaillé)"}\n`;
+            }
+        }
+        return base;
     }
 }
 
@@ -106,7 +123,7 @@ export class DevelopmentNode extends AgentNode {
             emoji: "💻",
             dependencies: ["supervisor_for_scaffold"],
             allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir", "read_memory", "write_memory"],
-            maxTurns: 30
+            maxTurns: 80
         });
     }
 
@@ -114,7 +131,7 @@ export class DevelopmentNode extends AgentNode {
         const analysis = context.pipeline.artifacts.analysis;
         const architecture = context.pipeline.artifacts.architecture;
 
-        let prompt = `Tu dois implémenter toutes les fonctionnalités décrites dans l'analyse de ce projet.\n\nAnalyse:\n${JSON.stringify(analysis, null, 2)}\n\nArchitecture:\n${JSON.stringify(architecture, null, 2)}\n\nInstructions:\n1. Lis le code de scaffold existant\n2. Implémente la logique fonctionnelle complète du projet\n3. Assure-toi que les services communiquent bien entre eux si besoin (via docker-compose)\n4. N'écrase pas le Dockerfile ou docker-compose sauvagement sans vérifier`;
+        let prompt = `Tu dois implémenter toutes les fonctionnalités décrites dans l'analyse de ce projet.\n\nAnalyse:\n${JSON.stringify(analysis, null, 2)}\n\nArchitecture:\n${JSON.stringify(architecture, null, 2)}\n\nInstructions:\n1. Lis le code de scaffold existant\n2. Vérifie s'il manque des fichiers source (App.jsx, composants, index.html, etc.)\n3. Crée TOUS les fichiers source manquants — le scaffold n'a créé que les fichiers de config\n4. Implémente la logique fonctionnelle complète du projet\n5. IMPORTANT: Tu DOIS créer App.jsx/App.tsx et TOUS les composants React/Vue requis\n6. Assure-toi que les services communiquent bien entre eux si besoin (via docker-compose)\n7. N'écrase pas le Dockerfile ou docker-compose sauvagement sans vérifier\n8. Fais npm install si node_modules est vide`;
 
         if ((this as any).supervisorFeedback) {
             prompt += `\n\n⚠️ ATTENTION: Lors de ta précédente tentative, le superviseur a REJETÉ ton travail et émis la critique suivante:\n\n${(this as any).supervisorFeedback}\n\nApplique ces corrections IMMÉDIATEMENT.`;
@@ -123,7 +140,15 @@ export class DevelopmentNode extends AgentNode {
     }
 
     protected getSystemPrompt(context: NodeContext): string {
-        return "Tu es un Développeur Senior Fullstack. Écris du code propre. Utilise read_memory pour connaître les ports et write_memory si tu ajoutes/changes une variable d'environnement ou un endpoint important.";
+        let base = "Tu es un Développeur Senior Fullstack. Écris du code propre. Utilise read_memory pour connaître les ports et write_memory si tu ajoutes/changes une variable d'environnement ou un endpoint important. Tu DOIS créer TOUS les fichiers source (composants, pages, styles) — ne suppose jamais qu'ils existent déjà.";
+        const skills = context.pipeline.artifacts.skills as SkillContent[] | undefined;
+        if (skills?.length) {
+            base += "\n\n📚 BEST PRACTICES (from skills.sh):\n";
+            for (const s of skills) {
+                base += `\n### ${s.title}\n${s.content?.slice(0, 1500) || "(pas de contenu détaillé)"}\n`;
+            }
+        }
+        return base;
     }
 }
 
@@ -141,11 +166,17 @@ export class QANode extends AgentNode {
     }
 
     protected getPrompt(context: NodeContext): string {
-        return "Vérifie que le code s'exécute correctement en lançant : docker compose up -d\nLis les logs (docker compose logs) et corrige le code si un service crashe. Fais docker compose down à la fin.";
+        return `Vérifie que le projet est complet et fonctionnel :
+1. Fais \`npm install\` si node_modules est absent
+2. Lance \`npm run build\` et corrige TOUTES les erreurs
+3. Vérifie qu'un fichier App.jsx/App.tsx (ou équivalent) existe et est importé dans main.jsx/main.tsx
+4. Vérifie qu'il n'y a pas d'imports manquants ou de dépendances absentes du package.json
+5. Si tu trouves des erreurs, corrige-les directement
+6. Si le build réussit, arrête-toi.`;
     }
 
     protected getSystemPrompt(context: NodeContext): string {
-        return "Tu es un Testeur QA. Utilise docker compose pour valider le code, et corrige s'il y a la moindre erreur. Utilise read_memory pour savoir sur quels ports les services tournent.";
+        return "Tu es un Testeur QA. Vérifie que le code compile et que tous les fichiers source sont présents. Corrige les erreurs de build. Utilise read_memory pour savoir sur quels ports les services tournent.";
     }
 }
 

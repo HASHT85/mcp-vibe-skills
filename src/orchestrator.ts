@@ -13,11 +13,13 @@ import * as crypto from "node:crypto";
 // @ts-ignore
 import { EventEmitter } from "node:events";
 
-import { runClaudeAgent, gitPush, gitClone, agentEvents, type AgentAction } from "./claude_code.js";
+import { runClaudeAgent, gitPush, gitClone, gitInit, agentEvents, type AgentAction } from "./claude_code.js";
 import { GraphManager } from "./dag/Graph.js";
 import type { NodeContext } from "./dag/Node.js";
 import { AnalysisNode, ArchitectureNode, ScaffoldNode, DevelopmentNode, QANode, DeployNode } from "./dag/nodes/VibeCraftNodes.js";
 import { SupervisorNode } from "./dag/nodes/SupervisorNode.js";
+import { SkillsEnrichmentNode } from "./dag/nodes/SkillsEnrichmentNode.js";
+import { createRepo } from "./github_api.js";
 
 import type { Pipeline, PipelinePhase, AgentStatus, PipelineAgent, PipelineEvent } from "./orchestrator_types.js";
 import { savePipelinesState, loadPipelinesState } from "./orchestrator_state.js";
@@ -433,6 +435,20 @@ RÈGLES ABSOLUES:
         const p = this.pipelines.get(id)!;
 
         try {
+            // ─── GitHub Setup ───
+            if (getGithubToken()) {
+                try {
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔗", "Création du repo GitHub...", "info");
+                    const repo = await createRepo(p.name, p.description);
+                    p.github = { owner: repo.owner, repo: repo.name, url: repo.url };
+                    await gitInit(p.workspace, `https://${getGithubToken()}@github.com/${repo.owner}/${repo.name}.git`);
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔗", `Repo GitHub créé: ${repo.url}`, "success");
+                    await savePipelinesState(this.pipelines);
+                } catch (gitErr: any) {
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `GitHub setup échoué: ${gitErr.message} — on continue sans GitHub`, "warning");
+                }
+            }
+
             const context: NodeContext = {
                 pipeline: p,
                 workspace: p.workspace,
@@ -446,6 +462,7 @@ RÈGLES ABSOLUES:
             manager.on("node-start", (node: any) => {
                 const phaseMap: Record<string, PipelinePhase> = {
                     "analysis": "ANALYSIS",
+                    "skills_enrichment": "ANALYSIS",
                     "architecture": "ARCHITECTURE",
                     "scaffold": "SCAFFOLD",
                     "development": "DEVELOPMENT",
@@ -457,7 +474,8 @@ RÈGLES ABSOLUES:
 
             manager.on("node-complete", ({ node }: { node: any }) => {
                 const progressMap: Record<string, number> = {
-                    "analysis": 15,
+                    "analysis": 10,
+                    "skills_enrichment": 15,
                     "architecture": 30,
                     "scaffold": 50,
                     "development": 70,
@@ -468,6 +486,7 @@ RÈGLES ABSOLUES:
             });
 
             manager.addNode(new AnalysisNode());
+            manager.addNode(new SkillsEnrichmentNode());
             manager.addNode(new ArchitectureNode());
             manager.addNode(new ScaffoldNode());
             manager.addNode(new SupervisorNode("scaffold", ["scaffold"]));
@@ -478,11 +497,69 @@ RÈGLES ABSOLUES:
 
             await manager.executeAll();
 
+            // ─── Final GitHub Push ───
+            if (p.github) {
+                try {
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔗", "Push final vers GitHub...", "info");
+                    const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
+                    const pushed = await gitPush(p.workspace, "feat: initial project generation", authUrl);
+                    if (pushed) {
+                        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔗", `Push OK → ${p.github.url}`, "success");
+                    } else {
+                        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", "Push GitHub échoué", "warning");
+                    }
+                } catch (pushErr: any) {
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `Push échoué: ${pushErr.message}`, "warning");
+                }
+            }
+
+            // ─── Auto-Deploy: spawn project as its own Docker container ───
+            try {
+                const prodComposePath = path.join(p.workspace, "docker-compose.prod.yml");
+                const hasProdCompose = await fs.access(prodComposePath).then(() => true).catch(() => false);
+
+                if (hasProdCompose) {
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", "Déploiement du container projet...", "info");
+
+                    // Use host path for the build context so Docker daemon can access the files
+                    const hostWorkspace = process.env.HOST_WORKSPACE_PATH || "/opt/vibecraft/workspace";
+                    const hostProjectPath = path.join(hostWorkspace, id);
+
+                    const { execSync } = await import("node:child_process");
+
+                    // Build and start the project containers with a unique project name
+                    const projectName = `vibe-${id}`;
+                    execSync(
+                        `docker compose -p ${projectName} -f docker-compose.prod.yml up -d --build`,
+                        {
+                            cwd: p.workspace,
+                            env: {
+                                ...process.env,
+                                COMPOSE_PROJECT_NAME: projectName,
+                                // Pass host path for any build context resolution
+                                HOST_PROJECT_PATH: hostProjectPath,
+                            },
+                            timeout: 5 * 60 * 1000, // 5 min timeout for build
+                            stdio: "pipe",
+                        }
+                    );
+
+                    p.artifacts.deployed = true;
+                    p.artifacts.deployedUrl = `https://${p.id}.hach.dev`;
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", `Container déployé! Accessible sur ${p.artifacts.deployedUrl}`, "success");
+                } else {
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", "Pas de docker-compose.prod.yml — déploiement ignoré", "warning");
+                }
+            } catch (deployErr: any) {
+                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `Déploiement container échoué: ${deployErr.message}`, "warning");
+                // Don't throw — the project is still generated successfully
+            }
+
             setPipelinePhase(this, this.pipelines, id, "COMPLETED");
             setAgentStatus(this, this.pipelines, id, "QA", "done");
             const completedMsg = p.github
-                ? `Projet terminé! Repo GitHub: ${p.github.url}`
-                : "Projet terminé!";
+                ? `Projet terminé! Repo GitHub: ${p.github.url}${p.artifacts.deployed ? ` | Live: ${p.artifacts.deployedUrl}` : ""}`
+                : `Projet terminé!${p.artifacts.deployed ? ` Live: ${p.artifacts.deployedUrl}` : ""}`;
             addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🎉", completedMsg, "success");
 
         } catch (err: any) {

@@ -15,8 +15,8 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV STORE_PATH=/data/store.json
 
-# Install OS utilities
-RUN apk add --no-cache git curl bash
+# Install OS utilities + Docker CLI for spawning project containers
+RUN apk add --no-cache git curl bash docker-cli docker-cli-compose
 
 RUN mkdir -p /data /workspace
 
