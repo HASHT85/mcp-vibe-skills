@@ -602,12 +602,16 @@ export async function gitPush(cwd: string, message: string, authRemoteUrl?: stri
         // If an authenticated URL is provided, update remote before push
         const commands: [string, string[]][] = authRemoteUrl
             ? [
+                ["git", ["config", "--global", "user.email", "vibecraft@auto.dev"]],
+                ["git", ["config", "--global", "user.name", "VibeCraft"]],
                 ["git", ["remote", "set-url", "origin", authRemoteUrl]],
                 ["git", ["add", "-A"]],
                 ["git", ["commit", "-m", message]],
                 ["git", ["push", "origin", "main"]],
             ]
             : [
+                ["git", ["config", "--global", "user.email", "vibecraft@auto.dev"]],
+                ["git", ["config", "--global", "user.name", "VibeCraft"]],
                 ["git", ["add", "-A"]],
                 ["git", ["commit", "-m", message]],
                 ["git", ["push", "origin", "main"]],
@@ -651,9 +655,9 @@ export async function gitInit(cwd: string, remoteUrl: string): Promise<boolean> 
             ["git", ["init"]],
             ["git", ["remote", "add", "origin", remoteUrl]],
             ["git", ["checkout", "-b", "main"]],
-            // Configure git user for commits
-            ["git", ["config", "user.email", "vibecraft@auto.dev"]],
-            ["git", ["config", "user.name", "VibeCraft"]],
+            // Configure git user for commits (global so it persists)
+            ["git", ["config", "--global", "user.email", "vibecraft@auto.dev"]],
+            ["git", ["config", "--global", "user.name", "VibeCraft"]],
         ] as const;
 
         let idx = 0;
