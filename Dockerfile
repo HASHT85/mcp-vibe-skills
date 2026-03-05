@@ -21,7 +21,7 @@ RUN apk add --no-cache git curl bash
 RUN mkdir -p /data /workspace
 
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install --omit=dev --ignore-scripts
 
 COPY --from=build /app/dist ./dist
 
