@@ -15,13 +15,14 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV STORE_PATH=/data/store.json
 
-# Install git (needed for cloning repos) + curl + bash
-RUN apt-get update && apt-get install -y git curl bash && rm -rf /var/lib/apt/lists/*
-
 RUN mkdir -p /data /workspace
 
+# Install Node dependencies first
 COPY package*.json ./
 RUN npm install --omit=dev
+
+# Install OS utilities
+RUN apt-get update && apt-get install -y git curl bash && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/dist ./dist
 
