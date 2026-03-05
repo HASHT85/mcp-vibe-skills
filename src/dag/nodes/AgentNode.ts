@@ -25,7 +25,7 @@ export abstract class AgentNode extends DagNode {
         this.emoji = options.emoji;
         this.model = options.model;
         this.allowedTools = options.allowedTools;
-        this.maxTurns = options.maxTurns || 15;
+        this.maxTurns = options.maxTurns || 150;
     }
 
     protected abstract getPrompt(context: NodeContext): string;

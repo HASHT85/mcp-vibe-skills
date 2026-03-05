@@ -122,8 +122,7 @@ export class DevelopmentNode extends AgentNode {
             role: "Developer",
             emoji: "💻",
             dependencies: ["supervisor_for_scaffold"],
-            allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir", "read_memory", "write_memory"],
-            maxTurns: 80
+            allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir", "read_memory", "write_memory"]
         });
     }
 
