@@ -255,7 +255,44 @@ Instructions:
    - \`traefik.http.routers.NOM-SERVICE.entrypoints=websecure\`
    - \`traefik.http.routers.NOM-SERVICE.tls.certresolver=letsencrypt\`
    - \`traefik.http.services.NOM-SERVICE.loadbalancer.server.port=PORT_INTERNE\`
-7. Valide la syntaxe du fichier généré.`;
+7. Valide la syntaxe du fichier généré.
+
+IMPORTANT - PRODUCTION DOCKERFILE:
+Si le projet est une SPA (React/Vue/Vite), tu DOIS créer un Dockerfile multi-stage:
+- Stage 1 "builder": FROM node:20-alpine, npm install, npm run build  
+- Stage 2: FROM nginx:alpine, copie dist/ vers /usr/share/nginx/html
+- Le port interne nginx doit être 80
+- Crée aussi un nginx.conf avec: try_files $uri $uri/ /index.html; pour le routing SPA
+- N'utilise JAMAIS "npm run dev" ou "npm run preview" en production
+- Le Dockerfile DOIT se trouver au même niveau que package.json du projet
+
+Exemple de Dockerfile production pour SPA:
+\`\`\`dockerfile
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+\`\`\`
+
+Exemple de nginx.conf minimal:
+\`\`\`nginx
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    index index.html;
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+\`\`\``;
     }
 
     protected getSystemPrompt(context: NodeContext): string {
