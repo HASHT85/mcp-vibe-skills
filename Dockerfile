@@ -11,12 +11,15 @@ RUN npm run build
 FROM node:20.19.0-alpine3.21
 WORKDIR /app
 
-ENV NODE_ENV=production
 ENV PORT=8080
 ENV STORE_PATH=/data/store.json
 
 # Install OS utilities + Docker CLI for spawning project containers
 RUN apk add --no-cache git curl bash docker-cli docker-cli-compose
+
+# Configure git globally so agents can commit
+RUN git config --global user.email "vibecraft@auto.dev" && \
+    git config --global user.name "VibeCraft"
 
 RUN mkdir -p /data /workspace
 
