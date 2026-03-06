@@ -11,6 +11,7 @@ export class AnalysisNode extends AgentNode {
             name: "Analyse des besoins",
             role: "Analyst",
             emoji: "🔎",
+            maxTurns: 5,
             allowedTools: ["web_search", "fetch_url", "read_memory", "write_memory"]
         });
     }
@@ -48,6 +49,7 @@ export class ArchitectureNode extends AgentNode {
             role: "Architect",
             emoji: "🏗️",
             dependencies: ["skills_enrichment"],
+            maxTurns: 10,
             allowedTools: ["web_search", "fetch_url", "read_memory", "write_memory"]
         });
     }
@@ -85,6 +87,7 @@ export class ScaffoldNode extends AgentNode {
             role: "Developer",
             emoji: "💻",
             dependencies: ["architecture"],
+            maxTurns: 30,
             allowedTools: ["bash", "write_file", "list_dir", "read_memory", "write_memory"]
         });
     }
@@ -122,6 +125,7 @@ export class DevelopmentNode extends AgentNode {
             role: "Developer",
             emoji: "💻",
             dependencies: ["supervisor_for_scaffold"],
+            maxTurns: 40,
             allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir", "read_memory", "write_memory"]
         });
     }
@@ -206,6 +210,7 @@ export class QANode extends AgentNode {
             role: "QA",
             emoji: "🧪",
             dependencies: ["supervisor_for_development"],
+            maxTurns: 20,
             allowedTools: ["bash", "read_file", "read_memory", "write_memory"]
         });
     }
@@ -234,6 +239,7 @@ export class DeployNode extends AgentNode {
             role: "DevOps",
             emoji: "🚀",
             dependencies: ["qa"],
+            maxTurns: 15,
             allowedTools: ["bash", "read_file", "write_file", "replace_in_file", "read_memory", "write_memory"]
         });
     }

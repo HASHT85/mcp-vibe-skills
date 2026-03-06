@@ -32,13 +32,14 @@ export type AgentResult = {
     outputTokens: number;
 };
 
-export type AgentOptions = {
+export interface AgentOptions {
     prompt: string;
     systemPrompt?: string;
     cwd: string;
     model?: string;
     allowedTools?: string[];
     maxTurns?: number;
+    maxTokenBudget?: number;
     appendPrompt?: string;
     timeoutMs?: number;
     attachedFiles?: { base64: string; type: string }[];
@@ -363,8 +364,9 @@ export function getCurrentModel(): string {
 export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult> {
     const startTime = Date.now();
     const actions: AgentAction[] = [];
-    const maxTurns = options.maxTurns || 150;
+    const maxTurns = options.maxTurns || 50;
     const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
+    const maxTokenBudget = options.maxTokenBudget || parseInt(process.env.MAX_TOKENS_PER_AGENT || "0") || 0;
 
     // Pre-flight check
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -381,7 +383,7 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
 
     console.log(`[Agent] Starting in ${options.cwd} `);
     const finalModel = options.model || DEFAULT_MODEL;
-    console.log(`[Agent] Model: ${finalModel}, Max turns: unbounded, Timeout: ${timeoutMs / 1000} s`);
+    console.log(`[Agent] Model: ${finalModel}, Max turns: ${maxTurns}, Budget: ${maxTokenBudget || 'unlimited'}, Timeout: ${timeoutMs / 1000} s`);
 
     const client = new Anthropic();
     let totalInputTokens = 0;
@@ -436,6 +438,12 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
             // Check timeout
             if (Date.now() - startTime > timeoutMs) {
                 console.log(`[Agent] ⏱️ Timeout after ${turn} turns`);
+                break;
+            }
+
+            // Check token budget
+            if (maxTokenBudget > 0 && totalInputTokens >= maxTokenBudget) {
+                console.log(`[Agent] 💰 Token budget exhausted: ${totalInputTokens}/${maxTokenBudget} input tokens after ${turn} turns`);
                 break;
             }
 
@@ -510,7 +518,7 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
                 // Sliding window: keep initial user message + last N exchange pairs
                 // to prevent quadratic token growth over many turns.
                 // NOTE: 3 was too aggressive — agents forgot their own reads and looped.
-                const KEEP_PAIRS = 15;
+                const KEEP_PAIRS = 8;
                 if (messages.length > 1 + KEEP_PAIRS * 2) {
                     const initial = messages[0];
                     const tail = messages.slice(-(KEEP_PAIRS * 2));
