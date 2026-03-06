@@ -27,9 +27,11 @@ COPY package*.json ./
 RUN npm install --omit=dev --ignore-scripts
 
 COPY --from=build /app/dist ./dist
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
 
 EXPOSE 8080
 
 VOLUME ["/data", "/workspace"]
 
-CMD ["node", "dist/index.js"]
+ENTRYPOINT ["./entrypoint.sh"]
