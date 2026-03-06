@@ -607,14 +607,15 @@ export async function gitPush(cwd: string, message: string, authRemoteUrl?: stri
                 ["git", ["remote", "set-url", "origin", authRemoteUrl]],
                 ["git", ["add", "-A"]],
                 ["git", ["commit", "-m", message]],
-                ["git", ["push", "origin", "main"]],
+                // --force because GitHub creates a README commit when making the repo
+                ["git", ["push", "--force", "origin", "main"]],
             ]
             : [
                 ["git", ["config", "--global", "user.email", "vibecraft@auto.dev"]],
                 ["git", ["config", "--global", "user.name", "VibeCraft"]],
                 ["git", ["add", "-A"]],
                 ["git", ["commit", "-m", message]],
-                ["git", ["push", "origin", "main"]],
+                ["git", ["push", "--force", "origin", "main"]],
             ];
 
         let idx = 0;

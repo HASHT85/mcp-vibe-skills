@@ -530,8 +530,21 @@ RÈGLES ABSOLUES:
                         if (hasEnvExample) {
                             await fs.copyFile(envExamplePath, envPath);
                         } else {
-                            // Create a minimal .env with placeholder values for any VITE_ vars
-                            await fs.writeFile(envPath, "# Auto-generated placeholder env\nVITE_OPENWEATHER_API_KEY=placeholder\n");
+                            await fs.writeFile(envPath, "# Auto-generated\nVITE_OPENWEATHER_API_KEY=placeholder\n");
+                        }
+                    }
+
+                    // Read .env and pass VITE_ vars as --build-arg so `RUN npm run build`
+                    // inside the generated Dockerfile can access them at build time
+                    const envContent = await fs.readFile(envPath, "utf-8").catch(() => "");
+                    const buildArgFlags: string[] = [];
+                    const buildArgEnv: Record<string, string> = {};
+                    for (const line of envContent.split("\n")) {
+                        const match = line.match(/^(VITE_[A-Z0-9_]+)=(.*)$/);
+                        if (match) {
+                            const [, key, val] = match;
+                            buildArgFlags.push(`--build-arg ${key}=${val}`);
+                            buildArgEnv[key] = val;
                         }
                     }
 
@@ -541,18 +554,19 @@ RÈGLES ABSOLUES:
 
                     const { execSync } = await import("node:child_process");
 
-                    // Build and start the project containers with a unique project name
                     const projectName = `vibe-${id}`;
+                    const buildArgStr = buildArgFlags.join(" ");
                     execSync(
-                        `docker compose -p ${projectName} -f docker-compose.prod.yml up -d --build`,
+                        `docker compose -p ${projectName} -f docker-compose.prod.yml up -d --build ${buildArgStr}`,
                         {
                             cwd: p.workspace,
                             env: {
                                 ...process.env,
+                                ...buildArgEnv,  // also as env vars for compose interpolation
                                 COMPOSE_PROJECT_NAME: projectName,
                                 HOST_PROJECT_PATH: hostProjectPath,
                             },
-                            timeout: 5 * 60 * 1000, // 5 min timeout for build
+                            timeout: 5 * 60 * 1000,
                             stdio: "pipe",
                         }
                     );
