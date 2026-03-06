@@ -534,17 +534,37 @@ RÈGLES ABSOLUES:
                         }
                     }
 
-                    // Read .env and pass VITE_ vars as --build-arg so `RUN npm run build`
-                    // inside the generated Dockerfile can access them at build time
+                    // Read VITE_ vars from .env
                     const envContent = await fs.readFile(envPath, "utf-8").catch(() => "");
-                    const buildArgFlags: string[] = [];
-                    const buildArgEnv: Record<string, string> = {};
+                    const viteVars: Record<string, string> = {};
                     for (const line of envContent.split("\n")) {
                         const match = line.match(/^(VITE_[A-Z0-9_]+)=(.*)$/);
-                        if (match) {
-                            const [, key, val] = match;
-                            buildArgFlags.push(`--build-arg ${key}=${val}`);
-                            buildArgEnv[key] = val;
+                        if (match) viteVars[match[1]] = match[2];
+                    }
+
+                    // Patch generated Dockerfiles to inject ARG declarations for VITE_ vars.
+                    // `docker compose up --build` does NOT support --build-arg on the CLI;
+                    // ARG must be declared in Dockerfile itself for build-time availability.
+                    if (Object.keys(viteVars).length > 0) {
+                        const argBlock = Object.entries(viteVars)
+                            .map(([k, v]) => `ARG ${k}=${v}`)
+                            .join("\n") + "\n";
+                        const { execSync: execS } = await import("node:child_process");
+                        const dfList = execS(
+                            `find . -name "Dockerfile*" -not -path "*/node_modules/*"`,
+                            { cwd: p.workspace, encoding: "utf-8" }
+                        ).split("\n").filter(Boolean);
+                        for (const df of dfList) {
+                            const dfPath = path.join(p.workspace, df);
+                            const dfContent = await fs.readFile(dfPath, "utf-8").catch(() => "");
+                            // Only inject if ARGs not already present
+                            if (dfContent && !dfContent.includes("ARG VITE_")) {
+                                const patched = dfContent.replace(
+                                    /(FROM\s+\S+(?:\s+AS\s+\S+)?\r?\n)/i,
+                                    `$1${argBlock}`
+                                );
+                                await fs.writeFile(dfPath, patched, "utf-8");
+                            }
                         }
                     }
 
@@ -555,14 +575,13 @@ RÈGLES ABSOLUES:
                     const { execSync } = await import("node:child_process");
 
                     const projectName = `vibe-${id}`;
-                    const buildArgStr = buildArgFlags.join(" ");
                     execSync(
-                        `docker compose -p ${projectName} -f docker-compose.prod.yml up -d --build ${buildArgStr}`,
+                        `docker compose -p ${projectName} -f docker-compose.prod.yml up -d --build`,
                         {
                             cwd: p.workspace,
                             env: {
                                 ...process.env,
-                                ...buildArgEnv,  // also as env vars for compose interpolation
+                                ...viteVars,  // env vars for compose variable interpolation
                                 COMPOSE_PROJECT_NAME: projectName,
                                 HOST_PROJECT_PATH: hostProjectPath,
                             },
