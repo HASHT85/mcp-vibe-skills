@@ -27,11 +27,9 @@ COPY package*.json ./
 RUN npm install --omit=dev --ignore-scripts
 
 COPY --from=build /app/dist ./dist
-COPY entrypoint.sh ./
-RUN chmod +x entrypoint.sh
 
 EXPOSE 8080
 
 VOLUME ["/data", "/workspace"]
 
-ENTRYPOINT ["./entrypoint.sh"]
+CMD ["sh", "-c", "git config --global user.email vibecraft@auto.dev && git config --global user.name VibeCraft && exec node dist/index.js"]
