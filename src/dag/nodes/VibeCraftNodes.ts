@@ -125,7 +125,7 @@ export class DevelopmentNode extends AgentNode {
             role: "Developer",
             emoji: "💻",
             dependencies: ["supervisor_for_scaffold"],
-            maxTurns: 40,
+            maxTurns: 60,
             allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir", "read_memory", "write_memory"]
         });
     }
@@ -160,10 +160,12 @@ ${JSON.stringify(architecture, null, 2)}
 ÉTAPE 4 - HOOKS: Crée src/hooks/ (useWeather, useForecast, etc.)
   → Après: write_memory(key: "dev_progress", value: "DONE: types, utils, constants, services, hooks")
 
-ÉTAPE 5 - COMPOSANTS UI: Crée src/components/ (TOUS les composants React)
-  → Après: write_memory(key: "dev_progress", value: "DONE: types, utils, constants, services, hooks, components")
+ÉTAPE 5 - APP + STYLES + ENTRY POINTS (PRIORITAIRE):
+  Crée IMMÉDIATEMENT src/App.tsx, src/main.tsx, src/index.css, index.html, .env.example
+  Ces fichiers DOIVENT exister avant les composants!
+  → Après: write_memory(key: "dev_progress", value: "DONE: types, utils, constants, services, hooks, app+entry")
 
-ÉTAPE 6 - APP + STYLES: Crée/modifie src/App.tsx, src/index.css, src/main.tsx
+ÉTAPE 6 - COMPOSANTS UI: Crée src/components/ (TOUS les composants React)
   → Après: write_memory(key: "dev_progress", value: "DONE: all source files")
 
 ÉTAPE 7 - BUILD: npm install && npm run build → corrige les erreurs
@@ -173,7 +175,20 @@ ${JSON.stringify(architecture, null, 2)}
 - JAMAIS réécrire un fichier déjà créé sauf pour corriger un bug de build
 - Après chaque groupe de fichiers, utilise write_memory pour sauvegarder ta progression
 - Si le sliding window te fait perdre le contexte, lis dev_progress pour savoir où reprendre
-- Concentre-toi sur ÉCRIRE du code, pas sur lire/lister les fichiers en boucle`;
+- Concentre-toi sur ÉCRIRE du code, pas sur lire/lister les fichiers en boucle
+
+🚀 OPTIMISATION DES TURNS:
+Pour économiser des turns, REGROUPE plusieurs petits fichiers dans UN SEUL appel bash avec des heredocs:
+\`\`\`bash
+mkdir -p src/types src/utils
+cat > src/types/weather.ts << 'TSEOF'
+export interface Weather { ... }
+TSEOF
+cat > src/types/api.ts << 'TSEOF'
+export interface ApiResponse { ... }
+TSEOF
+\`\`\`
+Cela te permet de créer 3-5 fichiers en UN SEUL turn au lieu de 3-5 turns séparés.`;
 
         if ((this as any).supervisorFeedback) {
             prompt += `\n\n⚠️ ATTENTION: Lors de ta précédente tentative, le superviseur a REJETÉ ton travail et émis la critique suivante:\n\n${(this as any).supervisorFeedback}\n\nApplique ces corrections IMMÉDIATEMENT.`;
@@ -189,7 +204,8 @@ RÈGLES:
 2. Ne réécris JAMAIS un fichier que tu as déjà créé (sauf bug de build)
 3. Après chaque batch de fichiers, fais write_memory("dev_progress", "DONE: ...")
 4. Crée TOUS les fichiers en une seule passe, ne reviens pas en arrière
-5. Utilise read_memory pour les ports et write_memory pour les endpoints`;
+5. Utilise read_memory pour les ports et write_memory pour les endpoints
+6. REGROUPE les petits fichiers (<50 lignes) dans un seul appel bash avec des heredocs pour économiser des turns`;
         const skills = context.pipeline.artifacts.skills as SkillContent[] | undefined;
         if (skills?.length) {
             base += "\n\n📚 BEST PRACTICES (from skills.sh):\n";
@@ -210,7 +226,7 @@ export class QANode extends AgentNode {
             role: "QA",
             emoji: "🧪",
             dependencies: ["supervisor_for_development"],
-            maxTurns: 20,
+            maxTurns: 30,
             allowedTools: ["bash", "read_file", "read_memory", "write_memory"]
         });
     }
