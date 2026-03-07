@@ -7,6 +7,8 @@ export class GraphManager extends (EventEmitter as any) {
     private context: NodeContext;
     private running = false;
     private error: Error | null = null;
+    private rejectionCounts: Map<string, number> = new Map();
+    private static readonly MAX_REJECTIONS = 2;
 
     constructor(context: NodeContext) {
         super();
@@ -53,15 +55,26 @@ export class GraphManager extends (EventEmitter as any) {
                             node.execute(this.context).then(res => {
                                 // Support for feedback loops (Supervisor -> Node)
                                 if (res && res._action === "RESET_NODE" && res.targetId) {
+                                    // Track rejection count per target node
+                                    const count = (this.rejectionCounts.get(res.targetId) || 0) + 1;
+                                    this.rejectionCounts.set(res.targetId, count);
+
+                                    if (count >= GraphManager.MAX_REJECTIONS) {
+                                        // Max rejections reached — auto-accept to prevent token waste
+                                        console.log(`[Graph] Max rejections (${GraphManager.MAX_REJECTIONS}) reached for ${res.targetId}, auto-accepting`);
+                                        node.status = "COMPLETED";
+                                        node.result = { status: "VALID", note: "Auto-accepted after max rejections" };
+                                        this.emit("node-complete", { node, result: node.result });
+                                        checkExecution();
+                                        return;
+                                    }
+
                                     this.emit("node-feedback", { node, target: res.targetId, feedback: res.feedback });
 
                                     // Reset target node
                                     const targetNode = this.nodes.get(res.targetId);
                                     if (targetNode) {
                                         targetNode.reset();
-                                        // Inject feedback into the target node's context or result so it knows what to fix.
-                                        // For simplicity, we can pass it via a special property on the node itself, or let the target node read memory.
-                                        // The chosen approach: we store the feedback on the target node.
                                         (targetNode as any).supervisorFeedback = res.feedback;
                                     }
 

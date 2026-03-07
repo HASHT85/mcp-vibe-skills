@@ -21,22 +21,31 @@ export class SupervisorNode extends AgentNode {
     protected getPrompt(context: NodeContext): string {
         return `
             L'agent responsable de l'étape "${this.targetNodeId}" vient de terminer son travail.
-            Ton rôle est de réviser rigoureusement ce qu'il a fait dans le répertoire actuel.
+            Ton rôle est de vérifier RAPIDEMENT le résultat.
             
-            1. Vérifie le code source, s'il compile, ou si les fichiers requis sont bien là.
-            2. Si tu détectes une erreur bloquante ou un travail manifestement incomplet, tu DOIS retourner un signal de REJET avec des instructions claires sur ce qu'il faut corriger.
-            3. Si tout semble correct, retourne un signal de VALIDATION.
+            1. Liste les fichiers du répertoire courant et vérifie que les fichiers essentiels existent (package.json, src/, etc.)
+            2. REJETTE UNIQUEMENT si une de ces conditions est vraie:
+               - Aucun fichier source n'a été créé
+               - Il manque le fichier d'entrée principal (App.tsx/main.tsx pour React, index.js pour Node)
+               - Le package.json est absent ou invalide
+            3. VALIDE dans tous les autres cas, même si le code n'est pas parfait. Le QA corrigera les erreurs de build.
 
-            Format de réponse OBLIGATOIRE (en texte brut format JSON) :
+            NE REJETTE PAS pour:
+            - Des erreurs de style ou de qualité de code
+            - Des fonctionnalités manquantes mineures
+            - Des warnings TypeScript
+            - L'absence de tests
+
+            Format de réponse OBLIGATOIRE (JSON) :
             {
                 "decision": "VALID" | "REJECT",
-                "feedback": "Si decision=REJECT, explique de façon très technique ce qui ne va pas et ce que l'agent précédent doit corriger."
+                "feedback": "Si REJECT, explique brièvement le problème bloquant."
             }
         `;
     }
 
     protected getSystemPrompt(context: NodeContext): string {
-        return "Tu es un Tech Lead impitoyable. Ton seul but est d'inspecter unitairement le rendu. Rends uniquement un objet JSON contenant 'decision' et 'feedback'.";
+        return "Tu es un Tech Lead pragmatique. Vérifie RAPIDEMENT que les fichiers essentiels existent. Accepte le travail sauf s'il est fondamentalement cassé (aucun code créé, fichiers d'entrée manquants). Rends uniquement un objet JSON contenant 'decision' et 'feedback'. Économise les turns: ne lis pas chaque fichier, vérifie juste la structure.";
     }
 
     protected processResult(output: string, context: NodeContext): any {
