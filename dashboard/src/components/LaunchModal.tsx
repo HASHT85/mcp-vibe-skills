@@ -1,17 +1,15 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Rocket, Paperclip, X } from 'lucide-react';
 
 const MODEL_OPTIONS = [
-    { value: 'claude-sonnet-4-6', label: 'Claude 4.6 Sonnet' },
-    { value: 'claude-opus-4-6', label: 'Claude 4.6 Opus' },
-    { value: 'claude-haiku-4-5', label: 'Claude 4.5 Haiku' },
-    { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet' },
+    { value: 'claude-3-7-sonnet-latest', label: 'Claude 3.7 Sonnet' },
+    { value: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku' },
+    { value: 'claude-3-5-sonnet-latest', label: 'Claude 3.5 Sonnet (Legacy)' },
     { value: 'gpt-4o', label: 'GPT-4o (OpenAI)' },
     { value: 'o1', label: 'o1 (OpenAI)' },
     { value: 'o3-mini', label: 'o3-mini (OpenAI)' },
-    { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' },
-    { value: 'gemini-3.0-pro', label: 'Gemini 3.0 Pro' }
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' }
 ];
 
 export function LaunchModal({ onClose, onLaunch }: {
@@ -49,7 +47,7 @@ export function LaunchModal({ onClose, onLaunch }: {
         const isTooLarge = f.size > MAX_MB * 1024 * 1024;
 
         if (isTooLarge) {
-            setFiles(prev => [...prev, { name: f.name, type: f.type, data: '', size: f.size, error: `Trop lourd (Max ${MAX_MB}MB)` }]);
+            setFiles(prev => [...prev, { name: f.name, type: f.type, data: '', size: f.size, error: `TOO LARGE (MAX ${MAX_MB}MB)` }]);
             return;
         }
 
@@ -87,92 +85,143 @@ export function LaunchModal({ onClose, onLaunch }: {
 
     return (
         <motion.div
-            className="modal-overlay"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 cursor-default"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
         >
             <motion.div
-                className="modal"
+                className="bg-panel border border-accent/30 w-full max-w-2xl flex flex-col scanline shadow-[0_0_30px_rgba(212,255,0,0.1)] relative origin-center overflow-hidden"
                 initial={{ opacity: 0, scale: 0.95, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 10 }}
                 onClick={(e) => e.stopPropagation()}
             >
-                <h2>🚀 Lancer une idée</h2>
-                <p>Décris ton projet. Les agents IA vont l'analyser, le concevoir, le développer et le déployer automatiquement.</p>
-                <input
-                    className="login-input"
-                    placeholder="Titre du projet (optionnel)"
-                    value={name}
-                    onChange={(e: any) => setName(e.target.value)}
-                    style={{ marginBottom: '12px', width: '100%' }}
-                />
-                <input
-                    list="model-options-launch"
-                    className="login-input"
-                    placeholder="Modèle IA (Laisse vide pour claude-4-6-sonnet, ou tape ton modèle API proxy)"
-                    value={model}
-                    onChange={(e: any) => setModel(e.target.value)}
-                    style={{ marginBottom: '12px', width: '100%', padding: '12px', background: 'var(--bg-layer-2)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: '8px' }}
-                />
-                <datalist id="model-options-launch">
-                    {MODEL_OPTIONS.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                </datalist>
-                <textarea
-                    placeholder="Ex: Un dashboard React analytique, OU un Bot Python autonome pour scraper des annonces Web 24/7... (Vous pouvez aussi coller une image Ctrl+V)"
-                    value={desc}
-                    onChange={(e) => setDesc(e.target.value)}
-                    onPaste={handlePaste}
-                    autoFocus
-                />
+                {/* Decorative Elements */}
+                <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-accent/50 m-1"></div>
+                <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-accent/50 m-1"></div>
+                <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-accent/50 m-1"></div>
+                <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-accent/50 m-1"></div>
 
-                {files.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-                        {files.map((f, i) => (
-                            <div key={i} className="file-preview-pill" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-layer-2)', borderRadius: 8, border: f.error ? '1px solid var(--error)' : '1px solid transparent' }}>
-                                {f.thumbnail ? (
-                                    <img src={f.thumbnail} alt="preview" style={{ width: 24, height: 24, objectFit: 'cover', borderRadius: 4 }} />
-                                ) : (
-                                    <Paperclip size={14} />
-                                )}
-                                <span style={{ fontSize: 12, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: f.error ? 'var(--error)' : 'inherit' }}>
-                                    {f.name}
-                                    {f.error && <span style={{ display: 'block', fontSize: 10, marginTop: 2 }}>{f.error}</span>}
-                                </span>
-                                <button onClick={() => removeFile(i)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
-                                    <X size={14} />
-                                </button>
-                            </div>
-                        ))}
+                <div className="flex items-center gap-3 p-6 border-b border-border-muted/50 bg-background-dark relative z-10">
+                    <span className="material-symbols-outlined text-3xl text-accent">add_box</span>
+                    <div>
+                        <h2 className="text-xl font-black text-white tracking-widest uppercase m-0">Initialize_Project</h2>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                            Provide architectural directives for autonomous matrix deployment
+                        </p>
                     </div>
-                )}
+                </div>
 
-                <div className="modal-actions">
+                <div className="p-6 flex flex-col gap-4 relative z-10">
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-black text-slate-400 tracking-widest uppercase">Project Identifier (Optional)</label>
+                        <input
+                            className="bg-black border border-border-muted focus:border-accent text-white p-3 font-medium outline-none transition-colors placeholder:text-slate-600 rounded-none w-full"
+                            placeholder="e.g. Nexus_Dashboard_v2"
+                            value={name}
+                            onChange={(e: any) => setName(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-black text-slate-400 tracking-widest uppercase">Select Neural Engine (Optional)</label>
+                        <div className="relative">
+                            <input
+                                list="model-options-launch"
+                                className="bg-black border border-border-muted focus:border-accent text-white p-3 font-medium outline-none transition-colors placeholder:text-slate-600 rounded-none w-full"
+                                placeholder="Default: Claude 3.7 Sonnet"
+                                value={model}
+                                onChange={(e: any) => setModel(e.target.value)}
+                            />
+                            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">expand_more</span>
+                        </div>
+                        <datalist id="model-options-launch">
+                            {MODEL_OPTIONS.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                        </datalist>
+                    </div>
+
+                    <div className="flex flex-col gap-1 flex-1 min-h-[150px]">
+                        <label className="text-[10px] font-black text-accent tracking-widest uppercase flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">terminal</span> Architectural Directives
+                        </label>
+                        <textarea
+                            className="bg-black border border-border-muted focus:border-accent text-white p-3 font-medium outline-none transition-colors placeholder:text-slate-600 rounded-none w-full flex-1 resize-y min-h-[150px] custom-scrollbar"
+                            placeholder="Ex: Un dashboard React analytique, avec un backend FastAPI et une base de données PostgreSQL..."
+                            value={desc}
+                            onChange={(e) => setDesc(e.target.value)}
+                            onPaste={handlePaste}
+                            autoFocus
+                        />
+                    </div>
+
+                    {files.length > 0 && (
+                        <div className="flex flex-wrap gap-2 p-3 bg-black/50 border border-white/5 border-dashed">
+                            {files.map((f, i) => (
+                                <div key={i} className={`flex items-center gap-2 p-2 bg-white/5 border rounded-none ${f.error ? 'border-red-500' : 'border-white/10'}`}>
+                                    {f.thumbnail ? (
+                                        <img src={f.thumbnail} alt="preview" className="w-8 h-8 object-cover border border-white/20" />
+                                    ) : (
+                                        <span className="material-symbols-outlined text-slate-400">description</span>
+                                    )}
+                                    <div className="flex flex-col max-w-[150px]">
+                                        <span className={`text-[10px] font-bold truncate ${f.error ? 'text-red-500' : 'text-slate-300'}`}>
+                                            {f.name}
+                                        </span>
+                                        {f.error && <span className="text-[9px] text-red-500 font-black tracking-widest">{f.error}</span>}
+                                    </div>
+                                    <button 
+                                        className="ml-auto text-slate-500 hover:text-white transition-colors"
+                                        onClick={() => removeFile(i)}
+                                    >
+                                        <span className="material-symbols-outlined text-[14px]">close</span>
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="p-4 border-t border-border-muted/50 bg-background-dark flex items-center justify-between relative z-10">
                     <input
                         type="file"
                         ref={fileInputRef}
                         onChange={handleFileChange}
                         accept="image/*,application/pdf"
-                        style={{ display: 'none' }}
+                        className="hidden"
+                        multiple
                     />
-                    <button className="btn-cancel" onClick={() => fileInputRef.current?.click()} title="Joindre une image ou un PDF" style={{ marginRight: 'auto' }}>
-                        <Paperclip size={16} />
+                    <button 
+                        className="flex items-center gap-2 text-[10px] font-bold tracking-widest text-slate-400 hover:text-white uppercase px-3 py-2 border border-transparent hover:border-slate-700 transition-colors" 
+                        onClick={() => fileInputRef.current?.click()} 
+                        title="Attach Media or Documents"
+                    >
+                        <span className="material-symbols-outlined text-[16px]">attach_file</span>
+                        Attach_Data
                     </button>
 
-                    <button className="btn-cancel" onClick={onClose}>Annuler</button>
-                    <button
-                        className="btn-launch"
-                        onClick={submit}
-                        disabled={!desc.trim() || loading}
-                    >
-                        {loading ? '⏳ Lancement...' : (
-                            <><Rocket size={14} /> Lancer la pipeline</>
-                        )}
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button 
+                            className="text-[10px] font-bold tracking-widest text-slate-400 hover:text-white uppercase px-4 py-2" 
+                            onClick={onClose}
+                        >
+                            Abort
+                        </button>
+                        <button
+                            className="bg-accent/20 hover:bg-accent/40 text-accent border border-accent/50 font-black text-xs px-6 py-2 tracking-widest uppercase flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={submit}
+                            disabled={!desc.trim() || loading}
+                        >
+                            {loading ? (
+                                <><span className="material-symbols-outlined animate-spin text-[16px]">sync</span> EXECUTING...</>
+                            ) : (
+                                <><span className="material-symbols-outlined text-[16px]">rocket_launch</span> INITIATE_SEQUENCE</>
+                            )}
+                        </button>
+                    </div>
                 </div>
             </motion.div>
         </motion.div>

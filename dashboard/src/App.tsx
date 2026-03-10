@@ -1,11 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import {
-  Rocket, FolderKanban, Bot, Sparkles, Server,
-  ChevronLeft, Plus, ExternalLink, Github, Play, Bomb,
-  Trash2, LayoutGrid, Coins, Edit, Paperclip, X,
-  Globe, Cpu, Database
-} from 'lucide-react';
 import { checkAuth, setAuth, listPipelines, launchIdea, killPipeline, deletePipeline, connectAllSSE, modifyPipeline } from './api/client';
 import type { Pipeline, PipelineEvent, PipelineAgent } from './api/client';
 import './index.css';
@@ -179,28 +173,37 @@ function Dashboard() {
   };
 
   return (
-    <div className="app-layout">
-      {/* TopBar */}
-      <TopBar
-        pipelineCount={pipelines.filter(p => !['COMPLETED', 'FAILED'].includes(p.phase)).length}
-        onLaunch={() => setShowModal(true)}
-        totalTokens={pipelines.reduce((sum, p) => sum + (p.tokenUsage?.inputTokens || 0) + (p.tokenUsage?.outputTokens || 0), 0)}
-      />
+    <div className="relative flex h-screen w-full flex-col overflow-hidden scanline">
+      
+      {/* ─── Header / Top Bar ─── */}
+      <TopBar />
 
-      {/* Sidebar */}
-      <Sidebar active={activeNav} onChange={(id) => { setActiveNav(id); setSelectedId(null); }} />
+      <div className="flex flex-1 overflow-hidden">
+        {/* ─── Sidebar Navigation ─── */}
+        <Sidebar active={activeNav} onChange={(id) => { setActiveNav(id); setSelectedId(null); }} onLaunch={() => setShowModal(true)} />
 
-      {/* Main */}
-      <main className="main-content">
-        <AnimatePresence mode="wait">
-          {renderMainContent()}
-        </AnimatePresence>
-      </main>
+        {/* ─── Main Content Area ─── */}
+        <main className="flex-1 overflow-y-auto bg-background-dark p-6">
+          <AnimatePresence mode="wait">
+            {renderMainContent()}
+          </AnimatePresence>
+        </main>
 
-      {/* Activity Panel */}
-      <LiveActivityPanel events={liveEvents} pipelines={pipelines} />
+        {/* ─── Right Sidebar: Live Activity ─── */}
+        <LiveActivityPanel events={liveEvents} />
+      </div>
 
-      {/* Launch Modal */}
+      {/* ─── System Footer ─── */}
+      <footer className="h-8 bg-panel border-t border-border-muted flex items-center justify-between px-4 text-[9px] font-bold text-slate-500 tracking-[0.2em] uppercase">
+        <div>VIBECRAFT_HQ // HOST_A09 // USER_ROOT</div>
+        <div className="flex gap-4">
+          <span>COORD: 45.92 - 12.01</span>
+          <span>STATUS: NOMINAL</span>
+          <span className="text-accent">TERM_SECURED</span>
+        </div>
+      </footer>
+
+      {/* ─── Launch Modal ─── */}
       <AnimatePresence>
         {showModal && (
           <LaunchModal
