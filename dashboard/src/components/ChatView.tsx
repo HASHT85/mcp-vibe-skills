@@ -6,8 +6,12 @@ import {
 import type { ChatSession, ChatMessage } from '../api/client';
 
 const MODEL_OPTIONS = [
-    { value: 'claude-3-7-sonnet-latest', label: 'Claude 3.7 Sonnet' },
-    { value: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku' },
+    { value: 'claude-opus-4-5', label: 'Claude Opus 4.6' },
+    { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.6' },
+    { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+    { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' },
+    { value: 'gemini-3.0-pro', label: 'Gemini 3.0 Pro' },
+    { value: 'gpt-4o', label: 'GPT-4o (OpenAI)' },
 ];
 
 export function ChatView({ onPipelineLaunched }: { onPipelineLaunched?: () => void }) {
@@ -16,7 +20,7 @@ export function ChatView({ onPipelineLaunched }: { onPipelineLaunched?: () => vo
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     const [launching, setLaunching] = useState(false);
-    const [model, setModel] = useState('claude-3-7-sonnet-latest');
+    const [model, setModel] = useState('claude-sonnet-4-5');
     const bottomRef = useRef<HTMLDivElement>(null);
 
     const loadSessions = useCallback(async () => {

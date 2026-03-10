@@ -2,14 +2,13 @@ import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 
 const MODEL_OPTIONS = [
-    { value: 'claude-3-7-sonnet-latest', label: 'Claude 3.7 Sonnet' },
-    { value: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku' },
-    { value: 'claude-3-5-sonnet-latest', label: 'Claude 3.5 Sonnet (Legacy)' },
+    { value: 'claude-opus-4-5', label: 'Claude Opus 4.6' },
+    { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.6' },
+    { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+    { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' },
+    { value: 'gemini-3.0-pro', label: 'Gemini 3.0 Pro' },
     { value: 'gpt-4o', label: 'GPT-4o (OpenAI)' },
-    { value: 'o1', label: 'o1 (OpenAI)' },
     { value: 'o3-mini', label: 'o3-mini (OpenAI)' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' }
 ];
 
 export function LaunchModal({ onClose, onLaunch }: {
