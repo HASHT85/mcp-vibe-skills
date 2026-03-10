@@ -81,7 +81,7 @@ export function TokensView({ pipelines }: { pipelines: Pipeline[] }) {
                                 <div className="flex items-center gap-3 mb-2 sm:mb-0">
                                     <span className="material-symbols-outlined text-slate-500 group-hover:text-accent transition-colors">folder_data</span>
                                     <span className="text-sm font-bold text-white tracking-widest uppercase truncate max-w-[200px]" title={p.name}>
-                                        {p.name.replace(/\s+/g, '_').toLowerCase()}
+                                        {(p.name || 'unnamed').replace(/\s+/g, '_').toLowerCase()}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-4 text-xs monospaced">

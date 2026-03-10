@@ -37,7 +37,7 @@ export function DeployView({ pipelines }: { pipelines: Pipeline[] }) {
                             
                             <div className="flex justify-between items-start mb-4 relative z-10 border-b border-border-muted pb-3">
                                 <span className="text-lg font-black text-white tracking-widest uppercase truncate pr-2">
-                                    {p.name.replace(/\s+/g, '_').toLowerCase()}
+                                    {(p.name || 'unnamed').replace(/\s+/g, '_').toLowerCase()}
                                 </span>
                                 <span className={`${badgeColorClass} text-[9px] font-black px-2 py-0.5 uppercase tracking-widest shrink-0`}>
                                     {p.phase}

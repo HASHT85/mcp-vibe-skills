@@ -154,7 +154,7 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
                                 {getTypeIcon()}
                             </span>
                             <h2 className="text-3xl font-black text-white tracking-widest uppercase">
-                                {p.name.replace(/\s+/g, '_').toLowerCase()}
+                                {(p.name || 'unnamed').replace(/\s+/g, '_').toLowerCase()}
                             </h2>
                             <span className={`${badgeColorClass} text-[10px] font-black px-3 py-1 tracking-widest uppercase ml-4`}>
                                 {p.phase}

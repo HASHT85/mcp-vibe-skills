@@ -61,7 +61,7 @@ export function AgentsView({ pipelines }: { pipelines: Pipeline[] }) {
                                         </span>
                                     </div>
                                     <div className="text-[10px] text-slate-400 mb-1 monospaced truncate" title={agent.pipelineName}>
-                                        NODE: {agent.pipelineName.replace(/\s+/g, '_').toUpperCase()}
+                                        NODE: {(agent.pipelineName || 'unknown').replace(/\s+/g, '_').toUpperCase()}
                                     </div>
                                     <div className="text-xs text-slate-300 mt-2 font-medium line-clamp-2">
                                         {agent.currentAction || agent.pipelinePhase}
