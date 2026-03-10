@@ -8,7 +8,7 @@ function getPipelineForContainer(name: string, pipelines: Pipeline[]): Pipeline 
     const match = name.match(/^vibe-([a-f0-9]+)-/);
     if (!match) return undefined;
     const pipelineId = match[1];
-    return pipelines.find(p => p.id.startsWith(pipelineId));
+    return pipelines.find(p => p.id && p.id.startsWith(pipelineId));
 }
 
 export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
