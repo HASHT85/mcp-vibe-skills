@@ -568,7 +568,10 @@ RÈGLES ABSOLUES:
                         }
                     }
 
-                    // Use host path for the build context so Docker daemon can access the files
+                    // Use host path for build-arg env vars, but cwd must be the CONTAINER path
+                    // because execSync runs inside the container.
+                    // Docker CLI reads the compose file from its local filesystem and sends
+                    // the build context as a tar archive to the daemon — no host path needed for cwd.
                     const hostWorkspace = process.env.HOST_WORKSPACE_PATH || "/opt/vibecraft/workspace";
                     const hostProjectPath = path.join(hostWorkspace, id);
 
@@ -576,21 +579,16 @@ RÈGLES ABSOLUES:
 
                     const projectName = `vibe-${id}`;
 
-                    // CRITICAL: Docker daemon runs on the HOST, so cwd must be the HOST path.
-                    // The container's /workspace/xxx is mapped to HOST_WORKSPACE_PATH/xxx on the host.
-                    // We must also pass the docker-compose file by its absolute HOST path.
-                    const hostComposePath = path.join(hostProjectPath, "docker-compose.prod.yml");
-
+                    console.log(`[Deploy] Container project path: ${p.workspace}`);
                     console.log(`[Deploy] Host project path: ${hostProjectPath}`);
-                    console.log(`[Deploy] Host compose file: ${hostComposePath}`);
 
                     execSync(
-                        `docker compose -p ${projectName} -f ${hostComposePath} up -d --build`,
+                        `docker compose -p ${projectName} -f docker-compose.prod.yml up -d --build`,
                         {
-                            cwd: hostProjectPath,
+                            cwd: p.workspace,  // MUST be container path — execSync runs inside container
                             env: {
                                 ...process.env,
-                                ...viteVars,  // env vars for compose variable interpolation
+                                ...viteVars,
                                 COMPOSE_PROJECT_NAME: projectName,
                                 HOST_PROJECT_PATH: hostProjectPath,
                             },
