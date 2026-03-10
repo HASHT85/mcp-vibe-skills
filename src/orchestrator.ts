@@ -525,26 +525,37 @@ RÈGLES ABSOLUES:
 
                                      console.log(`[Deploy] Building image ${imageName} from ${p.workspace}`);
 
-                    // Smart Dockerfile detection: check root first, then scan all subdirs
+                    // Smart Dockerfile detection: check root first, then scan all subdirs (including .prod variants)
                     let dockerfilePath = "";
                     let buildContext = p.workspace;
 
-                    // 1) Check root Dockerfile
+                    // 1) Check root Dockerfile (and Dockerfile.prod)
                     const rootDockerfile = path.join(p.workspace, "Dockerfile");
+                    const rootDockerfileProd = path.join(p.workspace, "Dockerfile.prod");
                     if (await fs.access(rootDockerfile).then(() => true).catch(() => false)) {
                         dockerfilePath = rootDockerfile;
                         buildContext = p.workspace;
                         console.log(`[Deploy] Found Dockerfile at root`);
+                    } else if (await fs.access(rootDockerfileProd).then(() => true).catch(() => false)) {
+                        dockerfilePath = rootDockerfileProd;
+                        buildContext = p.workspace;
+                        console.log(`[Deploy] Found Dockerfile.prod at root`);
                     } else {
-                        // 2) Scan all immediate subdirectories for a Dockerfile
+                        // 2) Scan all immediate subdirectories for a Dockerfile or Dockerfile.prod
                         const entries = await fs.readdir(p.workspace, { withFileTypes: true });
                         for (const entry of entries) {
                             if (entry.isDirectory() && entry.name !== "node_modules" && entry.name !== ".git") {
                                 const subDockerfile = path.join(p.workspace, entry.name, "Dockerfile");
+                                const subDockerfileProd = path.join(p.workspace, entry.name, "Dockerfile.prod");
                                 if (await fs.access(subDockerfile).then(() => true).catch(() => false)) {
                                     dockerfilePath = subDockerfile;
                                     buildContext = path.join(p.workspace, entry.name);
-                                    console.log(`[Deploy] Found Dockerfile at ${entry.name}/Dockerfile, context: ${buildContext}`);
+                                    console.log(`[Deploy] Found Dockerfile in ${entry.name}/, context: ${buildContext}`);
+                                    break;
+                                } else if (await fs.access(subDockerfileProd).then(() => true).catch(() => false)) {
+                                    dockerfilePath = subDockerfileProd;
+                                    buildContext = path.join(p.workspace, entry.name);
+                                    console.log(`[Deploy] Found Dockerfile.prod in ${entry.name}/, context: ${buildContext}`);
                                     break;
                                 }
                             }
@@ -552,10 +563,62 @@ RÈGLES ABSOLUES:
                     }
 
                     if (!dockerfilePath) {
-                        // Create a default multi-stage Dockerfile for SPA at root
-                        console.log(`[Deploy] No Dockerfile found, creating default SPA Dockerfile`);
+                        console.log(`[Deploy] No Dockerfile found, creating auto-detected Dockerfile`);
                         dockerfilePath = path.join(p.workspace, "Dockerfile");
-                        const defaultDockerfile = `FROM node:20-alpine AS builder
+
+                        // Detect project type: monorepo (frontend/ + backend/) or flat SPA/API
+                        const hasFrontend = await fs.access(path.join(p.workspace, "frontend")).then(() => true).catch(() => false);
+                        const hasBackend = await fs.access(path.join(p.workspace, "backend")).then(() => true).catch(() => false);
+                        const hasSrc = await fs.access(path.join(p.workspace, "src")).then(() => true).catch(() => false);
+                        const hasRootPkg = await fs.access(path.join(p.workspace, "package.json")).then(() => true).catch(() => false);
+
+                        let defaultDockerfile: string;
+
+                        if (hasFrontend && hasBackend) {
+                            // Monorepo: frontend (SPA) + backend (Node.js)
+                            console.log(`[Deploy] Detected monorepo (frontend+backend), generating multi-service Dockerfile`);
+                            defaultDockerfile = `# Stage 1: Build frontend
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ .
+RUN npm run build
+
+# Stage 2: Build backend
+FROM node:20-alpine AS backend-builder
+WORKDIR /app/backend
+COPY backend/package*.json ./
+RUN npm install
+COPY backend/ .
+RUN npm run build 2>/dev/null || true
+
+# Stage 3: Production (serve frontend via nginx + run backend)
+FROM node:20-alpine
+WORKDIR /app
+
+# Install nginx
+RUN apk add --no-cache nginx
+RUN mkdir -p /run/nginx /usr/share/nginx/html
+
+# Copy built frontend to nginx
+COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
+
+# Copy backend
+COPY --from=backend-builder /app/backend ./backend
+RUN cd backend && npm install --only=production 2>/dev/null || true
+
+# nginx config (proxy /api to backend on 3001)
+RUN echo 'server { listen 80; root /usr/share/nginx/html; index index.html; location /api { proxy_pass http://localhost:3001; } location / { try_files $uri $uri/ /index.html; } }' > /etc/nginx/http.d/default.conf
+
+# Start script
+RUN printf '#!/bin/sh\\nnginx &\\ncd /app/backend && node dist/index.js 2>/dev/null || node src/index.js\\n' > /start.sh && chmod +x /start.sh
+
+EXPOSE 80 3001
+CMD ["/start.sh"]`;
+                        } else if (hasRootPkg && !hasSrc) {
+                            // Flat SPA with npm build, output in dist/
+                            defaultDockerfile = `FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
@@ -564,9 +627,26 @@ RUN npm run build
 
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
-RUN echo 'server { listen 80; root /usr/share/nginx/html; index index.html; location / { try_files \\$uri \\$uri/ /index.html; } }' > /etc/nginx/conf.d/default.conf
+RUN echo 'server { listen 80; root /usr/share/nginx/html; index index.html; location / { try_files $uri $uri/ /index.html; } }' > /etc/nginx/conf.d/default.conf
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]`;
+                        } else {
+                            // Node.js backend style
+                            defaultDockerfile = `FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build 2>/dev/null || true
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app ./
+RUN npm install --only=production
+EXPOSE 3000
+CMD ["node", "dist/index.js"]`;
+                        }
+
                         await fs.writeFile(dockerfilePath, defaultDockerfile, "utf-8");
                     }
 
