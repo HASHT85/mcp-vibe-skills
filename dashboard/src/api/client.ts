@@ -249,10 +249,10 @@ export async function createChatSession(model?: string) {
     });
 }
 
-export async function sendChatMessage(sessionId: string, content: string) {
+export async function sendChatMessage(sessionId: string, content: string, files?: { base64: string; type: string }[]) {
     return api<{ reply: string; session: ChatSession }>(`/chat/sessions/${sessionId}/message`, {
         method: 'POST',
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, files }),
     });
 }
 

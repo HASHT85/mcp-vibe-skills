@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     createChatSession, sendChatMessage, listChatSessions, launchFromChat, deleteChatSession,
@@ -17,6 +17,15 @@ const MODEL_OPTIONS = [
 
 type ChatMode = 'new' | 'modify';
 
+type AttachedFile = {
+    name: string;
+    type: string;
+    data: string;    // base64
+    size: number;
+    error?: string;
+    thumbnail?: string;
+};
+
 interface ChatViewProps {
     pipelines?: Pipeline[];
     onPipelineLaunched?: () => void;
@@ -32,7 +41,10 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     const [model, setModel] = useState('claude-sonnet-4-6');
     const [mode, setMode] = useState<ChatMode>('new');
     const [selectedPipelineId, setSelectedPipelineId] = useState<string>('');
+    const [files, setFiles] = useState<AttachedFile[]>([]);
+    const [dragOver, setDragOver] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Filter pipelines that can be modified (COMPLETED or FAILED)
     const modifiablePipelines = pipelines.filter(p => ['COMPLETED', 'FAILED'].includes(p.phase));
@@ -50,6 +62,52 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [activeSession?.messages, sending]);
 
+    // ─── File Handling ───
+
+    const processFile = (f: File) => {
+        const MAX_MB = 10;
+        if (f.size > MAX_MB * 1024 * 1024) {
+            setFiles(prev => [...prev, { name: f.name, type: f.type, data: '', size: f.size, error: `MAX ${MAX_MB}MB` }]);
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const result = e.target?.result as string;
+            const base64 = result.split(',')[1];
+            if (base64) {
+                const thumbnail = f.type.startsWith('image/') ? result : undefined;
+                setFiles(prev => [...prev, { name: f.name, type: f.type, data: base64, size: f.size, thumbnail }]);
+            }
+        };
+        reader.readAsDataURL(f);
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) Array.from(e.target.files).forEach(processFile);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const handlePaste = (e: React.ClipboardEvent) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (const item of items) {
+            if (item.type.startsWith('image/') || item.type === 'application/pdf') {
+                const f = item.getAsFile();
+                if (f) { processFile(f); e.preventDefault(); }
+            }
+        }
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setDragOver(false);
+        if (e.dataTransfer.files) Array.from(e.dataTransfer.files).forEach(processFile);
+    };
+
+    const removeFile = (index: number) => setFiles(prev => prev.filter((_, i) => i !== index));
+
+    // ─── Chat Logic ───
+
     const createNewSession = async () => {
         try {
             const data = await createChatSession(model);
@@ -61,24 +119,30 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     };
 
     const handleSend = async () => {
-        if (!input.trim() || !activeSession || sending) return;
+        if ((!input.trim() && files.length === 0) || !activeSession || sending) return;
         const msg = input.trim();
+        const attachedFiles = files.filter(f => !f.error).map(f => ({ base64: f.data, type: f.type }));
         setInput('');
+        setFiles([]);
         setSending(true);
 
-        // Optimistic UI: add user message immediately
-        const optimisticMsg: ChatMessage = { role: 'user', content: msg, timestamp: new Date().toISOString() };
-        setActiveSession(prev => prev ? {
-            ...prev,
-            messages: [...prev.messages, optimisticMsg],
-        } : null);
+        // Build display content
+        const fileNames = attachedFiles.length > 0 ? `\n[📎 ${attachedFiles.length} FILE(S) ATTACHED]` : '';
+        const displayContent = msg + fileNames;
+
+        // Optimistic UI
+        const optimisticMsg: ChatMessage = { role: 'user', content: displayContent, timestamp: new Date().toISOString() };
+        setActiveSession(prev => prev ? { ...prev, messages: [...prev.messages, optimisticMsg] } : null);
 
         try {
-            const data = await sendChatMessage(activeSession.id, msg);
+            const data = await sendChatMessage(
+                activeSession.id,
+                msg || '[Attached files]',
+                attachedFiles.length > 0 ? attachedFiles : undefined
+            );
             setActiveSession(data.session);
         } catch (err: any) {
             alert(`SYS_ERR: ${err.message}`);
-            // Revert optimistic update
             setActiveSession(prev => prev ? {
                 ...prev,
                 messages: prev.messages.filter(m => m !== optimisticMsg),
@@ -93,13 +157,13 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
         setLaunching(true);
         try {
             if (mode === 'modify' && selectedPipelineId) {
-                // Collect all user messages as modification instructions
                 const instructions = activeSession.messages
                     .filter(m => m.role === 'user')
                     .map(m => m.content)
                     .join('\n');
-                await modifyPipeline(selectedPipelineId, instructions, model);
-                // Add system feedback message
+                const attachedFiles = files.filter(f => !f.error).map(f => ({ base64: f.data, type: f.type }));
+                await modifyPipeline(selectedPipelineId, instructions, model, attachedFiles.length > 0 ? attachedFiles : undefined);
+                setFiles([]);
                 setActiveSession(prev => prev ? {
                     ...prev,
                     messages: [...prev.messages, {
@@ -110,9 +174,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                 } : null);
                 onRefresh?.();
             } else {
-                // Launch new project from chat context
                 await launchFromChat(activeSession.id);
-                // Add system feedback message
                 setActiveSession(prev => prev ? {
                     ...prev,
                     messages: [...prev.messages, {
@@ -223,7 +285,6 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                 </div>
                 
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-2 flex flex-col gap-2 relative">
-                    {/* Background Grid Pattern */}
                     <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:10px_10px] pointer-events-none opacity-20" />
                     
                     {sessions.map(s => {
@@ -266,7 +327,30 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
             </div>
 
             {/* Chat main area */}
-            <div className="flex-1 flex flex-col relative bg-v-bg overflow-hidden scanline">
+            <div
+                className={`flex-1 flex flex-col relative bg-v-bg overflow-hidden scanline ${dragOver ? 'ring-2 ring-v-accent ring-inset' : ''}`}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+            >
+                {/* Hidden file input */}
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept="image/*,application/pdf,.txt,.md,.json,.csv,.html,.css,.js,.ts,.tsx,.jsx,.py"
+                    className="hidden"
+                    multiple
+                />
+
+                {/* Drag overlay */}
+                {dragOver && (
+                    <div className="absolute inset-0 z-50 bg-v-bg/90 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="material-symbols-outlined text-6xl text-v-accent mb-4 animate-bounce">upload_file</span>
+                        <span className="text-v-accent text-sm font-black tracking-widest uppercase">DROP FILES HERE</span>
+                    </div>
+                )}
+
                 {!activeSession ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center relative z-10">
                         <span className="material-symbols-outlined text-6xl text-white/20 mb-6 font-light">speaker_notes_off</span>
@@ -282,7 +366,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                     </div>
                 ) : (
                     <>
-                        {/* Header bar with mode indicator */}
+                        {/* Header bar */}
                         <div className="bg-v-accent text-v-bg px-4 py-1 font-black flex justify-between items-center font-sans tracking-tight z-10 relative">
                             <div className="flex items-center gap-3">
                                 <span>{mode === 'modify' ? 'MODIFY_STREAM' : 'LOG_READOUT_STREAM'}</span>
@@ -352,24 +436,59 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                             <div ref={bottomRef} className="h-4" />
                         </div>
 
+                        {/* Attached Files Preview */}
+                        {files.length > 0 && (
+                            <div className="px-4 py-2 border-t border-v-accent/30 bg-v-surface/50 flex flex-wrap gap-2 relative z-10">
+                                {files.map((f, i) => (
+                                    <div key={i} className={`flex items-center gap-2 p-2 bg-v-bg border ${f.error ? 'border-v-alert' : 'border-v-accent/30'} max-w-[200px]`}>
+                                        {f.thumbnail ? (
+                                            <img src={f.thumbnail} alt="preview" className="w-8 h-8 object-cover border border-white/20 shrink-0" />
+                                        ) : (
+                                            <span className="material-symbols-outlined text-slate-400 text-[18px] shrink-0">description</span>
+                                        )}
+                                        <div className="flex flex-col min-w-0 flex-1">
+                                            <span className={`text-[10px] font-bold truncate ${f.error ? 'text-v-alert' : 'text-slate-300'}`}>
+                                                {f.name}
+                                            </span>
+                                            {f.error && <span className="text-[9px] text-v-alert font-black tracking-widest">{f.error}</span>}
+                                            {!f.error && <span className="text-[9px] text-slate-500">{(f.size / 1024).toFixed(1)}KB</span>}
+                                        </div>
+                                        <button className="text-slate-500 hover:text-white transition-colors shrink-0" onClick={() => removeFile(i)}>
+                                            <span className="material-symbols-outlined text-[14px]">close</span>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
                         {/* Input Area */}
                         <div className="p-4 border-t-2 border-v-accent bg-v-bg flex flex-col gap-3 relative z-10">
                             {/* Toolbar */}
                             <div className="flex justify-between items-center px-2">
-                                {/* Modify mode warning */}
-                                {mode === 'modify' && !selectedPipelineId && (
-                                    <span className="text-[10px] text-v-alert font-bold tracking-widest uppercase flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-[14px]">warning</span>
-                                        SELECT TARGET NODE IN SIDEBAR
-                                    </span>
-                                )}
-                                {mode === 'modify' && selectedPipelineId && (
-                                    <span className="text-[10px] text-v-nominal font-bold tracking-widest uppercase flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                                        TARGET LOCKED
-                                    </span>
-                                )}
-                                {mode === 'new' && <span />}
+                                <div className="flex items-center gap-2">
+                                    {/* Attach button */}
+                                    <button
+                                        className="flex items-center gap-1 text-[10px] font-bold tracking-widest text-slate-400 hover:text-v-accent uppercase px-2 py-1 border border-transparent hover:border-v-accent/30 transition-colors"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        title="Attach files (images, PDF, code) or paste with Ctrl+V"
+                                    >
+                                        <span className="material-symbols-outlined text-[14px]">attach_file</span>
+                                        ATTACH
+                                    </button>
+
+                                    {mode === 'modify' && !selectedPipelineId && (
+                                        <span className="text-[10px] text-v-alert font-bold tracking-widest uppercase flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[14px]">warning</span>
+                                            SELECT TARGET
+                                        </span>
+                                    )}
+                                    {mode === 'modify' && selectedPipelineId && (
+                                        <span className="text-[10px] text-v-nominal font-bold tracking-widest uppercase flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                                            LOCKED
+                                        </span>
+                                    )}
+                                </div>
 
                                 {activeSession.messages.length >= 2 && (
                                     <button
@@ -400,6 +519,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
                                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                                    onPaste={handlePaste}
                                     placeholder={mode === 'modify' ? 'DESCRIBE MODIFICATIONS...' : 'ENTER COMMAND...'}
                                     disabled={sending}
                                     autoFocus
@@ -408,7 +528,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                 <button
                                     className="bg-v-accent text-v-bg px-6 py-1 font-black hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     onClick={handleSend}
-                                    disabled={!input.trim() || sending}
+                                    disabled={(!input.trim() && files.length === 0) || sending}
                                     title="Execute [Enter]"
                                 >
                                     EXECUTE
