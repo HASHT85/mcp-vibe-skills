@@ -518,10 +518,40 @@ RÈGLES ABSOLUES:
                 const prodComposePath = path.join(p.workspace, "docker-compose.prod.yml");
                 const hasProdCompose = await fs.access(prodComposePath).then(() => true).catch(() => false);
 
-                if (hasProdCompose) {
+                if (hasProdCompose || await fs.access(path.join(p.workspace, "Dockerfile")).then(() => true).catch(() => false)) {
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", "Déploiement du container projet...", "info");
 
-                    // Ensure .env exists so docker compose build doesn't fail on missing vars
+                    const { execSync } = await import("node:child_process");
+                    const projectName = `vibe-${id}`;
+                    const imageName = `vibe-${id}:latest`;
+                    const containerName = `${projectName}-app`;
+                    const hostDomain = `${id}.hach.dev`;
+
+                    console.log(`[Deploy] Building image ${imageName} from ${p.workspace}`);
+
+                    // Check if project has a Dockerfile (created by DevOps agent)
+                    const dockerfilePath = path.join(p.workspace, "Dockerfile");
+                    const hasDockerfile = await fs.access(dockerfilePath).then(() => true).catch(() => false);
+
+                    if (!hasDockerfile) {
+                        // Create a default multi-stage Dockerfile for SPA
+                        console.log(`[Deploy] No Dockerfile found, creating default SPA Dockerfile`);
+                        const defaultDockerfile = `FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+RUN echo 'server { listen 80; root /usr/share/nginx/html; index index.html; location / { try_files \\$uri \\$uri/ /index.html; } }' > /etc/nginx/conf.d/default.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]`;
+                        await fs.writeFile(dockerfilePath, defaultDockerfile, "utf-8");
+                    }
+
+                    // Inject VITE_ build args into Dockerfile if needed
                     const envPath = path.join(p.workspace, ".env");
                     const envExamplePath = path.join(p.workspace, ".env.example");
                     const hasEnv = await fs.access(envPath).then(() => true).catch(() => false);
@@ -530,78 +560,68 @@ RÈGLES ABSOLUES:
                         if (hasEnvExample) {
                             await fs.copyFile(envExamplePath, envPath);
                         } else {
-                            await fs.writeFile(envPath, "# Auto-generated\nVITE_OPENWEATHER_API_KEY=placeholder\n");
+                            await fs.writeFile(envPath, "# Auto-generated\nVITE_API_KEY=placeholder\n");
                         }
                     }
 
-                    // Read VITE_ vars from .env
-                    const envContent = await fs.readFile(envPath, "utf-8").catch(() => "");
-                    const viteVars: Record<string, string> = {};
-                    for (const line of envContent.split("\n")) {
-                        const match = line.match(/^(VITE_[A-Z0-9_]+)=(.*)$/);
-                        if (match) viteVars[match[1]] = match[2];
-                    }
-
-                    // Patch generated Dockerfiles to inject ARG declarations for VITE_ vars.
-                    // `docker compose up --build` does NOT support --build-arg on the CLI;
-                    // ARG must be declared in Dockerfile itself for build-time availability.
-                    if (Object.keys(viteVars).length > 0) {
-                        const argBlock = Object.entries(viteVars)
-                            .map(([k, v]) => `ARG ${k}=${v}`)
-                            .join("\n") + "\n";
-                        const { execSync: execS } = await import("node:child_process");
-                        const dfList = execS(
-                            `find . -name "Dockerfile*" -not -path "*/node_modules/*"`,
-                            { cwd: p.workspace, encoding: "utf-8" }
-                        ).split("\n").filter(Boolean);
-                        for (const df of dfList) {
-                            const dfPath = path.join(p.workspace, df);
-                            const dfContent = await fs.readFile(dfPath, "utf-8").catch(() => "");
-                            // Only inject if ARGs not already present
-                            if (dfContent && !dfContent.includes("ARG VITE_")) {
-                                const patched = dfContent.replace(
-                                    /(FROM\s+\S+(?:\s+AS\s+\S+)?\r?\n)/i,
-                                    `$1${argBlock}`
-                                );
-                                await fs.writeFile(dfPath, patched, "utf-8");
-                            }
-                        }
-                    }
-
-                    // Use host path for build-arg env vars, but cwd must be the CONTAINER path
-                    // because execSync runs inside the container.
-                    // Docker CLI reads the compose file from its local filesystem and sends
-                    // the build context as a tar archive to the daemon — no host path needed for cwd.
-                    const hostWorkspace = process.env.HOST_WORKSPACE_PATH || "/opt/vibecraft/workspace";
-                    const hostProjectPath = path.join(hostWorkspace, id);
-
-                    const { execSync } = await import("node:child_process");
-
-                    const projectName = `vibe-${id}`;
-
-                    console.log(`[Deploy] Container project path: ${p.workspace}`);
-                    console.log(`[Deploy] Host project path: ${hostProjectPath}`);
-
-                    execSync(
-                        `docker compose -p ${projectName} -f docker-compose.prod.yml up -d --build`,
-                        {
-                            cwd: p.workspace,  // MUST be container path — execSync runs inside container
-                            env: {
-                                ...process.env,
-                                ...viteVars,
-                                COMPOSE_PROJECT_NAME: projectName,
-                                HOST_PROJECT_PATH: hostProjectPath,
-                            },
+                    // Build the image
+                    try {
+                        execSync(`docker build -t ${imageName} .`, {
+                            cwd: p.workspace,
                             timeout: 5 * 60 * 1000,
                             stdio: "pipe",
-                        }
-                    );
+                        });
+                    } catch (buildErr: any) {
+                        const stderr = buildErr.stderr ? buildErr.stderr.toString().slice(-500) : buildErr.message;
+                        console.error(`[Deploy] ❌ Build failed: ${stderr}`);
+                        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `Build image échoué: ${stderr}`, "warning");
+                        throw buildErr;
+                    }
+
+                    console.log(`[Deploy] Image built. Deploying container ${containerName}`);
+
+                    // Remove old container if exists
+                    try {
+                        execSync(`docker rm -f ${containerName}`, { stdio: "pipe" });
+                    } catch { /* container didn't exist */ }
+
+                    // Ensure 'web' network exists
+                    try {
+                        execSync(`docker network create web`, { stdio: "pipe" });
+                    } catch { /* already exists */ }
+
+                    // Run with Traefik labels — deterministic, no agent-generated compose needed
+                    const dockerRunCmd = [
+                        `docker run -d`,
+                        `--name ${containerName}`,
+                        `--network web`,
+                        `--restart unless-stopped`,
+                        `--label "traefik.enable=true"`,
+                        `--label "traefik.http.routers.${projectName}.rule=Host(\\\`${hostDomain}\\\`)"`,
+                        `--label "traefik.http.routers.${projectName}.entrypoints=websecure"`,
+                        `--label "traefik.http.routers.${projectName}.tls.certresolver=letsencrypt"`,
+                        `--label "traefik.http.services.${projectName}.loadbalancer.server.port=80"`,
+                        imageName,
+                    ].join(" ");
+
+                    console.log(`[Deploy] Running: ${dockerRunCmd}`);
+
+                    execSync(dockerRunCmd, {
+                        cwd: p.workspace,
+                        timeout: 30 * 1000,
+                        stdio: "pipe",
+                    });
 
                     p.artifacts.deployed = true;
-                    p.artifacts.deployedUrl = `https://${p.id}.hach.dev`;
+                    p.artifacts.deployedUrl = `https://${hostDomain}`;
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", `Container déployé! Accessible sur ${p.artifacts.deployedUrl}`, "success");
                 } else {
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", "Pas de docker-compose.prod.yml — déploiement ignoré", "warning");
+                    // No docker-compose.prod.yml but check for Dockerfile
+                    const dockerfileFallback = path.join(p.workspace, "Dockerfile");
+                    const hasFallback = await fs.access(dockerfileFallback).then(() => true).catch(() => false);
+                    if (!hasFallback) {
+                        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", "Pas de docker-compose.prod.yml ni Dockerfile — déploiement ignoré", "warning");
+                    }
                 }
             } catch (deployErr: any) {
                 const errMsg = deployErr.stderr ? deployErr.stderr.toString().slice(-500) : deployErr.message;
