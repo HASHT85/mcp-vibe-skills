@@ -515,10 +515,6 @@ RÈGLES ABSOLUES:
 
             // ─── Auto-Deploy: spawn project as its own Docker container ───
             try {
-                const prodComposePath = path.join(p.workspace, "docker-compose.prod.yml");
-                const hasProdCompose = await fs.access(prodComposePath).then(() => true).catch(() => false);
-
-                if (hasProdCompose || await fs.access(path.join(p.workspace, "Dockerfile")).then(() => true).catch(() => false)) {
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", "Déploiement du container projet...", "info");
 
                     const { execSync } = await import("node:child_process");
@@ -527,15 +523,31 @@ RÈGLES ABSOLUES:
                     const containerName = `${projectName}-app`;
                     const hostDomain = `${id}.hach.dev`;
 
-                    console.log(`[Deploy] Building image ${imageName} from ${p.workspace}`);
+                                     console.log(`[Deploy] Building image ${imageName} from ${p.workspace}`);
 
-                    // Check if project has a Dockerfile (created by DevOps agent)
-                    const dockerfilePath = path.join(p.workspace, "Dockerfile");
-                    const hasDockerfile = await fs.access(dockerfilePath).then(() => true).catch(() => false);
+                    // Smart Dockerfile detection: look in root, then frontend/, then src/
+                    let dockerfilePath = "";
+                    let buildContext = p.workspace;
+                    const searchPaths = [
+                        { dockerfile: "Dockerfile", context: p.workspace },
+                        { dockerfile: "frontend/Dockerfile", context: path.join(p.workspace, "frontend") },
+                        { dockerfile: "src/Dockerfile", context: path.join(p.workspace, "src") },
+                    ];
+                    for (const sp of searchPaths) {
+                        const fullPath = path.join(p.workspace, sp.dockerfile);
+                        const exists = await fs.access(fullPath).then(() => true).catch(() => false);
+                        if (exists) {
+                            dockerfilePath = fullPath;
+                            buildContext = sp.context;
+                            console.log(`[Deploy] Found Dockerfile at ${sp.dockerfile}, context: ${buildContext}`);
+                            break;
+                        }
+                    }
 
-                    if (!hasDockerfile) {
-                        // Create a default multi-stage Dockerfile for SPA
+                    if (!dockerfilePath) {
+                        // Create a default multi-stage Dockerfile for SPA at root
                         console.log(`[Deploy] No Dockerfile found, creating default SPA Dockerfile`);
+                        dockerfilePath = path.join(p.workspace, "Dockerfile");
                         const defaultDockerfile = `FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
@@ -551,23 +563,33 @@ CMD ["nginx", "-g", "daemon off;"]`;
                         await fs.writeFile(dockerfilePath, defaultDockerfile, "utf-8");
                     }
 
-                    // Inject VITE_ build args into Dockerfile if needed
-                    const envPath = path.join(p.workspace, ".env");
-                    const envExamplePath = path.join(p.workspace, ".env.example");
+                    // Ensure .env exists for build args
+                    const envPath = path.join(buildContext, ".env");
+                    const envExamplePath = path.join(buildContext, ".env.example");
                     const hasEnv = await fs.access(envPath).then(() => true).catch(() => false);
                     if (!hasEnv) {
-                        const hasEnvExample = await fs.access(envExamplePath).then(() => true).catch(() => false);
-                        if (hasEnvExample) {
-                            await fs.copyFile(envExamplePath, envPath);
+                        // Also check root .env
+                        const rootEnvPath = path.join(p.workspace, ".env");
+                        const hasRootEnv = await fs.access(rootEnvPath).then(() => true).catch(() => false);
+                        if (hasRootEnv && buildContext !== p.workspace) {
+                            await fs.copyFile(rootEnvPath, envPath);
                         } else {
-                            await fs.writeFile(envPath, "# Auto-generated\nVITE_API_KEY=placeholder\n");
+                            const hasEnvExample = await fs.access(envExamplePath).then(() => true).catch(() => false);
+                            if (hasEnvExample) {
+                                await fs.copyFile(envExamplePath, envPath);
+                            } else {
+                                await fs.writeFile(envPath, "# Auto-generated\nVITE_API_KEY=placeholder\n");
+                            }
                         }
                     }
 
-                    // Build the image
+                    // Build the image with BuildKit
                     try {
-                        execSync(`docker build -t ${imageName} .`, {
+                        const buildCmd = `docker build -f ${dockerfilePath} -t ${imageName} ${buildContext}`;
+                        console.log(`[Deploy] Build cmd: ${buildCmd}`);
+                        execSync(buildCmd, {
                             cwd: p.workspace,
+                            env: { ...process.env, DOCKER_BUILDKIT: "1" },
                             timeout: 5 * 60 * 1000,
                             stdio: "pipe",
                         });
@@ -615,14 +637,6 @@ CMD ["nginx", "-g", "daemon off;"]`;
                     p.artifacts.deployed = true;
                     p.artifacts.deployedUrl = `https://${hostDomain}`;
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", `Container déployé! Accessible sur ${p.artifacts.deployedUrl}`, "success");
-                } else {
-                    // No docker-compose.prod.yml but check for Dockerfile
-                    const dockerfileFallback = path.join(p.workspace, "Dockerfile");
-                    const hasFallback = await fs.access(dockerfileFallback).then(() => true).catch(() => false);
-                    if (!hasFallback) {
-                        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", "Pas de docker-compose.prod.yml ni Dockerfile — déploiement ignoré", "warning");
-                    }
-                }
             } catch (deployErr: any) {
                 const errMsg = deployErr.stderr ? deployErr.stderr.toString().slice(-500) : deployErr.message;
                 console.error(`[Deploy] ❌ Error: ${errMsg}`);
