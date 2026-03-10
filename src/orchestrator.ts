@@ -575,10 +575,19 @@ RÈGLES ABSOLUES:
                     const { execSync } = await import("node:child_process");
 
                     const projectName = `vibe-${id}`;
+
+                    // CRITICAL: Docker daemon runs on the HOST, so cwd must be the HOST path.
+                    // The container's /workspace/xxx is mapped to HOST_WORKSPACE_PATH/xxx on the host.
+                    // We must also pass the docker-compose file by its absolute HOST path.
+                    const hostComposePath = path.join(hostProjectPath, "docker-compose.prod.yml");
+
+                    console.log(`[Deploy] Host project path: ${hostProjectPath}`);
+                    console.log(`[Deploy] Host compose file: ${hostComposePath}`);
+
                     execSync(
-                        `docker compose -p ${projectName} -f docker-compose.prod.yml up -d --build`,
+                        `docker compose -p ${projectName} -f ${hostComposePath} up -d --build`,
                         {
-                            cwd: p.workspace,
+                            cwd: hostProjectPath,
                             env: {
                                 ...process.env,
                                 ...viteVars,  // env vars for compose variable interpolation
@@ -597,7 +606,9 @@ RÈGLES ABSOLUES:
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", "Pas de docker-compose.prod.yml — déploiement ignoré", "warning");
                 }
             } catch (deployErr: any) {
-                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `Déploiement container échoué: ${deployErr.message}`, "warning");
+                const errMsg = deployErr.stderr ? deployErr.stderr.toString().slice(-500) : deployErr.message;
+                console.error(`[Deploy] ❌ Error: ${errMsg}`);
+                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `Déploiement container échoué: ${errMsg}`, "warning");
                 // Don't throw — the project is still generated successfully
             }
 
