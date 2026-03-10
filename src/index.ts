@@ -554,9 +554,12 @@ app.post("/chat/sessions/:id/launch", async (req: Request, res: Response) => {
         const brief = chatService.generateBrief(req.params.id);
         if (!brief) return res.status(404).json({ error: "session_not_found" });
 
+        // Allow frontend to override the auto-derived name
+        const nameOverride = req.body?.name ? String(req.body.name).trim() : undefined;
+
         const pipeline = await orchestrator.launchIdea(
             brief.description,
-            brief.name,
+            nameOverride || brief.name,
             brief.model
         );
         res.json({ pipeline, brief });

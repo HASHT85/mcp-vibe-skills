@@ -264,9 +264,10 @@ export async function listChatSessions() {
     return api<{ sessions: ChatSession[] }>('/chat/sessions');
 }
 
-export async function launchFromChat(sessionId: string) {
+export async function launchFromChat(sessionId: string, name?: string) {
     return api<{ pipeline: Pipeline; brief: any }>(`/chat/sessions/${sessionId}/launch`, {
         method: 'POST',
+        body: JSON.stringify({ name }),
     });
 }
 

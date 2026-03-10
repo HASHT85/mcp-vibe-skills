@@ -1,14 +1,14 @@
 import type { ProjectType } from "../types.js";
 
 export function detectProjectType(analysis: any): ProjectType {
-    const declared = (analysis?.type || "").toLowerCase();
+    const declared = String(analysis?.type || "").toLowerCase();
     if (["static", "spa", "fullstack", "api", "python-worker", "node-worker"].includes(declared)) {
         return declared as ProjectType;
     }
 
-    const desc = (analysis?.summary || "").toLowerCase();
-    const frontend = (analysis?.stack?.frontend || "").toLowerCase();
-    const backend = (analysis?.stack?.backend || "").toLowerCase();
+    const desc = String(analysis?.summary || "").toLowerCase();
+    const frontend = String(analysis?.stack?.frontend || "").toLowerCase();
+    const backend = String(analysis?.stack?.backend || "").toLowerCase();
 
     const hasBackend = backend && !["none", "aucun", "n/a", "-", ""].includes(backend);
     const hasFrontend = frontend && !["none", "aucun", "n/a", "-", ""].includes(frontend);

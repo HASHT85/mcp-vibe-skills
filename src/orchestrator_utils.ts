@@ -18,7 +18,7 @@ export function tryParseJson(text: string): any {
 }
 
 export function detectProjectType(analysis: any): ProjectType {
-    const declared = (analysis?.type || "").toLowerCase();
+    const declared = String(analysis?.type || "").toLowerCase();
     if (["static", "spa", "fullstack", "api", "python-worker", "node-worker"].includes(declared)) return declared as ProjectType;
     return "api"; // default
 }

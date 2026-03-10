@@ -148,7 +148,7 @@ export class ChatService {
             : "";
 
         // Derive a project name: first 4 words of first message
-        const name = userMessages[0]
+        const name = String(userMessages[0] || "")
             .split(/\s+/)
             .slice(0, 4)
             .join("-")

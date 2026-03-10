@@ -24,13 +24,20 @@ export async function createRepo(name: string, description: string) {
     const user: any = await getUser();
     const owner = user.login;
 
-    // 2. Create repo
+    // 2. Sanitize description: strip control chars, truncate to 350
+    const safeDesc = String(description || "")
+        .replace(/[\x00-\x1F\x7F]/g, " ")   // strip control characters
+        .replace(/\s+/g, " ")                 // collapse whitespace
+        .trim()
+        .slice(0, 350);
+
+    // 3. Create repo
     const res = await fetch(`${GITHUB_API}/user/repos`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
             name,
-            description,
+            description: safeDesc,
             private: true, // Default to private
             auto_init: true // Create README to allow immediate pushes
         })

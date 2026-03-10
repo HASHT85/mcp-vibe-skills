@@ -43,6 +43,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     const [selectedPipelineId, setSelectedPipelineId] = useState<string>('');
     const [files, setFiles] = useState<AttachedFile[]>([]);
     const [dragOver, setDragOver] = useState(false);
+    const [projectName, setProjectName] = useState('');
     const bottomRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -174,15 +175,18 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                 } : null);
                 onRefresh?.();
             } else {
-                await launchFromChat(activeSession.id);
+                await launchFromChat(activeSession.id, projectName.trim() || undefined);
+                // Add system feedback message
+                const launchName = projectName.trim() || 'AUTO_NAMED';
                 setActiveSession(prev => prev ? {
                     ...prev,
                     messages: [...prev.messages, {
                         role: 'assistant',
-                        content: 'DEPLOYMENT_INITIATED → New pipeline spawned. Orchestrator is bootstrapping agents.',
+                        content: `DEPLOYMENT_INITIATED → Pipeline "${launchName}" spawned. Orchestrator is bootstrapping agents.`,
                         timestamp: new Date().toISOString(),
                     }],
                 } : null);
+                setProjectName('');
                 onPipelineLaunched?.();
             }
         } catch (err: any) {
@@ -262,6 +266,20 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                             MODIFY
                         </button>
                     </div>
+
+                    {/* Project Name (only in new mode) */}
+                    {mode === 'new' && (
+                        <div>
+                            <label className="text-[9px] text-slate-400 font-bold tracking-widest uppercase mb-1 block">PROJECT_ID (OPT.)</label>
+                            <input
+                                className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 outline-none focus:ring-0 rounded-none placeholder:text-v-accent/20 uppercase"
+                                value={projectName}
+                                onChange={(e) => setProjectName(e.target.value)}
+                                placeholder="AUTO_GENERATED"
+                                spellCheck="false"
+                            />
+                        </div>
+                    )}
 
                     {/* Pipeline Selector (only in modify mode) */}
                     {mode === 'modify' && (
