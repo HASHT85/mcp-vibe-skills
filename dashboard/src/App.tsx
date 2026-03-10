@@ -58,38 +58,77 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
     } catch (err: any) {
       // Clear bad credentials
       localStorage.removeItem('vibe_auth');
-      setError('Invalid credentials');
+      setError('SECURITY BREACH DETECTED: ACCESS DENIED');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="login-screen">
+    <div className="flex h-screen w-full items-center justify-center bg-background-dark scanline relative overflow-hidden">
+      
+      {/* Background Decorators */}
+      <div className="absolute top-10 left-10 text-accent opacity-20 font-mono tracking-widest text-xs pointer-events-none">
+        U.E.S.C. MARATHON // SYSTEM TERMINAL v4.2<br/>
+        INITIALIZING CONNECTION...
+      </div>
+      <div className="absolute bottom-10 right-10 text-primary opacity-20 font-mono tracking-widest text-xs text-right pointer-events-none">
+        SECURE PROTOCOL ACTIVE<br/>
+        UNAUTHORIZED ACCESS WILL BE LOGGED
+      </div>
+
       <motion.form
-        className="login-box"
+        className="w-full max-w-md p-8 bg-panel border-2 border-border-muted relative z-10"
         onSubmit={submit}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
       >
-        <h1>⚡ VibeCraft HQ</h1>
-        <p>Universal AI & Software Builder</p>
-        {error && <p style={{ color: '#ff6b6b', fontSize: '0.9rem', margin: '0 0 0.5rem' }}>{error}</p>}
-        <input
-          className="login-input"
-          placeholder="Username"
-          value={user}
-          onChange={(e) => setUser(e.target.value)}
-        />
-        <input
-          className="login-input"
-          type="password"
-          placeholder="Password"
-          value={pass}
-          onChange={(e) => setPass(e.target.value)}
-        />
+        {/* Frame corner blocks for industrial look */}
+        <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-accent"></div>
+        <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-accent"></div>
+        <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-accent"></div>
+        <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-accent"></div>
+
+        <h1 className="text-4xl font-display font-bold text-slate-100 tracking-[0.2em] mb-2 uppercase">VibeCraft<span className="text-primary">_HQ</span></h1>
+        <p className="font-mono text-accent tracking-widest mb-8 text-sm opacity-80 uppercase">&gt; Universal AI Builder</p>
+        
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="mb-6 bg-primary/20 border-l-4 border-primary p-3 text-primary font-mono text-xs uppercase tracking-widest"
+          >
+            ! {error}
+          </motion.div>
+        )}
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-slate-500 font-mono text-[10px] uppercase tracking-widest mb-1">Identification</label>
+            <input
+              className="login-input"
+              placeholder="ENTER_USERNAME"
+              value={user}
+              onChange={(e) => setUser(e.target.value)}
+              autoComplete="off"
+              spellCheck="false"
+            />
+          </div>
+          <div>
+            <label className="block text-slate-500 font-mono text-[10px] uppercase tracking-widest mb-1">Passcode</label>
+            <input
+              className="login-input"
+              type="password"
+              placeholder="••••••••••••"
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+            />
+          </div>
+        </div>
+
         <button type="submit" className="btn-login" disabled={loading}>
-          {loading ? 'Connecting...' : 'Enter HQ'}
+          {loading ? 'AUTHENTICATING...' : 'INITIALIZE UPLINK'}
         </button>
       </motion.form>
     </div>

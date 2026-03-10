@@ -15,9 +15,9 @@ const NAV_ITEMS = [
 
 export function Sidebar({ active, onChange, onLaunch }: SidebarProps) {
     return (
-        <aside className="w-16 md:w-56 border-r border-border-muted bg-panel flex flex-col shrink-0 py-6 overflow-y-auto">
-            <div className="flex flex-col gap-1 px-3">
-                <div className="hidden md:block text-[10px] text-slate-500 font-bold px-3 mb-2 tracking-widest uppercase">System_HUD</div>
+        <aside className="w-16 md:w-56 border-r-2 border-border-muted bg-panel flex flex-col shrink-0 py-6 overflow-y-auto relative z-10">
+            <div className="flex flex-col gap-2 px-3">
+                <div className="hidden md:block text-[10px] text-primary font-mono font-bold px-3 mb-4 tracking-[0.3em] uppercase opacity-80 border-b border-border-muted pb-2">System_HUD</div>
                 
                 {NAV_ITEMS.map((item) => {
                     const isActive = active === item.id;
@@ -28,14 +28,14 @@ export function Sidebar({ active, onChange, onLaunch }: SidebarProps) {
                             title={item.label}
                             className={`group flex items-center justify-center md:justify-start gap-4 px-3 py-3 transition-all ${
                                 isActive 
-                                ? 'bg-accent/5 border-l-2 border-accent' 
-                                : 'hover:bg-white/5 border-l-2 border-transparent hover:border-white/20'
+                                ? 'bg-accent/10 border-l-4 border-accent shadow-[inset_4px_0_0_0_#d4ff00]' 
+                                : 'hover:bg-white/5 border-l-4 border-transparent hover:border-slate-500'
                             }`}
                         >
-                            <span className={`material-symbols-outlined ${isActive ? 'text-accent' : 'text-slate-400 group-hover:text-white'}`}>
+                            <span className={`material-symbols-outlined ${isActive ? 'text-accent' : 'text-slate-500 group-hover:text-slate-300'}`}>
                                 {item.icon}
                             </span>
-                            <span className={`hidden md:block text-xs font-bold tracking-widest uppercase ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
+                            <span className={`hidden md:block text-xs font-mono font-bold tracking-widest uppercase ${isActive ? 'text-accent' : 'text-slate-500 group-hover:text-slate-300'}`}>
                                 {item.label}
                             </span>
                         </button>
@@ -46,7 +46,7 @@ export function Sidebar({ active, onChange, onLaunch }: SidebarProps) {
             <div className="mt-auto px-4 pt-6">
                 <button 
                     onClick={onLaunch}
-                    className="w-full bg-accent text-black font-black text-xs py-3 tracking-widest uppercase hover:brightness-110 flex items-center justify-center md:justify-between"
+                    className="w-full bg-primary text-background-dark font-display font-bold text-xs py-4 tracking-widest uppercase transition-all flex items-center justify-center md:justify-between border-2 border-transparent hover:bg-transparent hover:text-primary hover:border-primary hover:shadow-neon-red hover-glitch"
                     title="NEW ENTRY"
                 >
                     <span className="hidden md:inline">+ NEW_ENTRY</span>

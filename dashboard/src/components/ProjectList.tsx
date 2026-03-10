@@ -14,25 +14,29 @@ export function ProjectList({ pipelines, onSelect }: ProjectListProps) {
     if (!filtered.length) {
         return (
             <motion.div 
-                className="flex flex-col items-center justify-center p-20 mt-10 border border-border-muted bg-panel/30 relative overflow-hidden" 
+                className="flex flex-col items-center justify-center p-20 mt-10 border-2 border-border-muted bg-panel relative overflow-hidden h-[60vh]" 
                 initial={{ opacity: 0 }} 
                 animate={{ opacity: 1 }}
             >
+                {/* Decorative Marathon Frame corners */}
+                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary"></div>
+                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary"></div>
+
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10"></div>
                 
                 <span className="material-symbols-outlined text-6xl text-slate-700 mb-6 font-light">
                     grid_view
                 </span>
                 
-                <h3 className="text-xl font-black text-white tracking-widest uppercase mb-2">No Active Nodes</h3>
-                <p className="text-slate-400 text-sm max-w-md text-center">
-                    Initialize a new pipeline sequence to establish a connection with the creative matrix.
+                <h3 className="text-2xl font-display font-bold text-slate-100 tracking-[0.3em] uppercase mb-4 hover-glitch">NO ACTIVE NODES</h3>
+                <p className="text-accent font-mono text-xs max-w-md text-center opacity-80 uppercase tracking-widest leading-relaxed">
+                    INITIALIZE A NEW PIPELINE SEQUENCE TO ESTABLISH A CONNECTION WITH THE CREATIVE MATRIX.
                 </p>
                 
-                <div className="mt-8 flex gap-2">
-                    <div className="w-1.5 h-1.5 bg-accent rounded-full animate-ping"></div>
-                    <div className="w-1.5 h-1.5 bg-accent/50 rounded-full"></div>
-                    <div className="w-1.5 h-1.5 bg-accent/20 rounded-full"></div>
+                <div className="mt-10 flex gap-4">
+                    <div className="w-2 h-2 bg-primary rounded-none animate-ping shadow-neon-red"></div>
+                    <div className="w-2 h-2 bg-primary/50 rounded-none"></div>
+                    <div className="w-2 h-2 bg-primary/20 rounded-none"></div>
                 </div>
             </motion.div>
         );
@@ -40,18 +44,18 @@ export function ProjectList({ pipelines, onSelect }: ProjectListProps) {
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-8 border-b-2 border-border-muted pb-4">
                 <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-accent text-xl">folder_managed</span>
-                    <h1 className="text-2xl font-black text-white tracking-widest uppercase">Project_Nodes</h1>
-                    <span className="bg-white/10 text-accent text-[10px] font-bold px-2 py-0.5 ml-2 mt-1 border border-white/5">
+                    <span className="material-symbols-outlined text-accent text-2xl font-bold">folder_managed</span>
+                    <h1 className="text-2xl font-display font-bold text-slate-100 tracking-[0.2em] uppercase">Project<span className="text-accent">_Nodes</span></h1>
+                    <span className="bg-primary/10 text-primary text-[10px] font-mono font-bold px-2 py-0.5 ml-2 mt-1 border border-primary/30 uppercase tracking-widest">
                         {filtered.length} ACTIVE
                     </span>
                 </div>
                 
-                <div className="flex bg-panel border border-border-muted p-1 rounded-none">
-                    <button className="px-3 py-1 bg-white/10 text-white text-[10px] font-bold uppercase">Grid</button>
-                    <button className="px-3 py-1 text-slate-500 hover:text-white text-[10px] font-bold uppercase transition-colors">List</button>
+                <div className="flex bg-panel border-2 border-border-muted p-0.5 rounded-none">
+                    <button className="px-4 py-1.5 bg-accent text-black text-[10px] font-bold uppercase tracking-widest transition-colors font-mono hover-glitch">GRID</button>
+                    <button className="px-4 py-1.5 text-slate-500 hover:text-accent border border-transparent hover:border-accent text-[10px] font-bold uppercase tracking-widest transition-colors font-mono">LIST</button>
                 </div>
             </div>
 
@@ -59,9 +63,9 @@ export function ProjectList({ pipelines, onSelect }: ProjectListProps) {
                 {filtered.map((p, i) => (
                     <motion.div
                         key={p.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.05 }}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: i * 0.05, duration: 0.2 }}
                     >
                         <ProjectCard pipeline={p} onClick={() => onSelect(p.id)} />
                     </motion.div>

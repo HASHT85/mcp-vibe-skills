@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=IBM+Plex+Mono:wght@400;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,12 +7,29 @@
 @layer base {
   body {
     @apply bg-background-dark font-display text-slate-100 selection:bg-accent selection:text-black;
+    /* Marathon CRT styling */
+    text-shadow: 0 0 2px rgba(212, 255, 0, 0.3);
   }
 }
 
 .scanline {
-  background: linear-gradient(to bottom, transparent 50%, rgba(212, 255, 0, 0.02) 50%);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0) 50%, rgba(0, 0, 0, 0.2) 50%, rgba(0, 0, 0, 0.2));
   background-size: 100% 4px;
+  position: relative;
+}
+
+.scanline::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  z-index: 50;
+  background-size: 100% 2px, 3px 100%;
+  pointer-events: none;
 }
 
 .monospaced {
@@ -24,16 +43,52 @@
 
 /* Custom scrollbar for dark panels */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #0f0f0f;
+  border-left: 1px solid #333;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2d1e18;
-  border-radius: 3px;
+  background: #333;
+  border-radius: 0px; /* Sharp edges */
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #d4ff00;
+}
+
+/* Marathon Glitch Utilities */
+@keyframes glitch {
+  0% { transform: translate(0) }
+  20% { transform: translate(-2px, 2px) }
+  40% { transform: translate(-2px, -2px) }
+  60% { transform: translate(2px, 2px) }
+  80% { transform: translate(2px, -2px) }
+  100% { transform: translate(0) }
+}
+
+.hover-glitch:hover {
+  animation: glitch 0.2s cubic-bezier(.25, .46, .45, .94) both infinite;
+  color: #d4ff00;
+  text-shadow: 2px 0 #ff3b3b, -2px 0 #00ffff;
+}
+
+/* Buttons and Inputs overrides (removing rounded corners) */
+input, button, .rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl {
+  border-radius: 0 !important;
+}
+
+.login-input {
+  @apply w-full bg-background-dark border border-border-muted text-accent p-3 font-mono outline-none transition-all duration-200;
+}
+.login-input:focus {
+  @apply border-accent shadow-neon-yellow;
+}
+
+.btn-login {
+  @apply w-full bg-accent text-black font-display font-bold uppercase tracking-widest p-4 mt-6 transition-all duration-200 border-2 border-transparent hover-glitch;
+}
+.btn-login:hover {
+  @apply bg-transparent text-accent border-accent shadow-neon-yellow;
 }
