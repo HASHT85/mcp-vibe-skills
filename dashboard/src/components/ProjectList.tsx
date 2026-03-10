@@ -7,8 +7,11 @@ interface ProjectListProps {
     onSelect: (id: string) => void;
 }
 
+const HIDDEN_PROJECTS = ['mcp-vibe-skills', 'mcp-vibe-dashboard'];
+
 export function ProjectList({ pipelines, onSelect }: ProjectListProps) {
-    if (!pipelines.length) {
+    const filtered = pipelines.filter(p => !HIDDEN_PROJECTS.some(h => p.name?.toLowerCase().includes(h) || p.id?.toLowerCase().includes(h)));
+    if (!filtered.length) {
         return (
             <motion.div 
                 className="flex flex-col items-center justify-center p-20 mt-10 border border-border-muted bg-panel/30 relative overflow-hidden" 
@@ -42,7 +45,7 @@ export function ProjectList({ pipelines, onSelect }: ProjectListProps) {
                     <span className="material-symbols-outlined text-accent text-xl">folder_managed</span>
                     <h1 className="text-2xl font-black text-white tracking-widest uppercase">Project_Nodes</h1>
                     <span className="bg-white/10 text-accent text-[10px] font-bold px-2 py-0.5 ml-2 mt-1 border border-white/5">
-                        {pipelines.length} ACTIVE
+                        {filtered.length} ACTIVE
                     </span>
                 </div>
                 
@@ -53,7 +56,7 @@ export function ProjectList({ pipelines, onSelect }: ProjectListProps) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {pipelines.map((p, i) => (
+                {filtered.map((p, i) => (
                     <motion.div
                         key={p.id}
                         initial={{ opacity: 0, y: 20 }}

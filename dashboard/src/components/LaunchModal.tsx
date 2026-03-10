@@ -2,8 +2,8 @@ import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 
 const MODEL_OPTIONS = [
-    { value: 'claude-opus-4-5', label: 'Claude Opus 4.6' },
-    { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.6' },
+    { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
     { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
     { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' },
     { value: 'gemini-3.0-pro', label: 'Gemini 3.0 Pro' },

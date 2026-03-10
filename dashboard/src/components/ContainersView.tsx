@@ -1,9 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { listContainers, stopContainer, startContainer, restartContainer, deleteContainer, getContainerLogs } from '../api/client';
-import type { Container } from '../api/client';
+import type { Container, Pipeline } from '../api/client';
 
-export function ContainersView() {
+// Extract pipeline ID from container name (format: vibe-{pipelineId}-app)
+function getPipelineForContainer(name: string, pipelines: Pipeline[]): Pipeline | undefined {
+    const match = name.match(/^vibe-([a-f0-9]+)-/);
+    if (!match) return undefined;
+    const pipelineId = match[1];
+    return pipelines.find(p => p.id.startsWith(pipelineId));
+}
+
+export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
     const [containers, setContainers] = useState<Container[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -109,15 +117,27 @@ export function ContainersView() {
                                 {isRunning && <div className="absolute top-0 right-0 w-16 h-16 bg-primary/5 rounded-full blur-xl -mr-6 -mt-6"></div>}
                                 
                                 <div className="flex justify-between items-start mb-3 border-b border-border-muted/50 pb-2 relative z-10">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-2 h-2 rounded-full ${dotColor} ${isRunning ? 'animate-pulse shadow-[0_0_5px_currentColor]' : ''}`}></div>
-                                        <span className="text-white font-bold text-sm tracking-wide truncate pr-2">{c.name}</span>
+                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                        <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor} ${isRunning ? 'animate-pulse shadow-[0_0_5px_currentColor]' : ''}`}></div>
+                                        <span className="text-white font-bold text-sm tracking-wide truncate">{c.name}</span>
                                     </div>
-                                    {c.url && (
-                                        <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-accent transition-colors" title={c.url}>
-                                            <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                                        </a>
-                                    )}
+                                    <div className="flex items-center gap-1 ml-2 shrink-0">
+                                        {(() => {
+                                            const linkedPipeline = getPipelineForContainer(c.name, pipelines);
+                                            if (linkedPipeline?.github?.url) return (
+                                                <a href={linkedPipeline.github.url} target="_blank" rel="noopener noreferrer" 
+                                                   className="text-slate-400 hover:text-white transition-colors" title={`GitHub: ${linkedPipeline.github.url}`}>
+                                                    <span className="material-symbols-outlined text-[16px]">code</span>
+                                                </a>
+                                            );
+                                            return null;
+                                        })()}
+                                        {c.url && (
+                                            <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-accent transition-colors" title={c.url}>
+                                                <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+                                            </a>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div className="flex flex-col gap-1 mb-4">

@@ -158,7 +158,7 @@ function Dashboard() {
           />
         );
       case 'containers':
-        return <ContainersView key="containers" />;
+        return <ContainersView key="containers" pipelines={pipelines} />;
       case 'chat':
         return <ChatView key="chat" onPipelineLaunched={() => { setActiveNav('projects'); load(); }} />;
       case 'agents':
