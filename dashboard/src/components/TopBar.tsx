@@ -1,44 +1,25 @@
 export function TopBar() {
     return (
-        <header className="flex h-16 shrink-0 items-center justify-between border-b-2 border-border-muted bg-panel px-6 relative z-10 w-full">
-            <div className="flex items-center gap-8">
-                <div className="flex items-center gap-3">
-                    <div className="text-primary hover-glitch transition-colors">
-                        <span className="material-symbols-outlined text-3xl">deployed_code</span>
-                    </div>
-                    <div className="flex flex-col">
-                        <h2 className="text-sm font-display font-bold tracking-[0.3em] text-slate-100 uppercase leading-none">VIBECRAFT<span className="text-primary">_HQ</span></h2>
-                        <span className="text-[10px] text-accent font-mono font-bold tracking-widest uppercase opacity-80 mt-1">System Terminal // v0.4.8-STABLE</span>
-                    </div>
-                </div>
-                <nav className="hidden md:flex items-center gap-6 ml-8">
-                    <a className="text-[10px] font-mono font-bold tracking-widest text-accent border-b-2 border-accent pb-1 hover:text-black hover:bg-accent transition-all px-2" href="#dashboard">DASHBOARD</a>
-                    <a className="text-[10px] font-mono font-bold tracking-widest text-slate-500 hover:text-accent border-b-2 border-transparent hover:border-accent pb-1 transition-all px-2" href="#network">NETWORK</a>
-                    <a className="text-[10px] font-mono font-bold tracking-widest text-slate-500 hover:text-accent border-b-2 border-transparent hover:border-accent pb-1 transition-all px-2" href="#archive">ARCHIVE</a>
-                    <a className="text-[10px] font-mono font-bold tracking-widest text-slate-500 hover:text-accent border-b-2 border-transparent hover:border-accent pb-1 transition-all px-2" href="#logs">LOGS</a>
-                </nav>
+        <header className="flex shrink-0 flex-col md:flex-row justify-between items-end gap-4 border-b-2 border-v-accent bg-v-bg px-6 py-4 relative z-10 w-full mb-0">
+            <div data-purpose="brand-id">
+                <h1 className="text-3xl md:text-5xl font-sans font-bold text-v-accent leading-none tracking-tighter">VIBECRAFT // CRITICAL FOCUS</h1>
+                <p className="text-xs mt-2 text-white/60 font-mono uppercase tracking-widest">System Status: Active // Marathon Protocol Enabled</p>
             </div>
             
-            <div className="flex items-center gap-4">
-                <div className="relative hidden sm:block">
-                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-accent text-sm">search</span>
-                    <input 
-                        className="bg-background-dark border-2 border-border-muted rounded-none pl-10 pr-4 py-1.5 text-xs text-accent placeholder:text-accent/30 focus:border-accent focus:shadow-neon-yellow w-64 outline-none font-mono tracking-widest transition-all" 
-                        placeholder="QUERY_DATABASE..." 
-                        type="text" 
-                        spellCheck="false"
-                    />
+            <div className="flex gap-6 text-right font-mono" data-purpose="global-metrics">
+                <div>
+                   <span className="block text-[10px] text-v-accent uppercase tracking-widest">Network Nodes</span>
+                   <span className="text-xl font-bold text-white">NOMINAL</span>
                 </div>
-                <div className="flex items-center gap-2 border-l-2 border-border-muted pl-4">
-                    <button className="text-slate-400 hover:text-accent p-1 flex items-center justify-center transition-colors">
-                        <span className="material-symbols-outlined">notifications</span>
-                    </button>
-                    <button className="text-slate-400 hover:text-accent p-1 flex items-center justify-center transition-colors">
-                        <span className="material-symbols-outlined">settings_input_component</span>
-                    </button>
-                    <div className="h-8 w-8 bg-accent flex items-center justify-center ml-2 border-2 border-accent hover:bg-transparent hover:text-accent transition-colors cursor-pointer text-black">
-                        <span className="material-symbols-outlined font-bold">person</span>
-                    </div>
+                <div>
+                   <span className="block text-[10px] text-v-alert uppercase tracking-widest">Intrusion Attempts</span>
+                   <span className="text-xl font-bold text-v-alert">00</span>
+                </div>
+                <div className="hidden sm:block">
+                   <span className="block text-[10px] text-v-accent uppercase tracking-widest">Term Uplink</span>
+                   <div className="h-6 w-8 bg-v-accent flex items-center justify-center mt-1 border-2 border-v-accent hover:bg-transparent hover:text-v-accent transition-colors cursor-crosshair text-black">
+                       <span className="material-symbols-outlined font-bold text-sm">person</span>
+                   </div>
                 </div>
             </div>
         </header>

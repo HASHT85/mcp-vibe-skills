@@ -95,21 +95,21 @@ export function ChatView({ onPipelineLaunched }: { onPipelineLaunched?: () => vo
 
     return (
         <motion.div
-            className="flex h-[calc(100vh-140px)] bg-panel border border-border-muted"
+            className="flex h-[calc(100vh-140px)] brutalist-border bg-v-bg font-mono"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
         >
             {/* Sessions sidebar */}
-            <div className="w-1/3 md:w-1/4 max-w-[300px] min-w-[200px] border-r border-border-muted flex flex-col bg-background-dark overflow-hidden">
-                <div className="p-4 border-b border-border-muted flex flex-col gap-4">
+            <div className="w-1/3 md:w-1/4 max-w-[300px] min-w-[200px] brutalist-border-r flex flex-col bg-v-surface overflow-hidden">
+                <div className="p-4 brutalist-border-b flex flex-col gap-4">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-white">
-                            <span className="material-symbols-outlined text-accent text-lg">forum</span>
+                        <div className="flex items-center gap-2 text-v-accent">
+                            <span className="material-symbols-outlined text-lg">forum</span>
                             <h3 className="text-sm font-black tracking-widest uppercase">Com_Link</h3>
                         </div>
                         <button 
-                            className="bg-primary/20 hover:bg-primary/40 text-primary border border-primary/50 text-[10px] font-bold px-2 py-1 uppercase tracking-widest flex items-center gap-1 transition-colors"
+                            className="bg-v-accent/20 hover:bg-v-accent/40 text-v-accent border border-v-accent/50 text-[10px] font-bold px-2 py-1 uppercase tracking-widest flex items-center gap-1 transition-colors relative z-10"
                             onClick={createNewSession}
                         >
                             <span className="material-symbols-outlined text-[12px]">add</span> NEW
@@ -118,7 +118,7 @@ export function ChatView({ onPipelineLaunched }: { onPipelineLaunched?: () => vo
                     
                     <div className="relative">
                         <select 
-                            className="w-full bg-black border border-border-muted text-xs text-slate-300 p-2 appearance-none outline-none focus:border-accent rounded-none"
+                            className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 appearance-none outline-none focus:ring-0 rounded-none cursor-pointer"
                             value={model} 
                             onChange={(e) => setModel(e.target.value)}
                         >
@@ -126,7 +126,7 @@ export function ChatView({ onPipelineLaunched }: { onPipelineLaunched?: () => vo
                                 <option key={m.value} value={m.value}>{m.label}</option>
                             ))}
                         </select>
-                        <span className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none text-[16px]">expand_more</span>
+                        <span className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-v-accent pointer-events-none text-[16px]">expand_more</span>
                     </div>
                 </div>
                 
@@ -139,26 +139,24 @@ export function ChatView({ onPipelineLaunched }: { onPipelineLaunched?: () => vo
                         return (
                             <div
                                 key={s.id}
-                                className={`flex items-center gap-3 p-3 cursor-pointer border transition-colors relative z-10 ${
+                                className={`flex items-center gap-3 p-3 cursor-pointer brutalist-border-b transition-colors relative z-10 ${
                                     isActive 
-                                    ? 'bg-accent/10 border-accent/50 text-white' 
-                                    : 'bg-white/5 border-transparent text-slate-400 hover:bg-white/10 hover:border-white/20'
+                                    ? 'bg-v-accent text-v-bg font-bold' 
+                                    : 'bg-transparent text-slate-400 hover:bg-v-accent hover:text-v-bg'
                                 }`}
                                 onClick={() => setActiveSession(s)}
                             >
-                                {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent shadow-[0_0_10px_rgba(212,255,0,0.8)]"></div>}
-                                
-                                <span className={`material-symbols-outlined text-[16px] shrink-0 ${isActive ? 'text-accent' : ''}`}>chat_bubble</span>
+                                <span className="material-symbols-outlined text-[16px] shrink-0">chat_bubble</span>
                                 <div className="flex-1 overflow-hidden flex flex-col">
                                     <span className="text-xs font-bold tracking-wider truncate">
-                                        {s.messages?.[0]?.content?.slice(0, 30) || `SESSION_${s.id.slice(0,6)}`}
+                                        {s.messages?.[0]?.content?.slice(0, 30) || `SESSION_${(s.id || '').slice(0,6)}`}
                                     </span>
                                     <span className="text-[9px] uppercase tracking-widest monospaced opacity-50 truncate mt-0.5">
                                         ID: {s.id}
                                     </span>
                                 </div>
                                 <button
-                                    className={`p-1 rounded opacity-0 transition-opacity hover:bg-red-500/20 text-red-500 ${isActive ? 'opacity-100' : 'group-hover:opacity-100'}`}
+                                    className={`p-1 rounded opacity-0 transition-opacity hover:bg-v-alert/20 text-v-alert ${isActive ? 'opacity-100 hover:text-white' : 'group-hover:opacity-100'}`}
                                     onClick={(e) => { e.stopPropagation(); handleDeleteSession(s.id); }}
                                     title="Purge Com_Link"
                                 >
@@ -176,27 +174,30 @@ export function ChatView({ onPipelineLaunched }: { onPipelineLaunched?: () => vo
             </div>
 
             {/* Chat main area */}
-            <div className="flex-1 flex flex-col relative bg-black overflow-hidden scanline">
+            <div className="flex-1 flex flex-col relative bg-v-bg overflow-hidden scanline">
                 {!activeSession ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center relative z-10">
-                        <span className="material-symbols-outlined text-6xl text-slate-700 mb-6 drop-shadow-[0_0_15px_rgba(0,0,0,1)]">speaker_notes_off</span>
-                        <h2 className="text-xl font-black text-white tracking-widest uppercase mb-2">Com_Link Offline</h2>
-                        <p className="text-slate-400 text-xs max-w-sm mb-8">Establish a connection to discuss architectural parameters prior to matrix deployment.</p>
+                        <span className="material-symbols-outlined text-6xl text-white/20 mb-6 font-light">speaker_notes_off</span>
+                        <h2 className="text-xl font-black text-white tracking-widest uppercase mb-2 font-sans">Com_Link Offline</h2>
+                        <p className="text-v-accent text-xs max-w-sm mb-8 leading-relaxed">Establish a connection to discuss architectural parameters prior to matrix deployment.</p>
                         <button 
-                            className="bg-primary/20 hover:bg-primary/30 text-primary border border-primary/50 text-xs font-bold px-6 py-3 uppercase tracking-widest flex items-center gap-2 transition-colors relative overflow-hidden group"
+                            className="bg-v-accent text-v-bg text-xs font-bold px-6 py-3 uppercase tracking-widest flex items-center gap-2 transition-colors hover:bg-white"
                             onClick={createNewSession}
                         >
-                            <span className="absolute inset-0 bg-primary/10 translate-y-[100%] group-hover:translate-y-0 transition-transform"></span>
-                            <span className="material-symbols-outlined relative z-10">cable</span>
-                            <span className="relative z-10">Initialize Connection</span>
+                            <span className="material-symbols-outlined">cable</span>
+                            <span>Initialize Connection</span>
                         </button>
                     </div>
                 ) : (
                     <>
+                        <div className="bg-v-accent text-v-bg px-4 py-1 font-black flex justify-between items-center font-sans tracking-tight z-10 relative">
+                            <span>LOG_READOUT_STREAM</span>
+                            <span className="text-[10px] uppercase">T-MINUS 00:04:12</span>
+                        </div>
                         {/* Messages Area */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 flex flex-col gap-6 relative z-10">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 flex flex-col gap-6 relative z-10 bg-v-bg text-sm leading-relaxed" id="terminal-display">
                             {activeSession.messages.length === 0 && (
-                                <div className="p-4 border border-accent/30 bg-accent/5 text-accent text-xs font-bold tracking-widest uppercase flex items-center gap-3 w-fit mx-auto mt-4 backdrop-blur-sm">
+                                <div className="p-4 brutalist-border bg-v-surface text-v-accent text-xs font-bold tracking-widest uppercase flex items-center gap-3 w-fit mx-auto mt-4">
                                     <span className="material-symbols-outlined animate-pulse">sensors</span>
                                     <span>Connection Established. Awaiting Input Parameters...</span>
                                 </div>
@@ -210,31 +211,21 @@ export function ChatView({ onPipelineLaunched }: { onPipelineLaunched?: () => vo
                                         animate={{ opacity: 1, y: 0, scale: 1 }}
                                         transition={{ duration: 0.2 }}
                                     >
-                                        <div className="flex items-center gap-2 mb-1 opacity-70">
+                                        <div className="flex items-center gap-2 mb-1">
                                             {msg.role === 'user' ? (
-                                                <>
-                                                    <span className="text-[9px] font-black uppercase tracking-widest text-primary">Operative</span>
-                                                    <span className="material-symbols-outlined text-[12px] text-primary">person</span>
-                                                </>
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-white/60">&gt;&gt; USER_EXEC</span>
                                             ) : (
-                                                <>
-                                                    <span className="material-symbols-outlined text-[12px] text-accent">smart_toy</span>
-                                                    <span className="text-[9px] font-black uppercase tracking-widest text-accent">VibeCraft_AI</span>
-                                                </>
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-v-accent">&gt;&gt; SYS_RES</span>
                                             )}
                                         </div>
                                         <div 
-                                            className={`p-4 text-sm leading-relaxed border relative shadow-xl ${
+                                            className={`p-4 text-sm leading-relaxed ${
                                                 msg.role === 'user' 
-                                                ? 'bg-primary/10 border-primary/30 text-slate-200' 
-                                                : 'bg-panel/80 border-border-muted text-slate-300 backdrop-blur-md'
+                                                ? 'bg-v-surface text-white border-l-2 border-white' 
+                                                : 'text-v-accent bg-v-bg'
                                             }`}
                                         >
-                                            {/* Decorative Corner Elements */}
-                                            <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-white/20"></div>
-                                            <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-white/20"></div>
-                                            
-                                            <div className="whitespace-pre-wrap font-medium">{msg.content}</div>
+                                            <div className="whitespace-pre-wrap font-mono uppercase">{msg.content}</div>
                                         </div>
                                     </motion.div>
                                 ))}
@@ -242,13 +233,12 @@ export function ChatView({ onPipelineLaunched }: { onPipelineLaunched?: () => vo
                             
                             {sending && (
                                 <div className="flex flex-col items-start max-w-[85%] mr-auto">
-                                    <div className="flex items-center gap-2 mb-1 opacity-70">
-                                        <span className="material-symbols-outlined text-[12px] text-accent">smart_toy</span>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-accent">VibeCraft_AI</span>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-v-accent">&gt;&gt; SYS_RES</span>
                                     </div>
-                                    <div className="p-4 border border-border-muted bg-panel/80 flex items-center gap-3 backdrop-blur-md min-w-[120px]">
-                                        <span className="material-symbols-outlined text-accent animate-spin text-[18px]">sync</span>
-                                        <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold monospaced relative after:content-[''] after:animate-ping after:absolute after:right-[-10px] after:bottom-[2px] after:w-1 after:h-1 after:bg-accent after:rounded-full">Processing</span>
+                                    <div className="p-4 text-v-accent bg-v-bg flex items-center gap-3 min-w-[120px]">
+                                        <span className="material-symbols-outlined text-v-accent animate-spin text-[18px]">sync</span>
+                                        <span className="text-[10px] uppercase tracking-widest font-bold monospaced relative after:content-[''] after:animate-ping after:absolute after:right-[-10px] after:bottom-[2px] after:w-1 after:h-1 after:bg-v-accent after:rounded-full">Processing</span>
                                     </div>
                                 </div>
                             )}
@@ -256,15 +246,15 @@ export function ChatView({ onPipelineLaunched }: { onPipelineLaunched?: () => vo
                         </div>
 
                         {/* Input Area */}
-                        <div className="border-t border-border-muted bg-background-dark p-4 relative z-10 flex flex-col gap-3">
+                        <div className="p-4 border-t-2 border-v-accent bg-v-bg flex flex-col gap-3 relative z-10">
                             {/* Toolbar */}
                             <div className="flex justify-end px-2">
                                 {activeSession.messages.length >= 2 && (
                                     <button
-                                        className="bg-accent/20 hover:bg-accent/40 text-accent border border-accent/50 text-[10px] font-black px-4 py-1.5 uppercase tracking-widest flex items-center gap-2 transition-colors relative overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="bg-v-accent text-v-bg text-[10px] font-black px-4 py-1.5 uppercase tracking-widest flex items-center gap-2 transition-colors relative overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white"
                                         onClick={handleLaunch}
                                         disabled={launching || sending}
-                                        title="Execute Pipeline Deployment Protocol from current context"
+                                        title="Execute Pipeline Deployment Protocol"
                                     >
                                         <span className={`material-symbols-outlined text-[14px] ${launching ? 'animate-bounce' : ''}`}>rocket_launch</span>
                                         {launching ? 'EXECUTING...' : 'INITIATE_DEPLOYMENT'}
@@ -272,31 +262,25 @@ export function ChatView({ onPipelineLaunched }: { onPipelineLaunched?: () => vo
                                 )}
                             </div>
                             
-                            <div className="flex gap-2 relative">
-                                <div className="flex-1 relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <span className="text-slate-500 font-bold monospaced text-sm select-none">&gt;</span>
-                                    </div>
-                                    <input
-                                        className="w-full bg-black border border-border-muted text-sm text-white pl-8 pr-4 py-3 appearance-none outline-none focus:border-primary/50 transition-colors rounded-none placeholder:text-slate-600 font-medium font-sans"
-                                        value={input}
-                                        onChange={(e) => setInput(e.target.value)}
-                                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                                        placeholder="Enter architectural directives..."
-                                        disabled={sending}
-                                        autoFocus
-                                    />
-                                    {/* Input Focus decorative line */}
-                                    <div className="absolute bottom-0 left-0 w-0 h-[1px] bg-primary transition-all duration-300 group-focus-within:w-full"></div>
-                                </div>
-                                
+                            <div className="flex items-center gap-3">
+                                <label className="font-black text-xl text-white">&gt;</label>
+                                <input
+                                    className="bg-transparent border-none focus:ring-0 p-0 text-v-accent font-mono text-lg flex-grow uppercase placeholder:text-v-accent/30 w-full"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                                    placeholder="ENTER COMMAND..."
+                                    disabled={sending}
+                                    autoFocus
+                                    spellCheck="false"
+                                />
                                 <button
-                                    className="bg-primary border border-primary text-black font-black px-4 flex items-center justify-center hover:bg-white hover:border-white transition-colors disabled:opacity-50 disabled:bg-slate-800 disabled:border-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed shrink-0"
+                                    className="bg-v-accent text-v-bg px-6 py-1 font-black hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     onClick={handleSend}
                                     disabled={!input.trim() || sending}
-                                    title="Transmit Message [Enter]"
+                                    title="Execute [Enter]"
                                 >
-                                    <span className="material-symbols-outlined text-xl">send</span>
+                                    EXECUTE
                                 </button>
                             </div>
                         </div>

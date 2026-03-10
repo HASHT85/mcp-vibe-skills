@@ -65,72 +65,100 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   };
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-background-dark scanline relative overflow-hidden">
-      
-      {/* Background Decorators */}
-      <div className="absolute top-10 left-10 text-accent opacity-20 font-mono tracking-widest text-xs pointer-events-none">
-        U.E.S.C. MARATHON // SYSTEM TERMINAL v4.2<br/>
-        INITIALIZING CONNECTION...
-      </div>
-      <div className="absolute bottom-10 right-10 text-primary opacity-20 font-mono tracking-widest text-xs text-right pointer-events-none">
-        SECURE PROTOCOL ACTIVE<br/>
-        UNAUTHORIZED ACCESS WILL BE LOGGED
-      </div>
+    <div className="font-mono overflow-x-hidden relative min-h-screen bg-v-bg text-white selection:bg-v-accent selection:text-black">
+      {/* Scanline Overlay */}
+      <div className="scanline"></div>
 
-      <motion.form
-        className="w-full max-w-md p-8 bg-panel border-2 border-border-muted relative z-10"
-        onSubmit={submit}
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4, ease: "easeOut" }}
-      >
-        {/* Frame corner blocks for industrial look */}
-        <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-accent"></div>
-        <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-accent"></div>
-        <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-accent"></div>
-        <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-accent"></div>
+      {/* Global Header */}
+      <header className="fixed top-0 w-full z-50 bg-v-bg border-b-3 border-white px-6 py-4 flex justify-between items-center">
+        <div className="flex items-center gap-4">
+          <div className="w-8 h-8 bg-v-accent"></div>
+          <span className="font-sans text-xl font-bold tracking-tighter">VIBECRAFT_SYS</span>
+        </div>
+        <div className="hidden md:flex gap-8 text-sm font-bold">
+          <span className="text-v-accent">[ STATUS_OK ]</span>
+          <span className="text-v-accent">[ AUTH_REQ ]</span>
+        </div>
+        <div className="text-v-alert text-xs hidden sm:block">
+          COORDINATES: 40.7128° N, 74.0060° W
+        </div>
+      </header>
 
-        <h1 className="text-4xl font-display font-bold text-slate-100 tracking-[0.2em] mb-2 uppercase">VibeCraft<span className="text-primary">_HQ</span></h1>
-        <p className="font-mono text-accent tracking-widest mb-8 text-sm opacity-80 uppercase">&gt; Universal AI Builder</p>
+      {/* Hero Section */}
+      <main className="relative min-h-screen pt-24 grid-bg flex flex-col justify-center px-6 md:px-12">
+        {/* Background Crosshairs */}
+        <div className="absolute top-40 left-10 text-white/20 select-none hidden md:block">┌ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ┐<br /><br />└ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ┘</div>
+        <div className="absolute bottom-40 right-10 text-white/20 select-none hidden md:block">┌ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ┐<br /><br />└ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ┘</div>
         
-        {error && (
-          <motion.div 
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="mb-6 bg-primary/20 border-l-4 border-primary p-3 text-primary font-mono text-xs uppercase tracking-widest"
-          >
-            ! {error}
-          </motion.div>
-        )}
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-slate-500 font-mono text-[10px] uppercase tracking-widest mb-1">Identification</label>
-            <input
-              className="login-input"
-              placeholder="ENTER_USERNAME"
-              value={user}
-              onChange={(e) => setUser(e.target.value)}
-              autoComplete="off"
-              spellCheck="false"
-            />
+        <div className="max-w-7xl mx-auto w-full relative z-10">
+          <div className="inline-block bg-v-alert text-v-bg font-bold px-2 py-1 mb-6 text-sm">
+            INITIATING_SEQUENCE: LOGIN_PR_03
           </div>
-          <div>
-            <label className="block text-slate-500 font-mono text-[10px] uppercase tracking-widest mb-1">Passcode</label>
-            <input
-              className="login-input"
-              type="password"
-              placeholder="••••••••••••"
-              value={pass}
-              onChange={(e) => setPass(e.target.value)}
-            />
+          <h1 className="font-sans text-7xl md:text-[8rem] lg:text-[12rem] leading-none font-bold tracking-tighter mb-8 break-all">
+            VIBECRAFT<span className="text-v-accent">_V3</span>
+          </h1>
+          
+          <div className="grid md:grid-cols-2 gap-12 items-end">
+            <div className="space-y-6">
+              <p className="text-xl md:text-2xl leading-tight max-w-xl">
+                CRITICAL FOCUS ENGAGED. INDUSTRIAL-GRADE CREATIVE ENGINE FOR THE NEW MARATHON. NO BLOAT. NO FRICTION. JUST THE CORE.
+              </p>
+              
+              {/* Login Form */}
+              <form onSubmit={submit} className="flex flex-col gap-4 pt-6 max-w-md">
+                {error && (
+                  <motion.div 
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="bg-v-alert/20 border-l-4 border-v-alert p-3 text-v-alert font-mono text-xs uppercase tracking-widest font-bold"
+                  >
+                    ! {error}
+                  </motion.div>
+                )}
+                
+                <input
+                  className="bg-v-bg border-3 border-white text-v-accent p-4 font-mono outline-none focus:border-v-accent focus:shadow-brutalist transition-all placeholder:text-white/30 uppercase"
+                  placeholder="IDENTIFICATION"
+                  value={user}
+                  onChange={(e) => setUser(e.target.value)}
+                  autoComplete="off"
+                  spellCheck="false"
+                />
+                
+                <input
+                  className="bg-v-bg border-3 border-white text-v-accent p-4 font-mono outline-none focus:border-v-accent focus:shadow-brutalist transition-all placeholder:text-white/30"
+                  type="password"
+                  placeholder="PASSCODE"
+                  value={pass}
+                  onChange={(e) => setPass(e.target.value)}
+                />
+                
+                <div className="flex flex-col sm:flex-row gap-4 mt-2">
+                  <button type="submit" disabled={loading} className="bg-v-accent text-v-bg hover:bg-white font-sans text-xl md:text-2xl font-bold px-10 py-5 transition-all flex items-center justify-between group disabled:opacity-50">
+                    {loading ? 'AUTHENTICATING...' : 'INITIALIZE_NOW'}
+                    <span className="ml-4 group-hover:translate-x-2 transition-transform">→</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+            
+            {/* System Logs UI decor */}
+            <div className="border-3 border-white p-6 bg-v-bg/50 backdrop-blur-sm hidden md:block">
+              <div className="flex justify-between items-center mb-4 border-b border-white/20 pb-2">
+                <span className="text-xs text-white/50">SYSTEM_LOGS</span>
+                <span className="w-2 h-2 bg-v-accent animate-pulse"></span>
+              </div>
+              <div className="space-y-2 text-xs font-mono uppercase">
+                <div className="text-v-accent">&gt; BOOTING CORE MODULES... [DONE]</div>
+                <div>&gt; CALIBRATING GRID MARKERS... [DONE]</div>
+                <div>&gt; ESTABLISHING SECURE PROTOCOLS... [DONE]</div>
+                <div className="text-v-alert">&gt; WARNING: UNAUTHORIZED ACCESS DETECTED</div>
+                <div className="animate-pulse">&gt; WAITING FOR CREDENTIALS_</div>
+              </div>
+            </div>
           </div>
         </div>
-
-        <button type="submit" className="btn-login" disabled={loading}>
-          {loading ? 'AUTHENTICATING...' : 'INITIALIZE UPLINK'}
-        </button>
-      </motion.form>
+      </main>
     </div>
   );
 }
@@ -212,7 +240,7 @@ function Dashboard() {
   };
 
   return (
-    <div className="relative flex h-screen w-full flex-col overflow-hidden scanline">
+    <div className="relative flex h-screen w-full flex-col overflow-hidden scanline bg-v-bg font-mono">
       
       {/* ─── Header / Top Bar ─── */}
       <TopBar />
@@ -222,7 +250,7 @@ function Dashboard() {
         <Sidebar active={activeNav} onChange={(id) => { setActiveNav(id); setSelectedId(null); }} onLaunch={() => setShowModal(true)} />
 
         {/* ─── Main Content Area ─── */}
-        <main className="flex-1 overflow-y-auto bg-background-dark p-6">
+        <main className="flex-1 overflow-y-auto bg-v-bg p-4 md:p-8">
           <AnimatePresence mode="wait">
             {renderMainContent()}
           </AnimatePresence>
@@ -233,12 +261,14 @@ function Dashboard() {
       </div>
 
       {/* ─── System Footer ─── */}
-      <footer className="h-8 bg-panel border-t border-border-muted flex items-center justify-between px-4 text-[9px] font-bold text-slate-500 tracking-[0.2em] uppercase">
-        <div>VIBECRAFT_HQ // HOST_A09 // USER_ROOT</div>
-        <div className="flex gap-4">
-          <span>COORD: 45.92 - 12.01</span>
-          <span>STATUS: NOMINAL</span>
-          <span className="text-accent">TERM_SECURED</span>
+      <footer className="mt-auto border-t-2 border-white/20 pt-2 pb-2 px-6 flex flex-col md:flex-row justify-between text-[10px] text-white/40 bg-v-bg z-10 font-mono tracking-widest uppercase">
+        <div className="flex gap-4 mb-2 md:mb-0">
+          <span>LOC: SECTOR_A-14</span>
+          <span>HOST: HOST_A09</span>
+          <span className="text-v-accent">SECURE_LINK: ESTABLISHED</span>
+        </div>
+        <div>
+          VIBECRAFT INDUSTRIAL OS v5.0.0-STABLE // MARATHON_MODE_ON
         </div>
       </footer>
 

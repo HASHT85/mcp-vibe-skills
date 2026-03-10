@@ -1,35 +1,81 @@
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=IBM+Plex+Mono:wght@400;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   body {
-    @apply bg-background-dark font-display text-slate-100 selection:bg-accent selection:text-black;
-    /* Marathon CRT styling */
-    text-shadow: 0 0 2px rgba(212, 255, 0, 0.3);
+    @apply bg-v-bg font-mono text-white selection:bg-v-accent selection:text-black;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: crosshair;
   }
 }
 
+/* Stitch Marathon Scanline Overlay */
 .scanline {
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0) 50%, rgba(0, 0, 0, 0.2) 50%, rgba(0, 0, 0, 0.2));
-  background-size: 100% 4px;
-  position: relative;
-}
-
-.scanline::before {
-  content: " ";
-  display: block;
+  width: 100%;
+  height: 2px;
+  background: rgba(215, 255, 47, 0.1);
   position: absolute;
   top: 0;
   left: 0;
-  bottom: 0;
-  right: 0;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  animation: scan 4s linear infinite;
   z-index: 50;
-  background-size: 100% 2px, 3px 100%;
   pointer-events: none;
+}
+
+@keyframes scan {
+  0% { top: 0%; }
+  100% { top: 100%; }
+}
+
+/* Industrial grid overlay from Screen 1 */
+.grid-bg {
+  background-image: radial-gradient(circle, #ffffff11 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Brutalist Component Styles from Screen 2 & 3 */
+.brutalist-card {
+  border: 2px solid #D7FF2F;
+  background-color: #171D25;
+  transition: all 0.1s ease-in-out;
+}
+.brutalist-card:hover {
+  box-shadow: 4px 4px 0px 0px #D7FF2F;
+  transform: translate(-2px, -2px);
+}
+
+.alert-card {
+  border-color: #FF6A3D;
+}
+.alert-card:hover {
+  box-shadow: 4px 4px 0px 0px #FF6A3D;
+}
+
+.brutalist-border {
+  border: 2px solid #D7FF2F;
+}
+.brutalist-border-b {
+  border-bottom: 2px solid #D7FF2F;
+}
+.brutalist-border-r {
+  border-right: 2px solid #D7FF2F;
+}
+
+.registry-table td, .registry-table th {
+  border: 1px solid #D7FF2F;
+  padding: 0.5rem;
+}
+
+.progress-fill {
+  background-color: #D7FF2F;
+  height: 100%;
+}
+
+*:focus {
+  outline: 2px solid #D7FF2F !important;
+  outline-offset: 2px !important;
 }
 
 .monospaced {
@@ -41,21 +87,14 @@
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
-/* Custom scrollbar for dark panels */
+/* Custom scrollbar for terminal feel */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: #0f0f0f;
-  border-left: 1px solid #333;
+  width: 12px;
+  background: #0B0F14;
+  border-left: 2px solid #D7FF2F;
 }
 ::-webkit-scrollbar-thumb {
-  background: #333;
-  border-radius: 0px; /* Sharp edges */
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #d4ff00;
+  background: #D7FF2F;
 }
 
 /* Marathon Glitch Utilities */
@@ -80,15 +119,15 @@ input, button, .rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl {
 }
 
 .login-input {
-  @apply w-full bg-background-dark border border-border-muted text-accent p-3 font-mono outline-none transition-all duration-200;
+  @apply w-full bg-v-bg border border-border-muted text-v-accent p-3 font-mono outline-none transition-all duration-200;
 }
 .login-input:focus {
-  @apply border-accent shadow-neon-yellow;
+  @apply border-v-accent shadow-brutalist;
 }
 
 .btn-login {
-  @apply w-full bg-accent text-black font-display font-bold uppercase tracking-widest p-4 mt-6 transition-all duration-200 border-2 border-transparent hover-glitch;
+  @apply w-full bg-v-accent text-v-bg font-sans font-bold uppercase tracking-widest p-4 mt-6 transition-all duration-200 border-2 border-transparent hover-glitch;
 }
 .btn-login:hover {
-  @apply bg-transparent text-accent border-accent shadow-neon-yellow;
+  @apply bg-transparent text-v-accent border-v-accent shadow-neon-yellow;
 }
