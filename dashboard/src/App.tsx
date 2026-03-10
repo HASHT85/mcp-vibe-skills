@@ -227,7 +227,7 @@ function Dashboard() {
       case 'containers':
         return <ContainersView key="containers" pipelines={pipelines} />;
       case 'chat':
-        return <ChatView key="chat" onPipelineLaunched={() => { setActiveNav('projects'); load(); }} />;
+        return <ChatView key="chat" pipelines={pipelines} onPipelineLaunched={() => { setActiveNav('projects'); load(); }} onRefresh={load} />;
       case 'agents':
         return <AgentsView key="agents" pipelines={pipelines} />;
       case 'tokens':
