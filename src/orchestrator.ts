@@ -525,22 +525,29 @@ RÈGLES ABSOLUES:
 
                                      console.log(`[Deploy] Building image ${imageName} from ${p.workspace}`);
 
-                    // Smart Dockerfile detection: look in root, then frontend/, then src/
+                    // Smart Dockerfile detection: check root first, then scan all subdirs
                     let dockerfilePath = "";
                     let buildContext = p.workspace;
-                    const searchPaths = [
-                        { dockerfile: "Dockerfile", context: p.workspace },
-                        { dockerfile: "frontend/Dockerfile", context: path.join(p.workspace, "frontend") },
-                        { dockerfile: "src/Dockerfile", context: path.join(p.workspace, "src") },
-                    ];
-                    for (const sp of searchPaths) {
-                        const fullPath = path.join(p.workspace, sp.dockerfile);
-                        const exists = await fs.access(fullPath).then(() => true).catch(() => false);
-                        if (exists) {
-                            dockerfilePath = fullPath;
-                            buildContext = sp.context;
-                            console.log(`[Deploy] Found Dockerfile at ${sp.dockerfile}, context: ${buildContext}`);
-                            break;
+
+                    // 1) Check root Dockerfile
+                    const rootDockerfile = path.join(p.workspace, "Dockerfile");
+                    if (await fs.access(rootDockerfile).then(() => true).catch(() => false)) {
+                        dockerfilePath = rootDockerfile;
+                        buildContext = p.workspace;
+                        console.log(`[Deploy] Found Dockerfile at root`);
+                    } else {
+                        // 2) Scan all immediate subdirectories for a Dockerfile
+                        const entries = await fs.readdir(p.workspace, { withFileTypes: true });
+                        for (const entry of entries) {
+                            if (entry.isDirectory() && entry.name !== "node_modules" && entry.name !== ".git") {
+                                const subDockerfile = path.join(p.workspace, entry.name, "Dockerfile");
+                                if (await fs.access(subDockerfile).then(() => true).catch(() => false)) {
+                                    dockerfilePath = subDockerfile;
+                                    buildContext = path.join(p.workspace, entry.name);
+                                    console.log(`[Deploy] Found Dockerfile at ${entry.name}/Dockerfile, context: ${buildContext}`);
+                                    break;
+                                }
+                            }
                         }
                     }
 
@@ -583,13 +590,12 @@ CMD ["nginx", "-g", "daemon off;"]`;
                         }
                     }
 
-                    // Build the image with BuildKit
+                    // Build the image (legacy builder — VPS lacks buildx)
                     try {
                         const buildCmd = `docker build -f ${dockerfilePath} -t ${imageName} ${buildContext}`;
                         console.log(`[Deploy] Build cmd: ${buildCmd}`);
                         execSync(buildCmd, {
                             cwd: p.workspace,
-                            env: { ...process.env, DOCKER_BUILDKIT: "1" },
                             timeout: 5 * 60 * 1000,
                             stdio: "pipe",
                         });
