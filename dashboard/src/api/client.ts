@@ -188,3 +188,88 @@ export type Project = {
     github?: Pipeline['github'];
     dokploy?: Pipeline['dokploy'];
 };
+
+// ─── 🐳 Container Management ───
+
+export type Container = {
+    id: string;
+    name: string;
+    image: string;
+    status: string;
+    state: string;
+    ports: string;
+    created: string;
+    url: string | null;
+};
+
+export async function listContainers() {
+    return api<{ containers: Container[] }>('/containers');
+}
+
+export async function stopContainer(name: string) {
+    return api('/containers/' + name + '/stop', { method: 'POST' });
+}
+
+export async function startContainer(name: string) {
+    return api('/containers/' + name + '/start', { method: 'POST' });
+}
+
+export async function restartContainer(name: string) {
+    return api('/containers/' + name + '/restart', { method: 'POST' });
+}
+
+export async function deleteContainer(name: string) {
+    return api('/containers/' + name, { method: 'DELETE' });
+}
+
+export async function getContainerLogs(name: string, lines = 100) {
+    return api<{ logs: string }>(`/containers/${name}/logs?lines=${lines}`);
+}
+
+// ─── 💬 Chat Mode ───
+
+export type ChatMessage = {
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: string;
+};
+
+export type ChatSession = {
+    id: string;
+    model: string;
+    messages: ChatMessage[];
+    createdAt: string;
+    updatedAt: string;
+};
+
+export async function createChatSession(model?: string) {
+    return api<{ session: ChatSession }>('/chat/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ model }),
+    });
+}
+
+export async function sendChatMessage(sessionId: string, content: string) {
+    return api<{ reply: string; session: ChatSession }>(`/chat/sessions/${sessionId}/message`, {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+    });
+}
+
+export async function getChatSession(sessionId: string) {
+    return api<{ session: ChatSession }>(`/chat/sessions/${sessionId}`);
+}
+
+export async function listChatSessions() {
+    return api<{ sessions: ChatSession[] }>('/chat/sessions');
+}
+
+export async function launchFromChat(sessionId: string) {
+    return api<{ pipeline: Pipeline; brief: any }>(`/chat/sessions/${sessionId}/launch`, {
+        method: 'POST',
+    });
+}
+
+export async function deleteChatSession(sessionId: string) {
+    return api('/chat/sessions/' + sessionId, { method: 'DELETE' });
+}

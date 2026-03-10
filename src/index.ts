@@ -51,6 +51,8 @@ const authMiddleware = (req: Request, res: Response, next: Function) => {
 app.use('/projects', authMiddleware);
 app.use('/pipeline', authMiddleware);
 app.use('/agents', authMiddleware);
+app.use('/containers', authMiddleware);
+app.use('/chat', authMiddleware);
 // Initialize Stores
 const agentsStore = new AgentsStore(storePath);
 const projectsStore = new ProjectsStore(storePath);
@@ -392,6 +394,182 @@ app.delete("/agents/:id/skills", async (req: Request, res: Response) => {
     }
 });
 
+
+// ─────────────────────────────────────
+// 🐳 Container Management
+// ─────────────────────────────────────
+
+app.get("/containers", async (_req: Request, res: Response) => {
+    try {
+        const { execSync } = await import("node:child_process");
+        const raw = execSync(
+            `docker ps -a --filter "name=vibe-" --format "{{json .}}"`,
+            { encoding: "utf-8", timeout: 10000 }
+        ).trim();
+
+        const containers = raw
+            .split("\n")
+            .filter(Boolean)
+            .map((line) => {
+                const c = JSON.parse(line);
+                return {
+                    id: c.ID,
+                    name: c.Names,
+                    image: c.Image,
+                    status: c.Status,
+                    state: c.State, // "running" | "exited" etc
+                    ports: c.Ports,
+                    created: c.CreatedAt,
+                    // Derive URL from name pattern vibe-{hash}-app
+                    url: c.Names.match(/^vibe-([a-f0-9]+)/)
+                        ? `https://${c.Names.match(/^vibe-([a-f0-9]+)/)[1]}.hach.dev`
+                        : null,
+                };
+            });
+
+        res.json({ containers });
+    } catch (err: any) {
+        console.error("GET /containers error:", err.message);
+        res.json({ containers: [] });
+    }
+});
+
+app.post("/containers/:name/stop", async (req: Request, res: Response) => {
+    try {
+        const { execSync } = await import("node:child_process");
+        execSync(`docker stop ${req.params.name}`, { timeout: 30000 });
+        res.json({ ok: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post("/containers/:name/start", async (req: Request, res: Response) => {
+    try {
+        const { execSync } = await import("node:child_process");
+        execSync(`docker start ${req.params.name}`, { timeout: 30000 });
+        res.json({ ok: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post("/containers/:name/restart", async (req: Request, res: Response) => {
+    try {
+        const { execSync } = await import("node:child_process");
+        execSync(`docker restart ${req.params.name}`, { timeout: 30000 });
+        res.json({ ok: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete("/containers/:name", async (req: Request, res: Response) => {
+    try {
+        const { execSync } = await import("node:child_process");
+        // Get image name before removing
+        let imageName = "";
+        try {
+            imageName = execSync(
+                `docker inspect --format="{{.Config.Image}}" ${req.params.name}`,
+                { encoding: "utf-8", timeout: 5000 }
+            ).trim();
+        } catch {}
+        execSync(`docker rm -f ${req.params.name}`, { timeout: 30000 });
+        // Also remove image
+        if (imageName) {
+            try { execSync(`docker rmi ${imageName}`, { timeout: 30000 }); } catch {}
+        }
+        res.json({ ok: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get("/containers/:name/logs", async (req: Request, res: Response) => {
+    try {
+        const { execSync } = await import("node:child_process");
+        const lines = req.query.lines ? Number(req.query.lines) : 100;
+        const logs = execSync(
+            `docker logs --tail ${lines} ${req.params.name} 2>&1`,
+            { encoding: "utf-8", timeout: 10000 }
+        );
+        res.json({ logs });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message, logs: "" });
+    }
+});
+
+// ─────────────────────────────────────
+// 💬 Chat Mode (Pre-Pipeline)
+// ─────────────────────────────────────
+
+import { ChatService } from "./chat_service.js";
+const chatService = new ChatService();
+
+// Create new chat session
+app.post("/chat/sessions", async (req: Request, res: Response) => {
+    try {
+        const model = req.body?.model ? String(req.body.model).trim() : undefined;
+        const session = chatService.createSession(model);
+        res.json({ session });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Send message in chat session
+app.post("/chat/sessions/:id/message", async (req: Request, res: Response) => {
+    try {
+        const content = String(req.body?.content ?? "").trim();
+        if (!content) return res.status(400).json({ error: "missing_content" });
+
+        const result = await chatService.sendMessage(req.params.id, content);
+        res.json(result);
+    } catch (err: any) {
+        res.status(err.message === "session_not_found" ? 404 : 500).json({ error: err.message });
+    }
+});
+
+// Get chat session
+app.get("/chat/sessions/:id", async (req: Request, res: Response) => {
+    try {
+        const session = chatService.getSession(req.params.id);
+        if (!session) return res.status(404).json({ error: "session_not_found" });
+        res.json({ session });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// List all chat sessions
+app.get("/chat/sessions", async (_req: Request, res: Response) => {
+    const sessions = chatService.listSessions();
+    res.json({ sessions });
+});
+
+// Launch pipeline from chat session
+app.post("/chat/sessions/:id/launch", async (req: Request, res: Response) => {
+    try {
+        const brief = chatService.generateBrief(req.params.id);
+        if (!brief) return res.status(404).json({ error: "session_not_found" });
+
+        const pipeline = await orchestrator.launchIdea(
+            brief.description,
+            brief.name,
+            brief.model
+        );
+        res.json({ pipeline, brief });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Delete chat session
+app.delete("/chat/sessions/:id", async (req: Request, res: Response) => {
+    const ok = chatService.deleteSession(req.params.id);
+    res.json({ ok });
+});
 
 // ─────────────────────────────────────
 // Events

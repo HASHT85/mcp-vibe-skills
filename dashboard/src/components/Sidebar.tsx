@@ -1,7 +1,9 @@
-import { LayoutGrid, Bot, Coins, Server } from 'lucide-react';
+import { LayoutGrid, Bot, Coins, Server, Container, MessageCircle } from 'lucide-react';
 
 const NAV_ITEMS = [
     { id: 'projects', icon: LayoutGrid, label: 'Projects' },
+    { id: 'containers', icon: Container, label: 'Containers' },
+    { id: 'chat', icon: MessageCircle, label: 'Chat' },
     { id: 'agents', icon: Bot, label: 'Agents' },
     { id: 'tokens', icon: Coins, label: 'Tokens' },
     { id: 'deploy', icon: Server, label: 'Deploy' },

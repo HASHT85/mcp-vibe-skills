@@ -17,6 +17,8 @@ import { ProjectDetail } from './components/ProjectDetail';
 import { AgentsView } from './components/AgentsView';
 import { TokensView } from './components/TokensView';
 import { DeployView } from './components/DeployView';
+import { ContainersView } from './components/ContainersView';
+import { ChatView } from './components/ChatView';
 import { LiveActivityPanel } from './components/LiveActivityPanel';
 import { LaunchModal } from './components/LaunchModal';
 import { formatTime, formatTokenCount } from './utils';
@@ -161,6 +163,10 @@ function Dashboard() {
             onSelect={(id) => setSelectedId(id)}
           />
         );
+      case 'containers':
+        return <ContainersView key="containers" />;
+      case 'chat':
+        return <ChatView key="chat" onPipelineLaunched={() => { setActiveNav('projects'); load(); }} />;
       case 'agents':
         return <AgentsView key="agents" pipelines={pipelines} />;
       case 'tokens':
