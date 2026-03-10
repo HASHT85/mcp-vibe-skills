@@ -617,6 +617,25 @@ export async function gitClone(repoUrl: string, targetDir: string): Promise<bool
 }
 
 export async function gitPush(cwd: string, message: string, authRemoteUrl?: string): Promise<boolean> {
+    // Ensure .gitignore exists to prevent staging node_modules, dist, etc.
+    try {
+        const gitignorePath = path.join(cwd, ".gitignore");
+        const hasGitignore = await fs.access(gitignorePath).then(() => true).catch(() => false);
+        if (!hasGitignore) {
+            console.log(`[Git] No .gitignore found, creating default one`);
+            await fs.writeFile(gitignorePath, "node_modules/\ndist/\nbuild/\n.env\n.env.local\n*.log\n", "utf-8");
+        } else {
+            // Ensure node_modules is in .gitignore
+            const content = await fs.readFile(gitignorePath, "utf-8");
+            if (!content.includes("node_modules")) {
+                console.log(`[Git] Adding node_modules to existing .gitignore`);
+                await fs.appendFile(gitignorePath, "\nnode_modules/\n");
+            }
+        }
+    } catch (e: any) {
+        console.warn(`[Git] .gitignore check failed: ${e.message}`);
+    }
+
     return new Promise((resolve) => {
         // If an authenticated URL is provided, update remote before push
         const commands: [string, string[]][] = authRemoteUrl
@@ -651,7 +670,15 @@ export async function gitPush(cwd: string, message: string, authRemoteUrl?: stri
             let stderr = "";
             proc.stderr?.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
 
+            // Timeout per command: 2 minutes (push can be slow but should not hang forever)
+            const cmdTimeout = setTimeout(() => {
+                console.error(`[Git] ${cmd} ${args.join(" ")} timed out after 120s — killing`);
+                proc.kill("SIGTERM");
+                resolve(false);
+            }, 120_000);
+
             proc.on("close", (code) => {
+                clearTimeout(cmdTimeout);
                 if (code !== 0) {
                     console.error(`[Git] ${cmd} ${args.join(" ")} failed (code ${code}):\n${stderr}`);
                     resolve(false);
@@ -660,6 +687,7 @@ export async function gitPush(cwd: string, message: string, authRemoteUrl?: stri
                 runNext();
             });
             proc.on("error", (err) => {
+                clearTimeout(cmdTimeout);
                 console.error(`[Git] Error:`, err);
                 resolve(false);
             });
