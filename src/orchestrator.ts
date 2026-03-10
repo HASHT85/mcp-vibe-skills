@@ -525,11 +525,11 @@ RÈGLES ABSOLUES:
 
                                      console.log(`[Deploy] Building image ${imageName} from ${p.workspace}`);
 
-                    // Smart Dockerfile detection: check root first, then scan all subdirs (including .prod variants)
+                    // Smart Dockerfile detection with monorepo awareness
                     let dockerfilePath = "";
                     let buildContext = p.workspace;
 
-                    // 1) Check root Dockerfile (and Dockerfile.prod)
+                    // 1) Check root Dockerfile (and Dockerfile.prod) — always takes priority
                     const rootDockerfile = path.join(p.workspace, "Dockerfile");
                     const rootDockerfileProd = path.join(p.workspace, "Dockerfile.prod");
                     if (await fs.access(rootDockerfile).then(() => true).catch(() => false)) {
@@ -541,22 +541,39 @@ RÈGLES ABSOLUES:
                         buildContext = p.workspace;
                         console.log(`[Deploy] Found Dockerfile.prod at root`);
                     } else {
-                        // 2) Scan all immediate subdirectories for a Dockerfile or Dockerfile.prod
-                        const entries = await fs.readdir(p.workspace, { withFileTypes: true });
-                        for (const entry of entries) {
-                            if (entry.isDirectory() && entry.name !== "node_modules" && entry.name !== ".git") {
-                                const subDockerfile = path.join(p.workspace, entry.name, "Dockerfile");
-                                const subDockerfileProd = path.join(p.workspace, entry.name, "Dockerfile.prod");
-                                if (await fs.access(subDockerfile).then(() => true).catch(() => false)) {
-                                    dockerfilePath = subDockerfile;
-                                    buildContext = path.join(p.workspace, entry.name);
-                                    console.log(`[Deploy] Found Dockerfile in ${entry.name}/, context: ${buildContext}`);
-                                    break;
-                                } else if (await fs.access(subDockerfileProd).then(() => true).catch(() => false)) {
-                                    dockerfilePath = subDockerfileProd;
-                                    buildContext = path.join(p.workspace, entry.name);
-                                    console.log(`[Deploy] Found Dockerfile.prod in ${entry.name}/, context: ${buildContext}`);
-                                    break;
+                        // 2) Detect monorepo BEFORE scanning subdirs — a monorepo with only
+                        //    partial Dockerfiles (e.g. backend/Dockerfile) would deploy incorrectly
+                        const hasFrontendDir = await fs.access(path.join(p.workspace, "frontend")).then(() => true).catch(() => false);
+                        const hasBackendDir = await fs.access(path.join(p.workspace, "backend")).then(() => true).catch(() => false);
+
+                        if (hasFrontendDir && hasBackendDir) {
+                            // Check for docker-compose.prod.yml first (ideal monorepo setup)
+                            const composeProd = path.join(p.workspace, "docker-compose.prod.yml");
+                            if (await fs.access(composeProd).then(() => true).catch(() => false)) {
+                                console.log(`[Deploy] Monorepo detected with docker-compose.prod.yml — skipping to combined Dockerfile generation (single-container deploy)`);
+                            }
+                            // For single-container deploy: generate a combined root Dockerfile
+                            // This ensures both frontend AND backend are served together
+                            console.log(`[Deploy] Monorepo detected (frontend+backend), generating combined root Dockerfile`);
+                            // dockerfilePath stays empty → will be handled by the fallback generation below
+                        } else {
+                            // 3) Not a monorepo: scan subdirectories for a Dockerfile or Dockerfile.prod
+                            const entries = await fs.readdir(p.workspace, { withFileTypes: true });
+                            for (const entry of entries) {
+                                if (entry.isDirectory() && entry.name !== "node_modules" && entry.name !== ".git") {
+                                    const subDockerfile = path.join(p.workspace, entry.name, "Dockerfile");
+                                    const subDockerfileProd = path.join(p.workspace, entry.name, "Dockerfile.prod");
+                                    if (await fs.access(subDockerfile).then(() => true).catch(() => false)) {
+                                        dockerfilePath = subDockerfile;
+                                        buildContext = path.join(p.workspace, entry.name);
+                                        console.log(`[Deploy] Found Dockerfile in ${entry.name}/, context: ${buildContext}`);
+                                        break;
+                                    } else if (await fs.access(subDockerfileProd).then(() => true).catch(() => false)) {
+                                        dockerfilePath = subDockerfileProd;
+                                        buildContext = path.join(p.workspace, entry.name);
+                                        console.log(`[Deploy] Found Dockerfile.prod in ${entry.name}/, context: ${buildContext}`);
+                                        break;
+                                    }
                                 }
                             }
                         }
