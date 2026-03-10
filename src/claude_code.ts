@@ -522,11 +522,22 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
                 if (messages.length > 1 + KEEP_PAIRS * 2) {
                     const initial = messages[0];
                     const tail = messages.slice(-(KEEP_PAIRS * 2));
-                    // Insert a summary so the model knows some context was dropped
                     const droppedCount = messages.length - 1 - KEEP_PAIRS * 2;
+
+                    // Read dev_progress from shared memory to prevent agent from re-doing work
+                    let progressHint = "";
+                    try {
+                        const memPath = path.resolve(options.cwd, ".vibecraft_memory.json");
+                        const memStr = await fs.readFile(memPath, "utf-8").catch(() => "{}");
+                        const mem = JSON.parse(memStr);
+                        if (mem.dev_progress) {
+                            progressHint = `\n\n📋 YOUR PROGRESS SO FAR: ${mem.dev_progress}\n⚠️ Do NOT recreate files that are already DONE. Continue from where you left off.`;
+                        }
+                    } catch {}
+
                     const summaryMsg: Anthropic.Messages.MessageParam = {
                         role: "user",
-                        content: `[SYSTEM: ${droppedCount} earlier message(s) were trimmed to save context. Do NOT re-read files you already processed. Focus on WRITING code and making progress.]`
+                        content: `[SYSTEM: ${droppedCount} earlier message(s) were trimmed to save context. Do NOT re-read or re-create files you already processed. Focus on WRITING new code and making progress.${progressHint}]`
                     };
                     messages.length = 0;
                     messages.push(initial, summaryMsg, ...tail);

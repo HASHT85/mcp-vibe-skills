@@ -608,33 +608,47 @@ CMD ["nginx", "-g", "daemon off;"]`;
 
                     console.log(`[Deploy] Image built. Deploying container ${containerName}`);
 
-                    // Remove old container if exists
-                    try {
-                        execSync(`docker rm -f ${containerName}`, { stdio: "pipe" });
-                    } catch { /* container didn't exist */ }
-
                     // Ensure 'web' network exists
                     try {
                         execSync(`docker network create web`, { stdio: "pipe" });
                     } catch { /* already exists */ }
 
-                    // Run with Traefik labels — deterministic, no agent-generated compose needed
-                    const dockerRunCmd = [
-                        `docker run -d`,
-                        `--name ${containerName}`,
-                        `--network web`,
-                        `--restart unless-stopped`,
-                        `--label "traefik.enable=true"`,
-                        `--label "traefik.http.routers.${projectName}.rule=Host(\\\`${hostDomain}\\\`)"`,
-                        `--label "traefik.http.routers.${projectName}.entrypoints=websecure"`,
-                        `--label "traefik.http.routers.${projectName}.tls.certresolver=letsencrypt"`,
-                        `--label "traefik.http.services.${projectName}.loadbalancer.server.port=80"`,
-                        imageName,
-                    ].join(" ");
+                    // Generate a deterministic compose file with Traefik labels
+                    // so it appears as a "project" in Hostinger Docker Manager
+                    const deployComposeContent = [
+                        'version: "3.8"',
+                        '',
+                        'services:',
+                        '  app:',
+                        `    image: ${imageName}`,
+                        `    container_name: ${containerName}`,
+                        '    restart: unless-stopped',
+                        '    networks:',
+                        '      - web',
+                        '    labels:',
+                        '      - "traefik.enable=true"',
+                        `      - "traefik.http.routers.${projectName}.rule=Host(\`${hostDomain}\`)"`,
+                        `      - "traefik.http.routers.${projectName}.entrypoints=websecure"`,
+                        `      - "traefik.http.routers.${projectName}.tls.certresolver=letsencrypt"`,
+                        `      - "traefik.http.services.${projectName}.loadbalancer.server.port=80"`,
+                        '',
+                        'networks:',
+                        '  web:',
+                        '    external: true',
+                    ].join('\n');
+                    const deployComposePath = path.join(p.workspace, "docker-compose.deploy.yml");
+                    await fs.writeFile(deployComposePath, deployComposeContent, "utf-8");
+                    console.log(`[Deploy] Generated ${deployComposePath}`);
 
-                    console.log(`[Deploy] Running: ${dockerRunCmd}`);
+                    // Stop old deployment if exists
+                    try {
+                        execSync(`docker compose -p ${projectName} -f ${deployComposePath} down`, {
+                            cwd: p.workspace, stdio: "pipe", timeout: 30000
+                        });
+                    } catch { /* didn't exist */ }
 
-                    execSync(dockerRunCmd, {
+                    // Deploy using docker compose (creates a "project" visible in Hostinger)
+                    execSync(`docker compose -p ${projectName} -f ${deployComposePath} up -d`, {
                         cwd: p.workspace,
                         timeout: 30 * 1000,
                         stdio: "pipe",
