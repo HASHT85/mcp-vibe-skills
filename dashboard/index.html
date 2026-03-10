@@ -12,6 +12,36 @@
     
     <!-- Material Symbols -->
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+
+    <!-- GLOBAL ERROR CATCHER - runs BEFORE any module JS -->
+    <script>
+      window.onerror = function(msg, url, line, col, error) {
+        var el = document.getElementById('crash-display');
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'crash-display';
+          el.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#0B0F14;color:#D7FF2F;font-family:monospace;padding:40px;overflow:auto;';
+          document.body.appendChild(el);
+        }
+        el.innerHTML += '<h1 style="color:#FF6A3D;font-size:20px">[ JS_CRASH ]</h1>' +
+          '<pre style="color:#fff;white-space:pre-wrap;font-size:12px">' +
+          msg + '\n' + url + ':' + line + ':' + col + '\n' +
+          (error && error.stack ? error.stack : '') + '</pre><hr style="border-color:#333">';
+        return true;
+      };
+      window.addEventListener('unhandledrejection', function(e) {
+        var el = document.getElementById('crash-display');
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'crash-display';
+          el.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#0B0F14;color:#D7FF2F;font-family:monospace;padding:40px;overflow:auto;';
+          document.body.appendChild(el);
+        }
+        el.innerHTML += '<h1 style="color:#FF6A3D;font-size:20px">[ PROMISE_REJECTION ]</h1>' +
+          '<pre style="color:#fff;white-space:pre-wrap;font-size:12px">' +
+          (e.reason ? (e.reason.stack || e.reason.message || String(e.reason)) : 'Unknown rejection') + '</pre><hr style="border-color:#333">';
+      });
+    </script>
   </head>
   <body class="bg-v-bg font-mono text-white antialiased">
     <div id="root"></div>
