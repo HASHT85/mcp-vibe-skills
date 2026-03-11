@@ -1,5 +1,6 @@
 import express, { type Request, type Response } from "express";
 import cors from "cors";
+import { slugify } from "./orchestrator_utils.js";
 
 import { AgentsStore } from "./agents_store.js";
 import { ProjectsStore } from "./projects_store.js";
@@ -198,7 +199,7 @@ app.delete("/pipeline/:id", async (req: Request, res: Response) => {
         // 2. Delete Docker container + image (silently ignore errors)
         try {
             const { execSync } = await import("node:child_process");
-            const containerName = `vibe-${req.params.id}-app`;
+            const containerName = pipeline.name ? `vibe-${slugify(pipeline.name)}-app` : `vibe-${req.params.id}-app`;
             let imageName = "";
             try {
                 imageName = execSync(
@@ -473,10 +474,15 @@ app.get("/containers", async (_req: Request, res: Response) => {
                     state: c.State, // "running" | "exited" etc
                     ports: c.Ports,
                     created: c.CreatedAt,
-                    // Derive URL from name pattern vibe-{hash}-app
-                    url: c.Names.match(/^vibe-([a-f0-9]+)/)
-                        ? `https://${c.Names.match(/^vibe-([a-f0-9]+)/)[1]}.hach.dev`
-                        : null,
+                    // Derive URL: match pipeline by container name
+                    url: (() => {
+                        const pipelines = orchestrator.listPipelines();
+                        const match = pipelines.find(p => p.name && `vibe-${slugify(p.name)}-app` === c.Names);
+                        if (match) return match.artifacts?.deployedUrl || `https://${match.id}.hach.dev`;
+                        // Fallback: extract hash from old-style name
+                        const m = c.Names.match(/^vibe-([a-f0-9]+)/);
+                        return m ? `https://${m[1]}.hach.dev` : null;
+                    })(),
                 };
             });
 
@@ -564,7 +570,8 @@ const chatService = new ChatService(storePath);
 app.post("/chat/sessions", async (req: Request, res: Response) => {
     try {
         const model = req.body?.model ? String(req.body.model).trim() : undefined;
-        const session = chatService.createSession(model);
+        const projectId = req.body?.projectId ? String(req.body.projectId).trim() : undefined;
+        const session = chatService.createSession(model, projectId);
         res.json({ session });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -626,6 +633,18 @@ app.post("/chat/sessions/:id/launch", async (req: Request, res: Response) => {
 app.delete("/chat/sessions/:id", async (req: Request, res: Response) => {
     const ok = chatService.deleteSession(req.params.id);
     res.json({ ok });
+});
+
+// Link/unlink chat session to a project
+app.put("/chat/sessions/:id/link", async (req: Request, res: Response) => {
+    try {
+        const projectId = req.body?.projectId ? String(req.body.projectId).trim() : null;
+        const ok = chatService.linkProject(req.params.id, projectId);
+        if (!ok) return res.status(404).json({ error: "session_not_found" });
+        res.json({ ok, projectId });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ─────────────────────────────────────

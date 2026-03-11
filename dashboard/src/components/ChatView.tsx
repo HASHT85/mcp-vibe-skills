@@ -15,8 +15,6 @@ const MODEL_OPTIONS = [
     { value: 'gpt-4o', label: 'GPT-4o (OpenAI)' },
 ];
 
-type ChatMode = 'new' | 'modify';
-
 type AttachedFile = {
     name: string;
     type: string;
@@ -39,7 +37,6 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     const [sending, setSending] = useState(false);
     const [launching, setLaunching] = useState(false);
     const [model, setModel] = useState('claude-sonnet-4-6');
-    const [mode, setMode] = useState<ChatMode>('new');
     const [selectedPipelineId, setSelectedPipelineId] = useState<string>('');
     const [files, setFiles] = useState<AttachedFile[]>([]);
     const [dragOver, setDragOver] = useState(false);
@@ -48,8 +45,8 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     const fileInputRef = useRef<HTMLInputElement>(null);
     const modifyCleanupRef = useRef<(() => void) | null>(null);
 
-    // Filter pipelines that can be modified (COMPLETED or FAILED)
-    const modifiablePipelines = pipelines.filter(p => ['COMPLETED', 'FAILED'].includes(p.phase));
+    // All pipelines for linking
+    const linkablePipelines = pipelines.filter(p => ['COMPLETED', 'FAILED'].includes(p.phase));
 
     const loadSessions = useCallback(async () => {
         try {
@@ -123,10 +120,13 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     const selectSession = async (s: ChatSession) => {
         // Set immediately with truncated data for responsiveness
         setActiveSession(s);
+        // Restore linked pipeline if any
+        setSelectedPipelineId((s as any).projectId || '');
         // Then fetch full session with all messages
         try {
             const data = await getChatSession(s.id);
             setActiveSession(data.session);
+            setSelectedPipelineId((data.session as any).projectId || '');
         } catch {
             // Keep truncated version if fetch fails
         }
@@ -144,10 +144,10 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
         const fileNames = attachedFiles.length > 0 ? `\n[📎 ${attachedFiles.length} FILE(S) ATTACHED]` : '';
         const displayContent = msg + fileNames;
 
-        // Build actual content sent to AI (with project context in modify mode)
+        // Build actual content sent to AI (with project context if linked)
         let aiContent = msg || '[Attached files]';
-        if (mode === 'modify' && selectedPipelineId) {
-            const targetPipeline = modifiablePipelines.find(p => p.id === selectedPipelineId);
+        if (selectedPipelineId) {
+            const targetPipeline = linkablePipelines.find(p => p.id === selectedPipelineId);
             if (targetPipeline && activeSession.messages.length === 0) {
                 // First message: inject full project context + repo contents
                 const repoCtx = await getRepoContext(selectedPipelineId);
@@ -192,7 +192,8 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
         if (!activeSession || launching) return;
         setLaunching(true);
         try {
-            if (mode === 'modify' && selectedPipelineId) {
+            if (selectedPipelineId) {
+                // ─── MODIFY existing project ───
                 const pipelineId = selectedPipelineId;
                 const instructions = activeSession.messages
                     .filter(m => m.role === 'user')
@@ -259,6 +260,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                 onRefresh?.();
                 return; // Don't setLaunching(false) yet — polling will do it
             } else {
+                // ─── CREATE new project ───
                 await launchFromChat(activeSession.id, projectName.trim() || undefined);
                 const launchName = projectName.trim() || 'AUTO_NAMED';
                 setActiveSession(prev => prev ? {
@@ -285,7 +287,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
         if (activeSession?.id === id) setActiveSession(null);
     };
 
-    const selectedPipelineName = modifiablePipelines.find(p => p.id === selectedPipelineId)?.name;
+    const selectedPipelineName = linkablePipelines.find(p => p.id === selectedPipelineId)?.name;
 
     return (
         <motion.div
@@ -324,34 +326,26 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                         <span className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-v-accent pointer-events-none text-[16px]">expand_more</span>
                     </div>
 
-                    {/* Mode Selector: NEW vs MODIFY */}
-                    <div className="flex gap-0">
-                        <button
-                            className={`flex-1 text-[10px] font-black uppercase tracking-widest py-2 px-1 flex items-center justify-center gap-1 transition-colors border-2 ${
-                                mode === 'new'
-                                ? 'bg-v-accent text-v-bg border-v-accent'
-                                : 'bg-transparent text-slate-400 border-v-accent/30 hover:text-v-accent'
-                            }`}
-                            onClick={() => setMode('new')}
+                    {/* Link to Project (optional) */}
+                    <div className="relative">
+                        <label className="text-[9px] text-slate-400 font-bold tracking-widest uppercase mb-1 block">LINK_TO_PROJECT</label>
+                        <select
+                            className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 appearance-none outline-none focus:ring-0 rounded-none cursor-pointer"
+                            value={selectedPipelineId}
+                            onChange={(e) => setSelectedPipelineId(e.target.value)}
                         >
-                            <span className="material-symbols-outlined text-[14px]">add_circle</span>
-                            NEW
-                        </button>
-                        <button
-                            className={`flex-1 text-[10px] font-black uppercase tracking-widest py-2 px-1 flex items-center justify-center gap-1 transition-colors border-2 border-l-0 ${
-                                mode === 'modify'
-                                ? 'bg-v-accent text-v-bg border-v-accent'
-                                : 'bg-transparent text-slate-400 border-v-accent/30 hover:text-v-accent'
-                            }`}
-                            onClick={() => setMode('modify')}
-                        >
-                            <span className="material-symbols-outlined text-[14px]">edit_square</span>
-                            MODIFY
-                        </button>
+                            <option value="">[ NEW_PROJECT ]</option>
+                            {linkablePipelines.map(p => (
+                                <option key={p.id} value={p.id}>
+                                    {(p.name || 'unnamed').replace(/\s+/g, '_').toUpperCase()} [{p.phase}]
+                                </option>
+                            ))}
+                        </select>
+                        <span className="material-symbols-outlined absolute right-2 bottom-2 text-v-accent pointer-events-none text-[16px]">expand_more</span>
                     </div>
 
-                    {/* Project Name (only in new mode) */}
-                    {mode === 'new' && (
+                    {/* Project Name (only when no project linked = new project mode) */}
+                    {!selectedPipelineId && (
                         <div>
                             <label className="text-[9px] text-slate-400 font-bold tracking-widest uppercase mb-1 block">PROJECT_ID (OPT.)</label>
                             <input
@@ -361,26 +355,6 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                 placeholder="AUTO_GENERATED"
                                 spellCheck="false"
                             />
-                        </div>
-                    )}
-
-                    {/* Pipeline Selector (only in modify mode) */}
-                    {mode === 'modify' && (
-                        <div className="relative">
-                            <label className="text-[9px] text-v-alert font-bold tracking-widest uppercase mb-1 block">TARGET_NODE</label>
-                            <select
-                                className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 appearance-none outline-none focus:ring-0 rounded-none cursor-pointer"
-                                value={selectedPipelineId}
-                                onChange={(e) => setSelectedPipelineId(e.target.value)}
-                            >
-                                <option value="">[ SELECT_PROJECT ]</option>
-                                {modifiablePipelines.map(p => (
-                                    <option key={p.id} value={p.id}>
-                                        {(p.name || 'unnamed').replace(/\s+/g, '_').toUpperCase()} [{p.phase}]
-                                    </option>
-                                ))}
-                            </select>
-                            <span className="material-symbols-outlined absolute right-2 bottom-2 text-v-accent pointer-events-none text-[16px]">expand_more</span>
                         </div>
                     )}
                 </div>
@@ -406,7 +380,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                         {s.messages?.[0]?.content?.slice(0, 30) || `SESSION_${(s.id || '').slice(0,6)}`}
                                     </span>
                                     <span className="text-[9px] uppercase tracking-widest monospaced opacity-50 truncate mt-0.5">
-                                        ID: {s.id}
+                                        {(s as any).projectId ? `🔗 LINKED` : `ID: ${s.id}`}
                                     </span>
                                 </div>
                                 <button
@@ -456,13 +430,13 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center relative z-10">
                         <span className="material-symbols-outlined text-6xl text-white/20 mb-6 font-light">speaker_notes_off</span>
                         <h2 className="text-xl font-black text-white tracking-widest uppercase mb-2 font-sans">Com_Link Offline</h2>
-                        <p className="text-v-accent text-xs max-w-sm mb-8 leading-relaxed">Establish a connection to discuss architectural parameters prior to matrix deployment.</p>
+                        <p className="text-v-accent text-xs max-w-sm mb-8 leading-relaxed">Establish a connection to discuss architectural parameters, create new projects, or modify existing ones.</p>
                         <button 
                             className="bg-v-accent text-v-bg text-xs font-bold px-6 py-3 uppercase tracking-widest flex items-center gap-2 transition-colors hover:bg-white"
                             onClick={createNewSession}
                         >
                             <span className="material-symbols-outlined">cable</span>
-                            <span>Initialize Connection</span>
+                            <span>Establish Connection</span>
                         </button>
                     </div>
                 ) : (
@@ -470,15 +444,15 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                         {/* Header bar */}
                         <div className="bg-v-accent text-v-bg px-4 py-1 font-black flex justify-between items-center font-sans tracking-tight z-10 relative">
                             <div className="flex items-center gap-3">
-                                <span>{mode === 'modify' ? 'MODIFY_STREAM' : 'LOG_READOUT_STREAM'}</span>
-                                {mode === 'modify' && selectedPipelineName && (
+                                <span>COM_LINK_STREAM</span>
+                                {selectedPipelineName && (
                                     <span className="text-[10px] bg-v-bg text-v-accent px-2 py-0.5 font-mono">
                                         → {selectedPipelineName.replace(/\s+/g, '_').toUpperCase()}
                                     </span>
                                 )}
                             </div>
                             <span className="text-[10px] uppercase">
-                                {mode === 'modify' ? 'MODE: MODIFY_NODE' : 'MODE: NEW_PROJECT'}
+                                {selectedPipelineId ? 'MODE: MODIFY_PROJECT' : 'MODE: NEW_PROJECT'}
                             </span>
                         </div>
 
@@ -488,7 +462,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                 <div className="p-4 brutalist-border bg-v-surface text-v-accent text-xs font-bold tracking-widest uppercase flex items-center gap-3 w-fit mx-auto mt-4">
                                     <span className="material-symbols-outlined animate-pulse">sensors</span>
                                     <span>
-                                        {mode === 'modify' 
+                                        {selectedPipelineId 
                                             ? 'Connection Established. Describe modifications for target node...'
                                             : 'Connection Established. Awaiting Input Parameters...'}
                                     </span>
@@ -577,16 +551,10 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                         ATTACH
                                     </button>
 
-                                    {mode === 'modify' && !selectedPipelineId && (
-                                        <span className="text-[10px] text-v-alert font-bold tracking-widest uppercase flex items-center gap-1">
-                                            <span className="material-symbols-outlined text-[14px]">warning</span>
-                                            SELECT TARGET
-                                        </span>
-                                    )}
-                                    {mode === 'modify' && selectedPipelineId && (
+                                    {selectedPipelineId && (
                                         <span className="text-[10px] text-v-nominal font-bold tracking-widest uppercase flex items-center gap-1">
-                                            <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                                            LOCKED
+                                            <span className="material-symbols-outlined text-[14px]">link</span>
+                                            LINKED
                                         </span>
                                     )}
                                 </div>
@@ -594,20 +562,20 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                 {activeSession.messages.length >= 2 && (
                                     <button
                                         className={`text-[10px] font-black px-4 py-1.5 uppercase tracking-widest flex items-center gap-2 transition-colors relative overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed ${
-                                            mode === 'modify'
+                                            selectedPipelineId
                                             ? 'bg-v-alert text-white hover:bg-white hover:text-v-bg'
                                             : 'bg-v-accent text-v-bg hover:bg-white'
                                         }`}
                                         onClick={handleAction}
-                                        disabled={launching || sending || (mode === 'modify' && !selectedPipelineId)}
-                                        title={mode === 'modify' ? 'Execute Modification Protocol' : 'Execute Pipeline Deployment Protocol'}
+                                        disabled={launching || sending}
+                                        title={selectedPipelineId ? 'Execute Modification Protocol' : 'Execute Pipeline Deployment Protocol'}
                                     >
                                         <span className={`material-symbols-outlined text-[14px] ${launching ? 'animate-bounce' : ''}`}>
-                                            {mode === 'modify' ? 'edit_square' : 'rocket_launch'}
+                                            {selectedPipelineId ? 'edit_square' : 'rocket_launch'}
                                         </span>
                                         {launching 
                                             ? 'EXECUTING...' 
-                                            : (mode === 'modify' ? 'EXECUTE_MODIFY' : 'INITIATE_DEPLOYMENT')
+                                            : (selectedPipelineId ? 'EXECUTE_MODIFY' : 'INITIATE_DEPLOYMENT')
                                         }
                                     </button>
                                 )}
@@ -621,7 +589,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                     onChange={(e) => setInput(e.target.value)}
                                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                                     onPaste={handlePaste}
-                                    placeholder={mode === 'modify' ? 'DESCRIBE MODIFICATIONS...' : 'ENTER COMMAND...'}
+                                    placeholder={selectedPipelineId ? 'DESCRIBE MODIFICATIONS...' : 'ENTER COMMAND...'}
                                     disabled={sending}
                                     autoFocus
                                     spellCheck="false"

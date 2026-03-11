@@ -23,6 +23,7 @@ export interface ChatSession {
     id: string;
     model: string;
     messages: ChatMessage[];
+    projectId?: string; // linked pipeline ID
     createdAt: string;
     updatedAt: string;
 }
@@ -117,17 +118,27 @@ export class ChatService {
 
     // ─── Session Management ───
 
-    createSession(model?: string): ChatSession {
+    createSession(model?: string, projectId?: string): ChatSession {
         const session: ChatSession = {
             id: randomUUID().slice(0, 8),
             model: model || DEFAULT_MODEL,
             messages: [],
+            projectId: projectId || undefined,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
         this.sessions.set(session.id, session);
         this.scheduleSave();
         return session;
+    }
+
+    linkProject(sessionId: string, projectId: string | null): boolean {
+        const session = this.sessions.get(sessionId);
+        if (!session) return false;
+        session.projectId = projectId || undefined;
+        session.updatedAt = new Date().toISOString();
+        this.scheduleSave();
+        return true;
     }
 
     getSession(id: string): ChatSession | undefined {

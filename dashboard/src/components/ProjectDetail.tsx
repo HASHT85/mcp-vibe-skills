@@ -1,21 +1,9 @@
-import { useState, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { killPipeline, deletePipeline, modifyPipeline, type Pipeline } from '../api/client';
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { killPipeline, deletePipeline, type Pipeline } from '../api/client';
 import { AgentCard } from './AgentCard';
 import { Terminal } from './Terminal';
 import { formatTokenCount } from '../utils';
-
-const MODEL_OPTIONS = [
-    { value: 'claude-sonnet-4-6', label: 'Claude 4.6 Sonnet' },
-    { value: 'claude-opus-4-6', label: 'Claude 4.6 Opus' },
-    { value: 'claude-haiku-4-5', label: 'Claude 4.5 Haiku' },
-    { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet' },
-    { value: 'gpt-4o', label: 'GPT-4o (OpenAI)' },
-    { value: 'o1', label: 'o1 (OpenAI)' },
-    { value: 'o3-mini', label: 'o3-mini (OpenAI)' },
-    { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' },
-    { value: 'gemini-3.0-pro', label: 'Gemini 3.0 Pro' }
-];
 
 interface ProjectDetailProps {
     pipeline: Pipeline;
@@ -24,14 +12,6 @@ interface ProjectDetailProps {
 }
 
 export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailProps) {
-    const [showModify, setShowModify] = useState(false);
-    const [modifyText, setModifyText] = useState('');
-    const [modifyModel, setModifyModel] = useState('');
-    const [files, setFiles] = useState<{ name: string; type: string; data: string; size: number; error?: string; thumbnail?: string }[]>([]);
-    const [modifying, setModifying] = useState(false);
-
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
     const handleKill = async () => {
         if (confirm(`FORCE_STOP sequence initiated for Node [${p.name}]. Confirm termination?`)) {
             await killPipeline(p.id);
@@ -59,75 +39,6 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
             }
         }
     };
-
-    const handleModify = async () => {
-        if ((!modifyText.trim() && files.length === 0) || modifying) return;
-        setModifying(true);
-        try {
-            const validFiles = files
-                .filter(f => !f.error && f.data)
-                .map(f => ({ base64: f.data, type: f.type }));
-
-            await modifyPipeline(p.id, modifyText.trim(), modifyModel || undefined, validFiles.length > 0 ? validFiles : undefined);
-            setShowModify(false);
-            setModifyText('');
-            setModifyModel('');
-            setFiles([]);
-            onRefresh();
-        } catch (err: any) {
-            alert(`SYS_ERR: ${err.message}`);
-        } finally {
-            setModifying(false);
-        }
-    };
-
-    const processFile = (f: File) => {
-        const MAX_MB = 10;
-        if (f.size > MAX_MB * 1024 * 1024) {
-            setFiles(prev => [...prev, { name: f.name, type: f.type, data: '', size: f.size, error: `EXCEEDS_LIMIT (Max ${MAX_MB}MB)` }]);
-            return;
-        }
-
-        if (f.type.startsWith('image/') || f.type === 'application/pdf') {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const result = e.target?.result as string;
-                const base64 = result.split(',')[1];
-                if (base64) {
-                    let thumbnail: string | undefined = undefined;
-                    if (f.type.startsWith('image/')) thumbnail = result;
-                    setFiles(prev => [...prev, { name: f.name, type: f.type, data: base64, size: f.size, thumbnail }]);
-                }
-            };
-            reader.readAsDataURL(f);
-        } else {
-            alert("UNSUPPORTED_FORMAT. Only IMAGE and PDF packets accepted.");
-        }
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) Array.from(e.target.files).forEach(processFile);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-
-    const removeFile = (index: number) => {
-        setFiles(prev => prev.filter((_, i) => i !== index));
-    };
-
-    const handlePaste = useCallback((e: React.ClipboardEvent) => {
-        const items = e.clipboardData?.items;
-        if (!items) return;
-        for (let i = 0; i < items.length; i++) {
-            if (items[i].type.indexOf('image') !== -1) {
-                const pastedFile = items[i].getAsFile();
-                if (pastedFile) {
-                    e.preventDefault();
-                    processFile(pastedFile);
-                    break;
-                }
-            }
-        }
-    }, []);
 
     const totalTokens = (p.tokenUsage?.inputTokens || 0) + (p.tokenUsage?.outputTokens || 0);
     const isCompleted = p.phase === 'COMPLETED';
@@ -179,15 +90,6 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
                     </div>
 
                     <div className="flex items-center gap-3 relative z-10">
-                        {['COMPLETED', 'FAILED'].includes(p.phase) && (
-                            <button 
-                                onClick={() => setShowModify(true)}
-                                className="bg-accent text-black font-bold text-[10px] px-4 py-2 hover:brightness-110 uppercase flex items-center gap-2"
-                                title="Modify Project Params"
-                            >
-                                <span className="material-symbols-outlined text-[16px]">edit_square</span> MODIFY
-                            </button>
-                        )}
                         {!['COMPLETED', 'FAILED'].includes(p.phase) && (
                             <button
                                 onClick={handleKill}
@@ -275,126 +177,6 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
                     </div>
                 </div>
             </div>
-
-            {/* Modify Modal */}
-            <AnimatePresence>
-                {showModify && (
-                    <motion.div
-                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => { setShowModify(false); setFiles([]); setModifyText(''); }}
-                    >
-                        <motion.div
-                            className="bg-panel border border-border-muted w-full max-w-2xl flex flex-col scanline shadow-2xl shadow-accent/5 origin-center"
-                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <div className="flex items-center justify-between p-4 border-b border-border-muted bg-background-dark">
-                                <h3 className="text-sm font-black tracking-widest text-accent uppercase flex items-center gap-2">
-                                    <span className="material-symbols-outlined">edit_square</span> 
-                                    MODIFY_NODE // {p.name}
-                                </h3>
-                                <button className="text-slate-500 hover:text-white" onClick={() => { setShowModify(false); setFiles([]); setModifyText(''); }}>
-                                    <span className="material-symbols-outlined">close</span>
-                                </button>
-                            </div>
-                            
-                            <div className="p-6">
-                                <p className="text-xs text-slate-400 mb-4 monospaced">
-                                    INPUT MODIFICATION DIRECTIVES. DEV_OPERATIVE WILL EXECUTE CHANGES ON THE TARGET REPOSITORY.
-                                </p>
-                                
-                                <textarea
-                                    autoFocus
-                                    rows={5}
-                                    placeholder="e.g. Change hero title to 'My Portfolio' // Paste images here (Ctrl+V)..."
-                                    value={modifyText}
-                                    onChange={(e) => setModifyText(e.target.value)}
-                                    onPaste={handlePaste}
-                                    className="w-full bg-background-dark border border-border-muted text-white p-4 focus:ring-1 focus:ring-accent focus:border-accent outline-none monospaced text-sm resize-none mb-4"
-                                />
-                                
-                                <div className="flex flex-col mb-6">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">AI_MODEL_SELECT</label>
-                                    <select
-                                        className="bg-background-dark border border-border-muted text-white p-3 outline-none text-xs focus:ring-1 focus:ring-accent"
-                                        value={modifyModel}
-                                        onChange={(e) => setModifyModel(e.target.value)}
-                                    >
-                                        <option value="">[SYSTEM_DEFAULT]</option>
-                                        {MODEL_OPTIONS.map(opt => (
-                                            <option key={opt.value} value={opt.value}>{opt.label.toUpperCase()}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                {files.length > 0 && (
-                                    <div className="flex flex-wrap gap-2 mb-4">
-                                        {files.map((f, i) => (
-                                            <div key={i} className={`flex items-center gap-2 p-2 bg-background-dark border ${f.error ? 'border-red-500/50 text-red-400' : 'border-border-muted text-slate-300'}`}>
-                                                {f.thumbnail ? (
-                                                    <img src={f.thumbnail} alt="preview" className="w-8 h-8 object-cover opacity-80" />
-                                                ) : (
-                                                    <span className="material-symbols-outlined text-[16px]">attachment</span>
-                                                )}
-                                                <div className="flex flex-col max-w-[150px]">
-                                                    <span className="text-[10px] monospaced truncate">{f.name}</span>
-                                                    {f.error && <span className="text-[9px] text-red-500">{f.error}</span>}
-                                                </div>
-                                                <button onClick={() => removeFile(i)} className="ml-1 text-slate-500 hover:text-white" title="Remove Packet">
-                                                    <span className="material-symbols-outlined text-[14px]">close</span>
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                <input
-                                    type="file"
-                                    multiple
-                                    ref={fileInputRef}
-                                    className="hidden"
-                                    accept="image/*,application/pdf"
-                                    onChange={handleFileChange}
-                                />
-
-                                <div className="flex justify-between items-center mt-4 pt-4 border-t border-border-muted">
-                                    <button
-                                        className="text-[10px] font-bold tracking-widest uppercase text-slate-400 hover:text-white flex items-center gap-2 transition-colors border-b border-transparent hover:border-slate-400 pb-0.5"
-                                        onClick={() => fileInputRef.current?.click()}
-                                    >
-                                        <span className="material-symbols-outlined text-[16px]">attach_file</span> ATTACH_PACKET
-                                    </button>
-
-                                    <div className="flex gap-4">
-                                        <button 
-                                            className="text-[10px] font-bold tracking-widest text-slate-400 hover:text-white uppercase px-4 py-2"
-                                            onClick={() => { setShowModify(false); setFiles([]); setModifyText(''); }}
-                                        >
-                                            ABORT
-                                        </button>
-                                        <button
-                                            className="bg-accent text-black font-black text-xs px-6 py-2 tracking-widest uppercase hover:brightness-110 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            onClick={handleModify}
-                                            disabled={modifying || (!modifyText.trim() && files.length === 0)}
-                                        >
-                                            {modifying ? (
-                                                <><span className="material-symbols-outlined animate-spin text-[16px]">sync</span> TRANSMITTING...</>
-                                            ) : (
-                                                <><span className="material-symbols-outlined text-[16px]">rocket_launch</span> EXECUTE</>
-                                            )}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
         </motion.div>
     );
 }

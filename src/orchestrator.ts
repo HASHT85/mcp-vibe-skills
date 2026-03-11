@@ -22,6 +22,7 @@ import { SkillsEnrichmentNode } from "./dag/nodes/SkillsEnrichmentNode.js";
 import { ResearchNode } from "./dag/nodes/ResearchNode.js";
 import { createRepo } from "./github_api.js";
 
+
 import type { Pipeline, PipelinePhase, AgentStatus, PipelineAgent, PipelineEvent } from "./orchestrator_types.js";
 import { savePipelinesState, loadPipelinesState } from "./orchestrator_state.js";
 import { addPipelineEvent, setAgentStatus, setPipelinePhase, addTokenUsage } from "./orchestrator_events.js";
@@ -417,8 +418,9 @@ RÈGLES ABSOLUES:
                 try {
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", "Reconstruction du container avec les modifications...", "info");
                     const { execSync } = await import("node:child_process");
-                    const projectName = `vibe-${id}`;
-                    const imageName = `vibe-${id}:latest`;
+                    const slug = slugify(p.name);
+                    const projectName = `vibe-${slug}`;
+                    const imageName = `vibe-${slug}:latest`;
 
                     // Find Dockerfile
                     const rootDockerfile = path.join(p.workspace, "Dockerfile");
@@ -577,10 +579,11 @@ RÈGLES ABSOLUES:
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", "Déploiement du container projet...", "info");
 
                     const { execSync } = await import("node:child_process");
-                    const projectName = `vibe-${id}`;
-                    const imageName = `vibe-${id}:latest`;
+                    const slug = slugify(p.name);
+                    const projectName = `vibe-${slug}`;
+                    const imageName = `vibe-${slug}:latest`;
                     const containerName = `${projectName}-app`;
-                    const hostDomain = `${id}.hach.dev`;
+                    const hostDomain = `${id}.hach.dev`; // Keep hash for DNS uniqueness
 
                                      console.log(`[Deploy] Building image ${imageName} from ${p.workspace}`);
 

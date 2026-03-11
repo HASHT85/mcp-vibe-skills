@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { checkAuth, setAuth, listPipelines, launchIdea, killPipeline, deletePipeline, connectAllSSE, modifyPipeline } from './api/client';
+import { checkAuth, setAuth, listPipelines, killPipeline, deletePipeline, connectAllSSE, modifyPipeline } from './api/client';
 import type { Pipeline, PipelineEvent, PipelineAgent } from './api/client';
 import './index.css';
 
@@ -14,7 +14,6 @@ import { DeployView } from './components/DeployView';
 import { ContainersView } from './components/ContainersView';
 import { ChatView } from './components/ChatView';
 import { LiveActivityPanel } from './components/LiveActivityPanel';
-import { LaunchModal } from './components/LaunchModal';
 import { formatTime, formatTokenCount } from './utils';
 
 const MODEL_OPTIONS = [
@@ -168,7 +167,6 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 function Dashboard() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showModal, setShowModal] = useState(false);
   const [liveEvents, setLiveEvents] = useState<PipelineEvent[]>([]);
   const [activeNav, setActiveNav] = useState('projects');
 
@@ -247,7 +245,7 @@ function Dashboard() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* ─── Sidebar Navigation ─── */}
-        <Sidebar active={activeNav} onChange={(id) => { setActiveNav(id); setSelectedId(null); }} onLaunch={() => setShowModal(true)} />
+        <Sidebar active={activeNav} onChange={(id) => { setActiveNav(id); setSelectedId(null); }} />
 
         {/* ─── Main Content Area ─── */}
         <main className="flex-1 overflow-y-auto bg-v-bg p-4 md:p-8">
@@ -272,19 +270,6 @@ function Dashboard() {
         </div>
       </footer>
 
-      {/* ─── Launch Modal ─── */}
-      <AnimatePresence>
-        {showModal && (
-          <LaunchModal
-            onClose={() => setShowModal(false)}
-            onLaunch={async (desc: string, name?: string, model?: string, files?: { base64: string; type: string }[]) => {
-              await launchIdea(desc, name, model, files);
-              setShowModal(false);
-              load();
-            }}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }
