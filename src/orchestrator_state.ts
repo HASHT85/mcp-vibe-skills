@@ -1,4 +1,5 @@
 import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import type { Pipeline } from "./types.js";
 
 // @ts-ignore
@@ -6,8 +7,14 @@ export const STORE_PATH = process.env.PIPELINES_STORE || "/data/pipelines.json";
 
 export async function savePipelinesState(pipelines: Map<string, Pipeline>) {
     try {
+        const dir = path.dirname(STORE_PATH);
+        await fs.mkdir(dir, { recursive: true });
         const data = Object.fromEntries(pipelines);
-        await fs.writeFile(STORE_PATH, JSON.stringify(data, null, 2));
+        const json = JSON.stringify(data, null, 2);
+        // Atomic write: write to tmp then rename (prevents corruption)
+        const tmp = `${STORE_PATH}.tmp`;
+        await fs.writeFile(tmp, json, "utf-8");
+        await fs.rename(tmp, STORE_PATH);
     } catch (err) {
         console.warn("[Orchestrator] Failed to save state:", err);
     }
