@@ -455,6 +455,7 @@ RÈGLES ABSOLUES:
                 }
             }
 
+            p.progress = 100;
             setPipelinePhase(this, this.pipelines, id, "COMPLETED");
             addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🎉", "Modification terminée et déployée!", "success");
 
