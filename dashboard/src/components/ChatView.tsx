@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    createChatSession, sendChatMessage, listChatSessions, launchFromChat, deleteChatSession,
+    createChatSession, sendChatMessage, listChatSessions, getChatSession, launchFromChat, deleteChatSession,
     modifyPipeline, launchIdea,
 } from '../api/client';
 import type { ChatSession, ChatMessage, Pipeline } from '../api/client';
@@ -116,6 +116,18 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
             setSessions(prev => [data.session, ...prev]);
         } catch (err: any) {
             alert(`SYS_ERR: ${err.message}`);
+        }
+    };
+
+    const selectSession = async (s: ChatSession) => {
+        // Set immediately with truncated data for responsiveness
+        setActiveSession(s);
+        // Then fetch full session with all messages
+        try {
+            const data = await getChatSession(s.id);
+            setActiveSession(data.session);
+        } catch {
+            // Keep truncated version if fetch fails
         }
     };
 
@@ -335,7 +347,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                     ? 'bg-v-accent text-v-bg font-bold' 
                                     : 'bg-transparent text-slate-400 hover:bg-v-accent hover:text-v-bg'
                                 }`}
-                                onClick={() => setActiveSession(s)}
+                                onClick={() => selectSession(s)}
                             >
                                 <span className="material-symbols-outlined text-[16px] shrink-0">chat_bubble</span>
                                 <div className="flex-1 overflow-hidden flex flex-col">
