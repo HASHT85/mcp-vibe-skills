@@ -44,6 +44,16 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     const bottomRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const modifyCleanupRef = useRef<(() => void) | null>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    // Auto-resize textarea
+    useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.style.height = '30px'; // Reset height to recalculate
+            const scrollHeight = textareaRef.current.scrollHeight;
+            textareaRef.current.style.height = `${Math.max(30, Math.min(scrollHeight, 200))}px`;
+        }
+    }, [input]);
 
     // All pipelines for linking
     const linkablePipelines = pipelines.filter(p => ['COMPLETED', 'FAILED'].includes(p.phase));
@@ -584,8 +594,8 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                             <div className="flex items-end gap-3">
                                 <label className="font-black text-xl text-white pb-1">&gt;</label>
                                 <textarea
+                                    ref={textareaRef}
                                     className="bg-transparent border-none focus:ring-0 p-0 text-v-accent font-mono text-lg flex-grow placeholder:text-v-accent/30 w-full resize-none min-h-[30px] max-h-[200px] overflow-y-auto"
-                                    rows={Math.min(8, Math.max(1, input.split('\n').length))}
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
                                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
