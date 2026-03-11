@@ -4,14 +4,13 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 # Cache buster
-ARG CACHE_BUSTER=20260311-2156
+ARG CACHE_BUSTER=20260311-2200
 
 COPY package*.json ./
-RUN npm install --legacy-peer-deps && echo "=== NPM INSTALL OK ===" && ls node_modules/.bin/vite
+RUN npm install --legacy-peer-deps
 
 COPY . .
-RUN ls -la && echo "=== FILES COPIED ==="
-RUN node node_modules/.bin/vite build
+RUN npx vite build
 
 # Serve Stage
 FROM nginx:alpine
