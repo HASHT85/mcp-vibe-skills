@@ -203,6 +203,21 @@ app.post("/pipeline/:id/modify", async (req: Request, res: Response) => {
     }
 });
 
+// Get repo context (tree + key files) for AI-assisted modification
+app.get("/pipeline/:id/repo-context", async (req: Request, res: Response) => {
+    try {
+        const pipeline = orchestrator.getPipeline(req.params.id);
+        if (!pipeline) return res.status(404).json({ error: "pipeline_not_found" });
+        if (!pipeline.github) return res.status(400).json({ error: "no_github_repo", context: "" });
+
+        const { getRepoContext } = await import('./github_api.js');
+        const context = await getRepoContext(pipeline.github.owner, pipeline.github.repo);
+        res.json({ context });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message, context: "" });
+    }
+});
+
 app.post("/pipeline/:id/kill", async (req: Request, res: Response) => {
     try {
         const success = await orchestrator.killPipeline(req.params.id);

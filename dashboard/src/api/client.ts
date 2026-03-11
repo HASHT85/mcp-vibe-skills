@@ -189,6 +189,17 @@ export type Project = {
     dokploy?: Pipeline['dokploy'];
 };
 
+// ─── 📂 Repo Context ───
+
+export async function getRepoContext(pipelineId: string): Promise<string> {
+    try {
+        const data = await api<{ context: string }>(`/pipeline/${pipelineId}/repo-context`);
+        return data.context || '';
+    } catch {
+        return '';
+    }
+}
+
 // ─── 🐳 Container Management ───
 
 export type Container = {

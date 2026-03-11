@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     createChatSession, sendChatMessage, listChatSessions, getChatSession, launchFromChat, deleteChatSession,
-    modifyPipeline, launchIdea,
+    modifyPipeline, launchIdea, getRepoContext,
 } from '../api/client';
 import type { ChatSession, ChatMessage, Pipeline } from '../api/client';
 
@@ -148,7 +148,8 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
         if (mode === 'modify' && selectedPipelineId) {
             const targetPipeline = modifiablePipelines.find(p => p.id === selectedPipelineId);
             if (targetPipeline && activeSession.messages.length === 0) {
-                // First message: inject full project context
+                // First message: inject full project context + repo contents
+                const repoCtx = await getRepoContext(selectedPipelineId);
                 const ctx = [
                     `[CONTEXTE PROJET - MODE MODIFICATION]`,
                     `Nom: ${targetPipeline.name || 'N/A'}`,
@@ -156,6 +157,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                     `Phase: ${targetPipeline.phase}`,
                     `Description: ${targetPipeline.description || 'N/A'}`,
                     targetPipeline.github ? `GitHub: ${targetPipeline.github.url}` : null,
+                    repoCtx ? `\n# CONTENU DU REPO\n${repoCtx}` : null,
                     `---`,
                     `L'utilisateur veut MODIFIER ce projet existant. Voici sa demande :`,
                 ].filter(Boolean).join('\n');

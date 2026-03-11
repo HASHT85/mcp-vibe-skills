@@ -155,3 +155,55 @@ export async function pushFiles(owner: string, repo: string, files: { path: stri
 
     return true;
 }
+
+// Fetch repo structure + key files for AI context
+const KEY_FILES = [
+    "package.json", "index.html", "vite.config.ts", "vite.config.js",
+    "Dockerfile", "docker-compose.yml", "docker-compose.yaml",
+    "nginx.conf", "README.md", "src/App.tsx", "src/App.jsx",
+    "src/App.vue", "src/main.tsx", "src/main.jsx", "src/main.ts",
+    "src/index.ts", "src/index.js",
+];
+
+export async function getRepoContext(owner: string, repo: string): Promise<string> {
+    const baseUrl = `${GITHUB_API}/repos/${owner}/${repo}`;
+    const parts: string[] = [];
+
+    // 1. Fetch file tree
+    try {
+        const treeRes = await fetch(`${baseUrl}/git/trees/main?recursive=1`, { headers });
+        if (treeRes.ok) {
+            const treeData: any = await treeRes.json();
+            const filePaths = (treeData.tree || [])
+                .filter((f: any) => f.type === "blob")
+                .map((f: any) => f.path);
+            parts.push(`## Structure du repo (${filePaths.length} fichiers)`);
+            parts.push("```");
+            parts.push(filePaths.join("\n"));
+            parts.push("```");
+        }
+    } catch {}
+
+    // 2. Fetch key files content
+    for (const filePath of KEY_FILES) {
+        try {
+            const res = await fetch(`${baseUrl}/contents/${filePath}`, { headers });
+            if (res.ok) {
+                const data: any = await res.json();
+                if (data.content && data.encoding === "base64") {
+                    const content = Buffer.from(data.content, "base64").toString("utf-8");
+                    // Truncate large files
+                    const truncated = content.length > 3000 
+                        ? content.slice(0, 3000) + "\n[... TRUNCATED ...]" 
+                        : content;
+                    parts.push(`## ${filePath}`);
+                    parts.push("```");
+                    parts.push(truncated);
+                    parts.push("```");
+                }
+            }
+        } catch {}
+    }
+
+    return parts.join("\n");
+}
