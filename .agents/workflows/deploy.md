@@ -32,12 +32,13 @@ git add -A; git commit -m "deploy: <description>"; git push
 
 ## If the deploy doesn't pick up code changes (cached images)
 
+> ⚠️ **NEVER use `deleteProjectV1`** — it destroys Docker volumes (`orchestrator-data`) and loses ALL pipeline/chat/store data permanently!
+
 If `createNewProjectV1` reuses old cached Docker images (same container IDs, old uptime):
 
-1. Make sure you bumped `CACHE_BUSTER` in `docker-compose.yml` (step 1)
-2. If still not working, use `deleteProjectV1` THEN `createNewProjectV1`. This destroys old images and forces a complete rebuild.
-   > ⚠️ `deleteProjectV1` removes containers, networks, **volumes**, and images. The `orchestrator-data` volume (pipelines, store, chat_sessions) will be LOST. Only do this as a last resort.
-3. To preserve data before deleting: SSH into VPS and `docker volume inspect orchestrator-data` to back up.
+1. Make sure you bumped `CACHE_BUSTER` in `docker-compose.yml` → both `orchestrator` and `dashboard` build args (step 1)
+2. Commit, push, and run `createNewProjectV1` again
+3. The changed build arg value forces Docker to invalidate the cache and rebuild from scratch
 
 ## Environment Variables
 
