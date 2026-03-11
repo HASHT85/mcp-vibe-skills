@@ -595,7 +595,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                 <label className="font-black text-xl text-white pb-1">&gt;</label>
                                 <textarea
                                     ref={textareaRef}
-                                    className="bg-transparent border-none focus:ring-0 p-0 text-v-accent font-mono text-lg flex-grow placeholder:text-v-accent/30 w-full resize-none min-h-[30px] max-h-[200px] overflow-y-auto"
+                                    className="bg-transparent border-none focus:ring-0 p-0 text-white font-mono text-lg flex-grow placeholder:text-v-accent/30 w-full resize-none min-h-[30px] max-h-[200px] overflow-y-auto"
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
                                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
