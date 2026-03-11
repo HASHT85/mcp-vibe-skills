@@ -72,7 +72,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       <header className="fixed top-0 w-full z-50 bg-v-bg border-b-3 border-white px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-4">
           <div className="w-8 h-8 bg-v-accent"></div>
-          <span className="font-sans text-xl font-bold tracking-tighter">VIBECRAFT_SYS</span>
+          <span className="font-sans text-xl font-bold tracking-tighter">VEIST_SYS</span>
         </div>
         <div className="hidden md:flex gap-8 text-sm font-bold">
           <span className="text-v-accent">[ STATUS_OK ]</span>
@@ -94,7 +94,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
             INITIATING_SEQUENCE: LOGIN_PR_03
           </div>
           <h1 className="font-sans text-7xl md:text-[8rem] lg:text-[12rem] leading-none font-bold tracking-tighter mb-8 break-all">
-            VIBECRAFT<span className="text-v-accent">_V3</span>
+            VEIST<span className="text-v-accent">_V3</span>
           </h1>
           
           <div className="grid md:grid-cols-2 gap-12 items-end">
@@ -266,7 +266,7 @@ function Dashboard() {
           <span className="text-v-accent">SECURE_LINK: ESTABLISHED</span>
         </div>
         <div>
-          VIBECRAFT INDUSTRIAL OS v5.0.0-STABLE // MARATHON_MODE_ON
+          VEIST INDUSTRIAL OS v5.0.0-STABLE // MARATHON_MODE_ON
         </div>
       </footer>
 

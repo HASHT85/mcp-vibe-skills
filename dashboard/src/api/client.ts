@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.DEV ? '/api' : 'https://api.vibecraft.hach.dev';
+const API_BASE = import.meta.env.DEV ? '/api' : 'https://api.veist.hach.dev';
 
 // ─── Auth ───
 

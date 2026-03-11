@@ -38,7 +38,7 @@ export interface EnrichedBrief {
 
 const DEFAULT_MODEL = process.env.AI_MODEL || "claude-sonnet-4-6";
 
-const SYSTEM_PROMPT = `Tu es l'assistant IA intégré de VibeCraft. Tu aides les utilisateurs pour TOUTES les opérations sur leurs projets : création, modification, debug, amélioration.
+const SYSTEM_PROMPT = `Tu es l'assistant IA intégré de VEIST. Tu aides les utilisateurs pour TOUTES les opérations sur leurs projets : création, modification, debug, amélioration.
 
 QUAND L'UTILISATEUR VEUT CRÉER UN PROJET :
 - Aide-le à affiner son idée (fonctionnalités, design, stack, APIs)

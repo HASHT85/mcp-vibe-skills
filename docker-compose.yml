@@ -22,10 +22,10 @@ services:
       - web
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.vibecraft-api.rule=Host(`api.vibecraft.hach.dev`)"
-      - "traefik.http.routers.vibecraft-api.entrypoints=websecure"
-      - "traefik.http.routers.vibecraft-api.tls.certresolver=letsencrypt"
-      - "traefik.http.services.vibecraft-api.loadbalancer.server.port=8080"
+      - "traefik.http.routers.veist-api.rule=Host(`api.veist.hach.dev`)"
+      - "traefik.http.routers.veist-api.entrypoints=websecure"
+      - "traefik.http.routers.veist-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.veist-api.loadbalancer.server.port=8080"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
       interval: 30s
@@ -41,10 +41,10 @@ services:
       - web
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.vibecraft-dashboard.rule=Host(`vibecraft.hach.dev`)"
-      - "traefik.http.routers.vibecraft-dashboard.entrypoints=websecure"
-      - "traefik.http.routers.vibecraft-dashboard.tls.certresolver=letsencrypt"
-      - "traefik.http.services.vibecraft-dashboard.loadbalancer.server.port=80"
+      - "traefik.http.routers.veist-dashboard.rule=Host(`veist.hach.dev`)"
+      - "traefik.http.routers.veist-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.veist-dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.services.veist-dashboard.loadbalancer.server.port=80"
     healthcheck:
       disable: true
 

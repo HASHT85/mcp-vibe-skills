@@ -670,7 +670,7 @@ app.use((err: any, _req: any, res: any, _next: any) => {
 (async () => {
     await orchestrator.ready;
     app.listen(PORT, "0.0.0.0", () => {
-        console.log(`🚀 VibeCraft HQ listening on port ${PORT}`);
+        console.log(`🚀 VEIST HQ listening on port ${PORT}`);
         console.log(`   Docker/Traefik Mode: ✓ Active`);
         console.log(`   GitHub: ${process.env.GITHUB_TOKEN ? "✓ configured" : "✗ not configured"}`);
         console.log(`   AI Model: ${getCurrentModel()}`);

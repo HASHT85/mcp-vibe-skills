@@ -2,7 +2,7 @@ export function TopBar() {
     return (
         <header className="flex shrink-0 flex-col md:flex-row justify-between items-end gap-4 border-b-2 border-v-accent bg-v-bg px-6 py-4 relative z-10 w-full mb-0">
             <div data-purpose="brand-id">
-                <h1 className="text-3xl md:text-5xl font-sans font-bold text-v-accent leading-none tracking-tighter">VIBECRAFT // CRITICAL FOCUS</h1>
+                <h1 className="text-3xl md:text-5xl font-sans font-bold text-v-accent leading-none tracking-tighter">VEIST // CRITICAL FOCUS</h1>
                 <p className="text-xs mt-2 text-white/60 font-mono uppercase tracking-widest">System Status: Active // Marathon Protocol Enabled</p>
             </div>
             
