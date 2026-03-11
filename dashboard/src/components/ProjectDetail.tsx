@@ -151,7 +151,7 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
         >
             {/* Header Area */}
             <div className="bg-panel border border-border-muted p-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl -mr-10 -mt-10"></div>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
                 
                 <div className="flex items-start gap-4 mb-6">
                     <button 
@@ -178,7 +178,7 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 relative z-10">
                         {['COMPLETED', 'FAILED'].includes(p.phase) && (
                             <button 
                                 onClick={() => setShowModify(true)}
@@ -199,10 +199,10 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
                         )}
                         <button 
                             onClick={handleDelete}
-                            className="text-slate-500 hover:text-red-500 hover:bg-red-500/10 p-2 rounded transition-colors"
+                            className="border border-red-500/50 bg-red-500/10 text-red-400 hover:bg-red-500/30 hover:text-red-300 font-bold text-[10px] px-4 py-2 uppercase flex items-center gap-2 transition-colors"
                             title="Purge Node"
                         >
-                            <span className="material-symbols-outlined">delete_forever</span>
+                            <span className="material-symbols-outlined text-[16px]">delete_forever</span> DELETE
                         </button>
                     </div>
                 </div>
