@@ -185,31 +185,30 @@ app.delete("/pipeline/:id", async (req: Request, res: Response) => {
             return res.status(404).json({ error: "pipeline_not_found" });
         }
 
-        // 1. Delete GitHub repo
+        // 1. Delete GitHub repo (silently ignore errors)
         if (pipeline.github) {
             try {
                 const { deleteRepo } = await import('./github_api.js');
                 await deleteRepo(pipeline.github.owner, pipeline.github.repo);
-            } catch (err) {
-                console.error("Failed to delete GitHub repo:", err);
+            } catch {
+                // Repo may already be deleted
             }
         }
 
-        // 2. Delete Docker container + image
+        // 2. Delete Docker container + image (silently ignore errors)
         try {
             const { execSync } = await import("node:child_process");
             const containerName = `vibe-${req.params.id}-app`;
-            // Get image before removing container
             let imageName = "";
             try {
                 imageName = execSync(
                     `docker inspect --format="{{.Config.Image}}" ${containerName}`,
-                    { encoding: "utf-8", timeout: 5000 }
+                    { encoding: "utf-8", timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }
                 ).trim();
             } catch {}
-            try { execSync(`docker rm -f ${containerName}`, { timeout: 15000 }); } catch {}
+            try { execSync(`docker rm -f ${containerName}`, { timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] }); } catch {}
             if (imageName) {
-                try { execSync(`docker rmi ${imageName}`, { timeout: 15000 }); } catch {}
+                try { execSync(`docker rmi ${imageName}`, { timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] }); } catch {}
             }
         } catch {}
 
