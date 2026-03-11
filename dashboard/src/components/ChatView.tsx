@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     createChatSession, sendChatMessage, listChatSessions, getChatSession, launchFromChat, deleteChatSession,
-    modifyPipeline, launchIdea, getRepoContext,
+    modifyPipeline, launchIdea, getRepoContext, connectAllSSE, getPipeline,
 } from '../api/client';
 import type { ChatSession, ChatMessage, Pipeline } from '../api/client';
 
@@ -46,6 +46,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     const [projectName, setProjectName] = useState('');
     const bottomRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const modifyCleanupRef = useRef<(() => void) | null>(null);
 
     // Filter pipelines that can be modified (COMPLETED or FAILED)
     const modifiablePipelines = pipelines.filter(p => ['COMPLETED', 'FAILED'].includes(p.phase));
@@ -192,25 +193,73 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
         setLaunching(true);
         try {
             if (mode === 'modify' && selectedPipelineId) {
+                const pipelineId = selectedPipelineId;
                 const instructions = activeSession.messages
                     .filter(m => m.role === 'user')
                     .map(m => m.content)
                     .join('\n');
                 const attachedFiles = files.filter(f => !f.error).map(f => ({ base64: f.data, type: f.type }));
-                await modifyPipeline(selectedPipelineId, instructions, model, attachedFiles.length > 0 ? attachedFiles : undefined);
+                await modifyPipeline(pipelineId, instructions, model, attachedFiles.length > 0 ? attachedFiles : undefined);
                 setFiles([]);
+
+                // Add initial dispatched message
                 setActiveSession(prev => prev ? {
                     ...prev,
                     messages: [...prev.messages, {
                         role: 'assistant',
-                        content: `MODIFY_NODE DISPATCHED → Pipeline ${selectedPipelineId.slice(0,8)}. Dev operative is executing changes on the target repository.`,
+                        content: `⚡ MODIFY_NODE DISPATCHED → Pipeline ${pipelineId.slice(0,8)}\n\n🔄 Streaming live progress below...`,
                         timestamp: new Date().toISOString(),
                     }],
                 } : null);
+
+                // Subscribe to SSE events for this pipeline
+                if (modifyCleanupRef.current) modifyCleanupRef.current();
+                const closeSSE = connectAllSSE((event) => {
+                    if (event.pipelineId !== pipelineId) return;
+                    const msg = `${event.agentEmoji || '📡'} **${(event.agentRole || 'System').toUpperCase()}** — ${event.action}`;
+                    setActiveSession(prev => prev ? {
+                        ...prev,
+                        messages: [...prev.messages, {
+                            role: 'assistant',
+                            content: msg,
+                            timestamp: event.timestamp || new Date().toISOString(),
+                        }],
+                    } : null);
+                });
+
+                // Poll pipeline status until COMPLETED or FAILED
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const result = await getPipeline(pipelineId);
+                        const phase = result?.pipeline?.phase;
+                        if (phase === 'COMPLETED' || phase === 'FAILED') {
+                            clearInterval(pollInterval);
+                            closeSSE();
+                            modifyCleanupRef.current = null;
+                            setLaunching(false);
+                            const icon = phase === 'COMPLETED' ? '✅' : '❌';
+                            setActiveSession(prev => prev ? {
+                                ...prev,
+                                messages: [...prev.messages, {
+                                    role: 'assistant',
+                                    content: `${icon} **MODIFICATION ${phase}** — Pipeline ${pipelineId.slice(0,8)} is now ${phase.toLowerCase()}.`,
+                                    timestamp: new Date().toISOString(),
+                                }],
+                            } : null);
+                            onRefresh?.();
+                        }
+                    } catch {}
+                }, 3000);
+
+                modifyCleanupRef.current = () => {
+                    clearInterval(pollInterval);
+                    closeSSE();
+                };
+
                 onRefresh?.();
+                return; // Don't setLaunching(false) yet — polling will do it
             } else {
                 await launchFromChat(activeSession.id, projectName.trim() || undefined);
-                // Add system feedback message
                 const launchName = projectName.trim() || 'AUTO_NAMED';
                 setActiveSession(prev => prev ? {
                     ...prev,

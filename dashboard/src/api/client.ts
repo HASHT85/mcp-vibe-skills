@@ -51,6 +51,10 @@ export async function getPipelineStatus(id: string) {
     return api<{ pipeline: Pipeline }>(`/pipeline/${id}/status`);
 }
 
+export async function getPipeline(id: string) {
+    return api<{ pipeline: Pipeline }>(`/pipeline/${id}`);
+}
+
 export async function pausePipeline(id: string) {
     return api('/pipeline/' + id + '/pause', { method: 'POST' });
 }
