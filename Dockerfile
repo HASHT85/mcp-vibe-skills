@@ -1,6 +1,9 @@
 FROM node:20.19.0-alpine3.21 AS build
 WORKDIR /app
 
+# Cache buster to force a rebuild on the VPS
+ARG CACHE_BUSTER=2026-03-11T19:03:00
+
 COPY package*.json ./
 RUN npm install
 
