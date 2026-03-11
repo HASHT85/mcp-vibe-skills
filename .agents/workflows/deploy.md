@@ -22,7 +22,9 @@ git add -A; git commit -m "deploy: <description>"; git push
    - `virtualMachineId`: `1287719`
    - `environment`: Read from the local `.env` file at `c:\Projet\mcp-vibe-skills\mcp-vibe-skills\.env`
    
-   > This replaces the existing project **without deleting volumes** because `createNewProjectV1` with the same name does `docker compose up` which reuses existing named volumes.
+   > This replaces the existing project config (like `docker-compose.yml`) but **preserves volumes** because it runs `docker compose up -d` under the hood. 
+
+   > ⚠️ **DO NOT USE `updateProjectV1`** because it only restarts containers with the OLD cached `docker-compose.yml`. It does not pull infra/traefik changes from GitHub.
 
 4. **Wait ~30s** then check action status with `getActionDetailsV1`
 
@@ -35,8 +37,8 @@ git add -A; git commit -m "deploy: <description>"; git push
 The `createNewProjectV1` might reuse cached Docker images. If you see old code still running:
 
 1. Do NOT delete the project!
-2. Instead, use `createNewProjectV1` again with the same parameters — it will do `docker compose up -d --build` which rebuilds from source while preserving volumes.
-3. If that still doesn't work, the Docker layer cache on the VPS is stale. You'd need SSH access to run `docker compose build --no-cache`.
+2. Instead, use `createNewProjectV1` again exactly as shown above.
+3. If that still doesn't work, modify your `Dockerfile` to include an `ARG CACHE_BUSTER=$(date)` and commit it, then run `createNewProjectV1` again. This is the only way to force Hostinger/Dokploy to rebuild without destroying volumes.
 
 ## Environment Variables
 
