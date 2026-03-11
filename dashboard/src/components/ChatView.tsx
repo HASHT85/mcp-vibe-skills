@@ -127,9 +127,29 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
         setFiles([]);
         setSending(true);
 
-        // Build display content
+        // Build display content (what the user sees)
         const fileNames = attachedFiles.length > 0 ? `\n[📎 ${attachedFiles.length} FILE(S) ATTACHED]` : '';
         const displayContent = msg + fileNames;
+
+        // Build actual content sent to AI (with project context in modify mode)
+        let aiContent = msg || '[Attached files]';
+        if (mode === 'modify' && selectedPipelineId) {
+            const targetPipeline = modifiablePipelines.find(p => p.id === selectedPipelineId);
+            if (targetPipeline && activeSession.messages.length === 0) {
+                // First message: inject full project context
+                const ctx = [
+                    `[CONTEXTE PROJET - MODE MODIFICATION]`,
+                    `Nom: ${targetPipeline.name || 'N/A'}`,
+                    `ID: ${targetPipeline.id}`,
+                    `Phase: ${targetPipeline.phase}`,
+                    `Description: ${targetPipeline.description || 'N/A'}`,
+                    targetPipeline.github ? `GitHub: ${targetPipeline.github.url}` : null,
+                    `---`,
+                    `L'utilisateur veut MODIFIER ce projet existant. Voici sa demande :`,
+                ].filter(Boolean).join('\n');
+                aiContent = ctx + '\n' + aiContent;
+            }
+        }
 
         // Optimistic UI
         const optimisticMsg: ChatMessage = { role: 'user', content: displayContent, timestamp: new Date().toISOString() };
@@ -138,7 +158,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
         try {
             const data = await sendChatMessage(
                 activeSession.id,
-                msg || '[Attached files]',
+                aiContent,
                 attachedFiles.length > 0 ? attachedFiles : undefined
             );
             setActiveSession(data.session);
