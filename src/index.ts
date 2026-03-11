@@ -15,7 +15,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 const storePath = process.env.STORE_PATH || '/data/store.json';
 app.use(cors()); // Enable CORS for all routes
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "50mb" }));
 
 // Basic Auth Middleware
 const ADMIN_USER = process.env.ADMIN_USER;
@@ -580,6 +580,7 @@ app.post("/chat/sessions/:id/message", async (req: Request, res: Response) => {
         const result = await chatService.sendMessage(req.params.id, content);
         res.json(result);
     } catch (err: any) {
+        console.error(`[Chat] Error in session ${req.params.id}:`, err.message || err);
         res.status(err.message === "session_not_found" ? 404 : 500).json({ error: err.message });
     }
 });
@@ -639,6 +640,12 @@ app.get("/events", async (req: Request, res: Response) => {
 
 // Start HTTP server (wait for orchestrator to finish loading state)
 const PORT = Number(process.env.PORT) || 3000;
+
+// Global error handler — catches Express-level errors (body-parser, etc.)
+app.use((err: any, _req: any, res: any, _next: any) => {
+    console.error("[Express] Unhandled error:", err.type || err.message, err.status || 500);
+    res.status(err.status || 500).json({ error: err.message || "Internal Server Error" });
+});
 
 (async () => {
     await orchestrator.ready;
