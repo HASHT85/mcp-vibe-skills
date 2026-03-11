@@ -363,6 +363,8 @@ RÈGLES ABSOLUES:
                 }
 
                 setPipelinePhase(this, this.pipelines, id, "QA");
+                setAgentStatus(this, this.pipelines, id, "Developer", "done");
+                setAgentStatus(this, this.pipelines, id, "Debugger", "done"); // Skipped in modify mode
                 setAgentStatus(this, this.pipelines, id, "QA", "active", "Vérification post-modification...");
 
                 const qaResult = await runClaudeAgent({
