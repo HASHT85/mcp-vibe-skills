@@ -410,6 +410,51 @@ RÈGLES ABSOLUES:
             }
 
             delete p.artifacts.pendingModification;
+
+            // ─── Rebuild and redeploy Docker container after modification ───
+            if (p.artifacts.deployed) {
+                try {
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", "Reconstruction du container avec les modifications...", "info");
+                    const { execSync } = await import("node:child_process");
+                    const projectName = `vibe-${id}`;
+                    const imageName = `vibe-${id}:latest`;
+
+                    // Find Dockerfile
+                    const rootDockerfile = path.join(p.workspace, "Dockerfile");
+                    const rootDockerfileProd = path.join(p.workspace, "Dockerfile.prod");
+                    let dockerfilePath = rootDockerfile;
+                    if (await fs.access(rootDockerfileProd).then(() => true).catch(() => false)) {
+                        dockerfilePath = rootDockerfileProd;
+                    }
+
+                    // Rebuild image with --no-cache to pick up code changes
+                    const buildCmd = `docker build --no-cache -f ${dockerfilePath} -t ${imageName} ${p.workspace}`;
+                    console.log(`[Deploy-Modify] Rebuilding: ${buildCmd}`);
+                    execSync(buildCmd, { cwd: p.workspace, timeout: 5 * 60 * 1000, stdio: "pipe" });
+
+                    // Restart container via compose
+                    const deployComposePath = path.join(p.workspace, "docker-compose.deploy.yml");
+                    if (await fs.access(deployComposePath).then(() => true).catch(() => false)) {
+                        try {
+                            execSync(`docker compose -p ${projectName} -f ${deployComposePath} down`, {
+                                cwd: p.workspace, stdio: "pipe", timeout: 30000
+                            });
+                        } catch { /* didn't exist */ }
+
+                        execSync(`docker compose -p ${projectName} -f ${deployComposePath} up -d`, {
+                            cwd: p.workspace, timeout: 30 * 1000, stdio: "pipe",
+                        });
+                    }
+
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", `Container reconstruit et redéployé! ${p.artifacts.deployedUrl || ''}`, "success");
+                } catch (deployErr: any) {
+                    const errMsg = deployErr.stderr ? deployErr.stderr.toString().slice(-300) : deployErr.message;
+                    console.error(`[Deploy-Modify] ❌ Rebuild failed: ${errMsg}`);
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `Rebuild container échoué: ${errMsg}`, "warning");
+                    // Don't throw — code was pushed, just container rebuild failed
+                }
+            }
+
             setPipelinePhase(this, this.pipelines, id, "COMPLETED");
             addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🎉", "Modification terminée et déployée!", "success");
 
