@@ -3,10 +3,13 @@
  * Chat Service — Pre-Pipeline Conversational Mode
  * Manages chat sessions where users discuss project ideas with Claude
  * before launching the pipeline with an enriched brief.
+ * Sessions are persisted to disk so they survive container restarts.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "node:crypto";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 // ─── Types ───
 
@@ -59,10 +62,60 @@ Réponds en français, sois concis et technique.`;
 export class ChatService {
     private sessions: Map<string, ChatSession> = new Map();
     private client: Anthropic;
+    private filePath: string;
+    private saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    constructor() {
+    constructor(storePath?: string) {
         this.client = new Anthropic();
+        // Store chat sessions next to the main store
+        const baseDir = path.dirname(storePath || process.env.STORE_PATH || "/data/store.json");
+        this.filePath = path.join(baseDir, "chat_sessions.json");
+        this.loadFromDisk();
     }
+
+    // ─── Persistence ───
+
+    private async loadFromDisk() {
+        try {
+            const dir = path.dirname(this.filePath);
+            await fs.mkdir(dir, { recursive: true });
+            const raw = await fs.readFile(this.filePath, "utf-8");
+            const data = JSON.parse(raw);
+            if (Array.isArray(data.sessions)) {
+                for (const s of data.sessions) {
+                    this.sessions.set(s.id, s);
+                }
+                console.log(`💬 ChatService: Loaded ${this.sessions.size} sessions from disk`);
+            }
+        } catch {
+            // File doesn't exist yet — start fresh
+            console.log("💬 ChatService: No saved sessions found, starting fresh");
+        }
+    }
+
+    private scheduleSave() {
+        // Debounce saves — wait 500ms after last change before writing
+        if (this.saveTimeout) clearTimeout(this.saveTimeout);
+        this.saveTimeout = setTimeout(() => this.saveToDisk(), 500);
+    }
+
+    private async saveToDisk() {
+        try {
+            const dir = path.dirname(this.filePath);
+            await fs.mkdir(dir, { recursive: true });
+            const data = {
+                sessions: Array.from(this.sessions.values()),
+                savedAt: new Date().toISOString(),
+            };
+            const tmp = `${this.filePath}.tmp`;
+            await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf-8");
+            await fs.rename(tmp, this.filePath);
+        } catch (err) {
+            console.error("💬 ChatService: Failed to save sessions:", err);
+        }
+    }
+
+    // ─── Session Management ───
 
     createSession(model?: string): ChatSession {
         const session: ChatSession = {
@@ -73,6 +126,7 @@ export class ChatService {
             updatedAt: new Date().toISOString(),
         };
         this.sessions.set(session.id, session);
+        this.scheduleSave();
         return session;
     }
 
@@ -81,14 +135,18 @@ export class ChatService {
     }
 
     listSessions(): ChatSession[] {
-        return Array.from(this.sessions.values()).map(s => ({
-            ...s,
-            messages: s.messages.slice(-2), // Only return last 2 messages for list view
-        }));
+        return Array.from(this.sessions.values())
+            .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+            .map(s => ({
+                ...s,
+                messages: s.messages.slice(-2), // Only return last 2 messages for list view
+            }));
     }
 
     deleteSession(id: string): boolean {
-        return this.sessions.delete(id);
+        const result = this.sessions.delete(id);
+        if (result) this.scheduleSave();
+        return result;
     }
 
     async sendMessage(sessionId: string, content: string): Promise<{ reply: string; session: ChatSession }> {
@@ -129,6 +187,7 @@ export class ChatService {
             });
 
             session.updatedAt = new Date().toISOString();
+            this.scheduleSave();
             return { reply, session };
         } catch (err: any) {
             // Remove failed user message

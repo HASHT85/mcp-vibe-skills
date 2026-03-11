@@ -559,7 +559,7 @@ app.get("/containers/:name/logs", async (req: Request, res: Response) => {
 // ─────────────────────────────────────
 
 import { ChatService } from "./chat_service.js";
-const chatService = new ChatService();
+const chatService = new ChatService(storePath);
 
 // Create new chat session
 app.post("/chat/sessions", async (req: Request, res: Response) => {
