@@ -43,8 +43,9 @@ const authMiddleware = (req: Request, res: Response, next: Function) => {
     if (user === ADMIN_USER && pass === ADMIN_PASS) {
         next();
     } else {
-        res.setHeader('WWW-Authenticate', 'Basic realm="VibeCraft Admin"');
-        return res.status(401).send('Authentication required');
+        // No WWW-Authenticate header — prevents browser's native auth popup
+        // The dashboard has its own login page that handles auth
+        return res.status(401).json({ error: 'Authentication required' });
     }
 };
 
