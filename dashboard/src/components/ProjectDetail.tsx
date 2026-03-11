@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { killPipeline, deletePipeline, type Pipeline } from '../api/client';
-import { AgentCard } from './AgentCard';
 import { Terminal } from './Terminal';
+import { ProjectNodeMap } from './ProjectNodeMap';
 import { formatTokenCount } from '../utils';
 
 interface ProjectDetailProps {
@@ -153,28 +153,22 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
                 </div>
             </div>
 
-            {/* Sub-sections layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-1 flex flex-col gap-4">
-                    <div className="flex items-center gap-2 mb-2">
-                        <span className="w-1.5 h-1.5 bg-slate-500 mr-2 rounded-none"></span>
-                        <h3 className="text-sm font-black text-slate-400 tracking-widest uppercase">Operatives</h3>
-                    </div>
-                    <div className="flex flex-col gap-3">
-                        {(p.agents || []).map(agent => (
-                            <AgentCard key={agent.role} agent={agent} />
-                        ))}
-                    </div>
+            {/* Main Content Layout */}
+            <div className="flex flex-col gap-6">
+                <div className="flex items-center gap-2 mb-2">
+                    <span className="w-1.5 h-1.5 bg-slate-500 mr-2 rounded-none"></span>
+                    <h3 className="text-sm font-black text-slate-400 tracking-widest uppercase">System_Console</h3>
                 </div>
-                
-                <div className="lg:col-span-2 flex flex-col">
-                    <div className="flex items-center gap-2 mb-4">
-                        <span className="w-1.5 h-1.5 bg-slate-500 mr-2 rounded-none"></span>
-                        <h3 className="text-sm font-black text-slate-400 tracking-widest uppercase">System_Console</h3>
-                    </div>
-                    <div className="flex-1 bg-black border border-border-muted border-l-4 border-l-slate-700 min-h-[400px]">
-                        <Terminal events={p.events || []} />
-                    </div>
+                <div className="bg-black border border-border-muted border-l-4 border-l-slate-700 min-h-[250px] max-h-[350px] overflow-hidden">
+                    <Terminal events={p.events || []} />
+                </div>
+
+                <div className="w-full mt-4">
+                    <ProjectNodeMap 
+                        topology={p.topology} 
+                        agents={p.agents || []} 
+                        events={p.events || []} 
+                    />
                 </div>
             </div>
         </motion.div>

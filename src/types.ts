@@ -41,6 +41,15 @@ export type PipelineEvent = {
     type: "info" | "success" | "error" | "warning" | "deploy";
 };
 
+export type NodeTopology = {
+    id: string;
+    role: string;
+    emoji: string;
+    description: string;
+    systemPrompt: string;
+    dependencies: string[];
+};
+
 export type Pipeline = {
     id: string;
     name: string;
@@ -57,6 +66,7 @@ export type Pipeline = {
         repo: string;
         url: string;
     };
+    topology?: NodeTopology[];
     artifacts: Record<string, unknown>;
     tokenUsage: { inputTokens: number; outputTokens: number };
     createdAt: string;

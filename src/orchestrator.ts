@@ -517,45 +517,129 @@ RÈGLES ABSOLUES:
                 checkAbort: () => abortController.signal.aborted
             };
 
+            // ─── Planner / Dynamic Topology ───
+            addPipelineEvent(this, this.pipelines, id, "Planner", "🛸", "Analyse de la demande: Création de l'essaim d'agents...", "info");
+            
+            const plannerPrompt = `Analyze the project idea: "${p.description}"
+            
+We already have standard agents for Research, Analysis, Architecture, and Scaffold.
+Your task is to generate the specific DEVELOPMENT sub-agents needed to implement the project.
+For example, a web app might need a 'frontend' and a 'backend_api'. A mobile app might just need one 'flutter_dev'.
+
+Output MUST be a strict JSON array of objects:
+[
+  {
+    "id": "string (snake_case, unique, e.g. 'frontend_dev')",
+    "role": "string (e.g. 'Frontend Developer')",
+    "emoji": "string (e.g. '🎨')",
+    "description": "string (Brief description of tasks for this agent)",
+    "systemPrompt": "string (Detailed instructions for this agent. Tell them to wait for the scaffold to be ready before coding, and to use list_dir/read_file to understand the existing code first.)",
+    "dependencies": [] // Array of IDs. If an agent depends on another dynamic agent, list its ID here. Use empty array [] if it has no dependencies among the dynamic agents; we will auto-link it to the Scaffold.
+  }
+]
+
+IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\`\`json.`;
+
+            let dynamicTopology: import("./types.js").NodeTopology[] = [];
+            try {
+                const plannerResult = await runClaudeAgent({
+                    model: p.model,
+                    prompt: plannerPrompt,
+                    systemPrompt: "You are the VEIST Master Orchestrator. Output ONLY valid JSON array. No markdown formatting.",
+                    cwd: p.workspace,
+                    allowedTools: [],
+                    maxTurns: 3,
+                    abortSignal: abortController.signal
+                });
+                
+                let out = plannerResult.finalResult?.trim() || "[]";
+                if (out.startsWith("```json")) out = out.replace(/^```json/, "").replace(/```$/, "").trim();
+                dynamicTopology = JSON.parse(out);
+                addTokenUsage(this.pipelines, id, plannerResult);
+            } catch (err: any) {
+                console.error("[Planner] Failed to parse dynamic topology:", err);
+                dynamicTopology = [{
+                    id: "development",
+                    role: "Developer",
+                    emoji: "💻",
+                    description: "Fullstack Development",
+                    systemPrompt: "Tu es un Développeur Senior. Implémente le plan de l'Architecte.",
+                    dependencies: []
+                }];
+            }
+
+            const baseTopology: import("./types.js").NodeTopology[] = [
+                { id: "research", role: "Researcher", emoji: "🌐", description: "Veille technologique", systemPrompt: "", dependencies: [] },
+                { id: "analysis", role: "Analyst", emoji: "🔎", description: "Analyse des besoins", systemPrompt: "", dependencies: ["research"] },
+                { id: "skills_enrichment", role: "Tech Lead", emoji: "📚", description: "Injection de best practices", systemPrompt: "", dependencies: ["analysis"] },
+                { id: "architecture", role: "Architect", emoji: "🏗️", description: "Conception architecturale", systemPrompt: "", dependencies: ["skills_enrichment"] },
+                { id: "scaffold", role: "DevOps", emoji: "🔨", description: "Génération de la base", systemPrompt: "", dependencies: ["architecture"] },
+                { id: "supervisor_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", dependencies: ["scaffold"] },
+            ];
+
+            const dynamicNodes = dynamicTopology.map(t => ({
+                ...t,
+                dependencies: t.dependencies.length > 0 ? t.dependencies : ["supervisor_scaffold"]
+            }));
+
+            const dynamicIds = dynamicNodes.map(d => d.id);
+            const endTopology: import("./types.js").NodeTopology[] = [
+                { id: "qa", role: "QA Engineer", emoji: "🧪", description: "Tests finaux", systemPrompt: "", dependencies: dynamicIds },
+                { id: "deploy", role: "Release Manager", emoji: "🚀", description: "Déploiement", systemPrompt: "", dependencies: ["qa"] }
+            ];
+
+            p.topology = [...baseTopology, ...dynamicNodes, ...endTopology];
+            
+            // Sync traditional agents array for UI backward compatibility
+            p.agents = p.topology.map(t => ({
+                role: t.role,
+                emoji: t.emoji,
+                status: "waiting",
+            }));
+            await savePipelinesState(this.pipelines);
+
             const manager = new GraphManager(context);
 
             manager.on("node-start", (node: any) => {
-                const phaseMap: Record<string, PipelinePhase> = {
+                const phaseMap: Record<string, import("./types.js").PipelinePhase> = {
                     "research": "ANALYSIS",
                     "analysis": "ANALYSIS",
                     "skills_enrichment": "ANALYSIS",
                     "architecture": "ARCHITECTURE",
                     "scaffold": "SCAFFOLD",
-                    "development": "DEVELOPMENT",
                     "qa": "QA",
                     "deploy": "DEPLOYING"
                 };
-                if (phaseMap[node.id]) setPipelinePhase(this, this.pipelines, id, phaseMap[node.id]);
+                if (phaseMap[node.id]) {
+                    setPipelinePhase(this, this.pipelines, id, phaseMap[node.id]);
+                } else if (dynamicIds.includes(node.id)) {
+                    setPipelinePhase(this, this.pipelines, id, "DEVELOPMENT");
+                }
             });
 
             manager.on("node-complete", ({ node }: { node: any }) => {
-                const progressMap: Record<string, number> = {
-                    "research": 5,
-                    "analysis": 10,
-                    "skills_enrichment": 15,
-                    "architecture": 30,
-                    "scaffold": 50,
-                    "development": 70,
-                    "qa": 85,
-                    "deploy": 100
-                };
-                if (progressMap[node.id]) p.progress = progressMap[node.id];
+                // Let's just do a simple linear progression calculation
+                const totalNodes = p.topology!.length;
+                const completedNodes = Array.from((manager as any).nodes.values()).filter((n: any) => n.status === "COMPLETED" || n.status === "SKIPPED").length;
+                p.progress = Math.floor((completedNodes / totalNodes) * 100);
             });
 
+            // Add all base nodes
             manager.addNode(new ResearchNode());
             manager.addNode(new AnalysisNode());
             manager.addNode(new SkillsEnrichmentNode());
             manager.addNode(new ArchitectureNode());
             manager.addNode(new ScaffoldNode());
             manager.addNode(new SupervisorNode("scaffold", ["scaffold"]));
-            manager.addNode(new DevelopmentNode());
-            manager.addNode(new SupervisorNode("development", ["development"]));
-            manager.addNode(new QANode());
+            
+            // Add dynamic agents
+            const { DynamicAgentNode } = await import("./dag/nodes/DynamicAgentNode.js");
+            for (const dn of dynamicNodes) {
+                manager.addNode(new DynamicAgentNode(dn));
+            }
+
+            // End nodes
+            manager.addNode(new QANode(dynamicIds)); 
             manager.addNode(new DeployNode());
 
             await manager.executeAll();

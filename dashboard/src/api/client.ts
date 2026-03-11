@@ -177,6 +177,15 @@ export type PipelineEvent = {
     type: 'info' | 'success' | 'error' | 'warning' | 'deploy';
 };
 
+export type NodeTopology = {
+    id: string;
+    role: string;
+    emoji: string;
+    description: string;
+    dependencies: string[];
+    systemPrompt: string;
+};
+
 export type Pipeline = {
     id: string;
     name: string;
@@ -196,13 +205,12 @@ export type Pipeline = {
         applicationId: string;
         url?: string;
     };
+    topology?: NodeTopology[];
+    artifacts: Record<string, unknown>;
+    tokenUsage?: { inputTokens: number; outputTokens: number };
     createdAt: string;
     updatedAt?: string;
     error?: string;
-    tokenUsage?: {
-        inputTokens: number;
-        outputTokens: number;
-    };
 };
 
 export type Project = {

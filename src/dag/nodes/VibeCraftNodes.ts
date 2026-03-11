@@ -231,13 +231,13 @@ RÈGLES:
 
 // --- QA NODE ---
 export class QANode extends AgentNode {
-    constructor() {
+    constructor(dynamicDependencies: string[] = ["supervisor_for_development"]) {
         super({
             id: "qa",
             name: "Vérification QA",
             role: "QA",
             emoji: "🧪",
-            dependencies: ["supervisor_for_development"],
+            dependencies: dynamicDependencies,
             maxTurns: 30,
             allowedTools: ["bash", "read_file", "read_memory", "write_memory"]
         });
