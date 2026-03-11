@@ -1,19 +1,17 @@
 # Build Stage
-FROM node:20-alpine as build
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Cache buster to force a rebuild on the VPS
-ARG CACHE_BUSTER=20260311-2140
-
-ENV NODE_OPTIONS="--max-old-space-size=512"
+# Cache buster
+ARG CACHE_BUSTER=20260311-2156
 
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm install --legacy-peer-deps && echo "=== NPM INSTALL OK ===" && ls node_modules/.bin/vite
 
 COPY . .
-# Capture build output for debugging
-RUN npx vite build > /tmp/build.log 2>&1 || (echo "=== BUILD FAILED ===" && cat /tmp/build.log && exit 1)
+RUN ls -la && echo "=== FILES COPIED ==="
+RUN node node_modules/.bin/vite build
 
 # Serve Stage
 FROM nginx:alpine
