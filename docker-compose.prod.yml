@@ -37,9 +37,6 @@ services:
     build: ./dashboard
     container_name: mcp-vibe-dashboard
     restart: unless-stopped
-    environment:
-      - DASHBOARD_USER=${ADMIN_USER}
-      - DASHBOARD_PASS=${ADMIN_PASS}
     networks:
       - web
     labels:
