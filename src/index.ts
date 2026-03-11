@@ -177,10 +177,49 @@ app.post("/pipeline/:id/resume", async (req: Request, res: Response) => {
     res.json({ ok });
 });
 
-// Delete pipeline
+// Delete pipeline (with full cleanup: GitHub + Docker + orchestrator)
 app.delete("/pipeline/:id", async (req: Request, res: Response) => {
-    const ok = await orchestrator.deletePipeline(req.params.id);
-    res.json({ ok });
+    try {
+        const pipeline = orchestrator.getPipeline(req.params.id);
+        if (!pipeline) {
+            return res.status(404).json({ error: "pipeline_not_found" });
+        }
+
+        // 1. Delete GitHub repo
+        if (pipeline.github) {
+            try {
+                const { deleteRepo } = await import('./github_api.js');
+                await deleteRepo(pipeline.github.owner, pipeline.github.repo);
+            } catch (err) {
+                console.error("Failed to delete GitHub repo:", err);
+            }
+        }
+
+        // 2. Delete Docker container + image
+        try {
+            const { execSync } = await import("node:child_process");
+            const containerName = `vibe-${req.params.id}-app`;
+            // Get image before removing container
+            let imageName = "";
+            try {
+                imageName = execSync(
+                    `docker inspect --format="{{.Config.Image}}" ${containerName}`,
+                    { encoding: "utf-8", timeout: 5000 }
+                ).trim();
+            } catch {}
+            try { execSync(`docker rm -f ${containerName}`, { timeout: 15000 }); } catch {}
+            if (imageName) {
+                try { execSync(`docker rmi ${imageName}`, { timeout: 15000 }); } catch {}
+            }
+        } catch {}
+
+        // 3. Delete from orchestrator
+        await orchestrator.deletePipeline(req.params.id);
+        res.json({ ok: true, id: req.params.id });
+    } catch (err: any) {
+        console.error("DELETE /pipeline/:id error:", err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Modify pipeline (send new instructions to a completed/failed project)

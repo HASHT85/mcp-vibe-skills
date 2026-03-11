@@ -41,9 +41,22 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
 
     const handleDelete = async () => {
         if (confirm(`CRITICAL: Purge ALL data for Node [${p.name}]? This action is irreversible.`)) {
-            await deletePipeline(p.id);
-            onBack();
-            onRefresh();
+            try {
+                // Delete via pipeline route
+                await deletePipeline(p.id);
+                onBack();
+                onRefresh();
+            } catch (err: any) {
+                // Try projects route as fallback
+                try {
+                    const { deleteProject } = await import('../api/client');
+                    await deleteProject(p.id);
+                    onBack();
+                    onRefresh();
+                } catch (err2: any) {
+                    alert(`DELETE_FAILED: ${err2.message || err.message}`);
+                }
+            }
         }
     };
 
