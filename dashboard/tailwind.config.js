@@ -8,20 +8,18 @@ export default {
   theme: {
     extend: {
       colors: {
-        "v-bg": "#0a0a0a",
-        "v-surface": "#121212",
-        "v-accent": "#D7FF2F",  // Marathon Yellow
-        "v-alert": "#FF1E1E",   // Critical Red
-        "v-nominal": "#00FF66", // Success Green
-        "marathon-yellow": "#D7FF2F",
-        "primary": "#D7FF2F",
-        "secondary": "#FF6A3D",
-        "background-dark": "#0B0F14",
-        "ui-border": "#2A2F35",
+        "v-bg": "#0B0F14",
+        "v-surface": "#171D25",
+        "v-accent": "#D7FF2F",
+        "v-alert": "#FF6A3D",
+        "v-nominal": "#22C55E",
         // Legacy aliases for existing components
+        "primary": "#FF6A3D",
         "accent": "#D7FF2F",
         "background-light": "#171D25",
+        "background-dark": "#0B0F14",
         "panel": "#171D25",
+        "border-muted": "#D7FF2F",
         "marathon-yellow": "#D7FF2F"
       },
       fontFamily: {
