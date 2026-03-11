@@ -12,8 +12,8 @@ COPY package*.json ./
 RUN npm install --legacy-peer-deps
 
 COPY . .
-# Skip tsc -b (fails on VPS Docker), vite build is sufficient
-RUN npx vite build
+# Capture build output for debugging
+RUN npx vite build > /tmp/build.log 2>&1 || (echo "=== BUILD FAILED ===" && cat /tmp/build.log && exit 1)
 
 # Serve Stage
 FROM nginx:alpine
