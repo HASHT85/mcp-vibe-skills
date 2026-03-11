@@ -93,18 +93,43 @@ export function connectPipelineSSE(id: string, onEvent: (event: PipelineEvent) =
 }
 
 export function connectAllSSE(onEvent: (event: PipelineEvent) => void): () => void {
-    const auth = localStorage.getItem('vibe_auth');
-    const url = `${API_BASE}/pipeline/events/all${auth ? `?auth=${btoa(auth)}` : ''}`;
-    const es = new EventSource(url);
+    let es: EventSource | null = null;
+    let closed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    es.onmessage = (e) => {
-        try {
-            const data = JSON.parse(e.data);
-            onEvent(data);
-        } catch { /* skip */ }
+    function connect() {
+        if (closed) return;
+        const auth = localStorage.getItem('vibe_auth');
+        const url = `${API_BASE}/pipeline/events/all${auth ? `?auth=${btoa(auth)}` : ''}`;
+        es = new EventSource(url);
+
+        es.onopen = () => {
+            console.log('[SSE] Connected to live events');
+        };
+
+        es.onmessage = (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                onEvent(data);
+            } catch { /* skip */ }
+        };
+
+        es.onerror = () => {
+            console.warn('[SSE] Connection lost, reconnecting in 3s...');
+            es?.close();
+            if (!closed) {
+                reconnectTimer = setTimeout(connect, 3000);
+            }
+        };
+    }
+
+    connect();
+
+    return () => {
+        closed = true;
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        es?.close();
     };
-
-    return () => es.close();
 }
 
 export async function modifyPipeline(id: string, instructions: string, model?: string, files?: { base64: string; type: string }[]) {
