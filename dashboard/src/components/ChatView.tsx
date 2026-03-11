@@ -301,32 +301,31 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
 
     return (
         <motion.div
-            className="flex h-[calc(100vh-140px)] border-4 border-ui-border bg-background-dark text-slate-100 font-mono overflow-hidden"
+            className="flex h-[calc(100vh-140px)] brutalist-border bg-v-bg font-mono"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
         >
             {/* Sessions sidebar */}
-            <div className="w-1/3 md:w-1/4 max-w-[300px] min-w-[200px] border-r border-ui-border flex flex-col bg-background-dark overflow-hidden">
-                <div className="p-6 border-b border-ui-border flex flex-col gap-4">
-                    <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-primary text-xl">radar</span>
-                        <div className="flex flex-col">
-                            <h3 className="text-sm font-bold tracking-tighter text-primary">VEIST // TERMINAL</h3>
-                            <p className="text-[10px] text-slate-500 uppercase tracking-widest">ID: CRITICAL_FOCUS</p>
+            <div className="w-1/3 md:w-1/4 max-w-[300px] min-w-[200px] brutalist-border-r flex flex-col bg-v-surface overflow-hidden">
+                <div className="p-4 brutalist-border-b flex flex-col gap-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-v-accent">
+                            <span className="material-symbols-outlined text-lg">forum</span>
+                            <h3 className="text-sm font-black tracking-widest uppercase">Com_Link</h3>
                         </div>
+                        <button 
+                            className="bg-v-accent/20 hover:bg-v-accent/40 text-v-accent border border-v-accent/50 text-[10px] font-bold px-2 py-1 uppercase tracking-widest flex items-center gap-1 transition-colors relative z-10"
+                            onClick={createNewSession}
+                        >
+                            <span className="material-symbols-outlined text-[12px]">add</span> NEW
+                        </button>
                     </div>
-                    <button 
-                        className="w-full bg-primary text-background-dark px-4 py-2 text-xs font-bold flex items-center justify-between hover:bg-white transition-colors"
-                        onClick={createNewSession}
-                    >
-                        NEW_SESSION
-                        <span className="material-symbols-outlined text-sm">add</span>
-                    </button>
+                    
                     {/* Model Selector */}
                     <div className="relative">
                         <select 
-                            className="w-full bg-background-dark border border-ui-border text-xs text-slate-300 p-2 appearance-none outline-none focus:border-primary rounded-none cursor-pointer"
+                            className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 appearance-none outline-none focus:ring-0 rounded-none cursor-pointer"
                             value={model} 
                             onChange={(e) => setModel(e.target.value)}
                         >
@@ -334,14 +333,14 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                 <option key={m.value} value={m.value}>{m.label}</option>
                             ))}
                         </select>
-                        <span className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none text-[16px]">expand_more</span>
+                        <span className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-v-accent pointer-events-none text-[16px]">expand_more</span>
                     </div>
 
                     {/* Link to Project (optional) */}
                     <div className="relative">
-                        <label className="text-[9px] text-slate-500 font-bold tracking-widest uppercase mb-1 block">LINK_TO_PROJECT</label>
+                        <label className="text-[9px] text-slate-400 font-bold tracking-widest uppercase mb-1 block">LINK_TO_PROJECT</label>
                         <select
-                            className="w-full bg-background-dark border border-ui-border text-xs text-slate-300 p-2 appearance-none outline-none focus:border-primary rounded-none cursor-pointer"
+                            className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 appearance-none outline-none focus:ring-0 rounded-none cursor-pointer"
                             value={selectedPipelineId}
                             onChange={(e) => setSelectedPipelineId(e.target.value)}
                         >
@@ -352,15 +351,15 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                 </option>
                             ))}
                         </select>
-                        <span className="material-symbols-outlined absolute right-2 bottom-2 text-slate-500 pointer-events-none text-[16px]">expand_more</span>
+                        <span className="material-symbols-outlined absolute right-2 bottom-2 text-v-accent pointer-events-none text-[16px]">expand_more</span>
                     </div>
 
                     {/* Project Name (only when no project linked = new project mode) */}
                     {!selectedPipelineId && (
                         <div>
-                            <label className="text-[9px] text-slate-500 font-bold tracking-widest uppercase mb-1 block">PROJECT_ID (OPT.)</label>
+                            <label className="text-[9px] text-slate-400 font-bold tracking-widest uppercase mb-1 block">PROJECT_ID (OPT.)</label>
                             <input
-                                className="w-full bg-background-dark border border-ui-border text-xs text-slate-300 p-2 outline-none focus:border-primary rounded-none placeholder:text-slate-600 uppercase"
+                                className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 outline-none focus:ring-0 rounded-none placeholder:text-v-accent/20 uppercase"
                                 value={projectName}
                                 onChange={(e) => setProjectName(e.target.value)}
                                 placeholder="AUTO_GENERATED"
@@ -370,27 +369,27 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                     )}
                 </div>
                 
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 flex flex-col gap-2 relative">
-                    <div className="text-[10px] text-slate-500 mb-2 px-2">ACTIVE_CHANNELS</div>
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 flex flex-col gap-2 relative">
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:10px_10px] pointer-events-none opacity-20" />
                     
                     {sessions.map(s => {
                         const isActive = activeSession?.id === s.id;
                         return (
                             <div
                                 key={s.id}
-                                className={`flex items-center gap-3 p-3 cursor-pointer transition-colors relative z-10 ${
+                                className={`flex items-center gap-3 p-3 cursor-pointer brutalist-border-b transition-colors relative z-10 ${
                                     isActive 
-                                    ? 'border border-primary bg-primary/5' 
-                                    : 'border border-ui-border hover:border-slate-500 opacity-80'
+                                    ? 'bg-v-accent text-v-bg font-bold' 
+                                    : 'bg-transparent text-slate-400 hover:bg-v-accent hover:text-v-bg'
                                 }`}
                                 onClick={() => selectSession(s)}
                             >
-                                <span className={`material-symbols-outlined text-[16px] shrink-0 ${isActive ? 'text-primary' : 'text-slate-500'}`}>chat_bubble</span>
+                                <span className="material-symbols-outlined text-[16px] shrink-0">chat_bubble</span>
                                 <div className="flex-1 overflow-hidden flex flex-col">
-                                    <span className={`text-xs font-bold tracking-wider truncate ${isActive ? 'text-primary' : 'text-slate-300'}`}>
+                                    <span className="text-xs font-bold tracking-wider truncate">
                                         {s.messages?.[0]?.content?.slice(0, 30) || `SESSION_${(s.id || '').slice(0,6)}`}
                                     </span>
-                                    <span className="text-[9px] uppercase tracking-widest monospaced opacity-50 truncate mt-0.5 text-slate-500">
+                                    <span className="text-[9px] uppercase tracking-widest monospaced opacity-50 truncate mt-0.5">
                                         {(s as any).projectId ? `🔗 LINKED` : `ID: ${s.id}`}
                                     </span>
                                 </div>
@@ -405,7 +404,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                         );
                     })}
                     {sessions.length === 0 && (
-                        <div className="p-4 text-center text-[10px] text-slate-500 uppercase tracking-widest leading-relaxed border border-dashed border-ui-border bg-ui-border/20 m-2 relative z-10">
+                        <div className="p-4 text-center text-[10px] text-slate-500 uppercase tracking-widest leading-relaxed border border-dashed border-border-muted m-2 relative z-10 bg-black/50">
                             NO COM_LINKS ACTIVE.<br/>ESTABLISH NEW CONNECTION.
                         </div>
                     )}
@@ -414,7 +413,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
 
             {/* Chat main area */}
             <div
-                className={`flex-1 flex flex-col relative bg-background-dark overflow-hidden scanline ${dragOver ? 'ring-2 ring-primary ring-inset' : ''}`}
+                className={`flex-1 flex flex-col relative bg-v-bg overflow-hidden scanline ${dragOver ? 'ring-2 ring-v-accent ring-inset' : ''}`}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
@@ -431,19 +430,19 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
 
                 {/* Drag overlay */}
                 {dragOver && (
-                    <div className="absolute inset-0 z-50 bg-background-dark/90 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="material-symbols-outlined text-6xl text-primary mb-4 animate-bounce">upload_file</span>
-                        <span className="text-primary text-sm font-black tracking-widest uppercase">DROP FILES HERE</span>
+                    <div className="absolute inset-0 z-50 bg-v-bg/90 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="material-symbols-outlined text-6xl text-v-accent mb-4 animate-bounce">upload_file</span>
+                        <span className="text-v-accent text-sm font-black tracking-widest uppercase">DROP FILES HERE</span>
                     </div>
                 )}
 
                 {!activeSession ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center relative z-10">
-                        <span className="material-symbols-outlined text-6xl text-ui-border mb-6 font-light">speaker_notes_off</span>
+                        <span className="material-symbols-outlined text-6xl text-white/20 mb-6 font-light">speaker_notes_off</span>
                         <h2 className="text-xl font-black text-white tracking-widest uppercase mb-2 font-sans">Com_Link Offline</h2>
-                        <p className="text-slate-500 text-xs max-w-sm mb-8 leading-relaxed">Establish a connection to discuss architectural parameters, create new projects, or modify existing ones.</p>
+                        <p className="text-v-accent text-xs max-w-sm mb-8 leading-relaxed">Establish a connection to discuss architectural parameters, create new projects, or modify existing ones.</p>
                         <button 
-                            className="bg-primary text-background-dark text-xs font-bold px-6 py-3 uppercase tracking-widest flex items-center gap-2 transition-colors hover:bg-white"
+                            className="bg-v-accent text-v-bg text-xs font-bold px-6 py-3 uppercase tracking-widest flex items-center gap-2 transition-colors hover:bg-white"
                             onClick={createNewSession}
                         >
                             <span className="material-symbols-outlined">cable</span>
@@ -453,178 +452,191 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                 ) : (
                     <>
                         {/* Header bar */}
-                        <div className="h-16 border-b border-ui-border flex items-center justify-between px-6 bg-background-dark z-10 relative">
-                            <div className="flex items-center gap-6">
-                                <div className="flex items-center gap-3">
-                                    <span className="material-symbols-outlined text-primary">radar</span>
-                                    <h2 className="text-sm font-bold tracking-tight text-white">COM_LINK_STREAM</h2>
-                                </div>
+                        <div className="bg-v-accent text-v-bg px-4 py-1 font-black flex justify-between items-center font-sans tracking-tight z-10 relative">
+                            <div className="flex items-center gap-3">
+                                <span>COM_LINK_STREAM</span>
                                 {selectedPipelineName && (
-                                    <div className="flex items-center gap-2 px-3 py-1 bg-ui-border/30 border border-ui-border/50 rounded-sm">
-                                        <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-                                        <span className="text-[10px] text-slate-300 font-mono">
-                                            → {selectedPipelineName.replace(/\s+/g, '_').toUpperCase()}
-                                        </span>
-                                    </div>
+                                    <span className="text-[10px] bg-v-bg text-v-accent px-2 py-0.5 font-mono">
+                                        → {selectedPipelineName.replace(/\s+/g, '_').toUpperCase()}
+                                    </span>
                                 )}
                             </div>
-                            <div className="flex items-center gap-4">
-                                <span className="text-[10px] text-slate-500 font-mono hidden md:inline-block">ENCRYPTION: AES-256</span>
-                                <span className="text-[10px] text-primary bg-primary/10 px-2 py-1 border border-primary/20">
-                                    {selectedPipelineId ? 'MODE: MODIFY_PROJECT' : 'MODE: NEW_PROJECT'}
-                                </span>
-                            </div>
+                            <span className="text-[10px] uppercase">
+                                {selectedPipelineId ? 'MODE: MODIFY_PROJECT' : 'MODE: NEW_PROJECT'}
+                            </span>
                         </div>
 
                         {/* Messages Area */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 flex flex-col gap-6 relative z-10 bg-background-dark text-sm leading-relaxed" id="terminal-display">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 flex flex-col gap-6 relative z-10 bg-v-bg text-sm leading-relaxed" id="terminal-display">
                             {activeSession.messages.length === 0 && (
-                                <div className="p-4 border border-ui-border bg-ui-border/10 text-primary text-xs font-bold tracking-widest uppercase flex items-center gap-3 w-fit mx-auto mt-4">
-                                    <span className="material-symbols-outlined animate-pulse">sensors</span>
-                                    <span>
-                                        {selectedPipelineId 
-                                            ? 'Connection Established. Describe modifications for target node...'
-                                            : 'Connection Established. Awaiting Input Parameters...'}
-                                    </span>
+                                <div className="flex flex-col gap-2 max-w-3xl">
+                                    <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                        <span className="text-v-alert font-bold">[!] SYSTEM_LOG</span>
+                                        <span>{new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'})}_UTC</span>
+                                        <span className="border-t border-[#2A2F35] flex-1"></span>
+                                    </div>
+                                    <div className="border border-[#2A2F35] bg-[#2A2F35]/10 p-4">
+                                        <p className="text-sm leading-relaxed">
+                                            <span className="text-v-accent font-bold">[HANDSHAKE_VERIFIED]</span>{' '}
+                                            {selectedPipelineId 
+                                                ? 'LINK ESTABLISHED. DESCRIBE MODIFICATIONS FOR TARGET NODE...'
+                                                : 'CONNECTION ESTABLISHED. INITIALIZING DATA STREAM... AWAITING INPUT PARAMETERS...'}
+                                        </p>
+                                    </div>
                                 </div>
                             )}
                             <AnimatePresence initial={false}>
-                                {activeSession.messages.map((msg, i) => (
-                                    <motion.div
-                                        key={i}
-                                        className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[85%] ${msg.role === 'user' ? 'ml-auto' : 'mr-auto'}`}
-                                        initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                                        transition={{ duration: 0.2 }}
-                                    >
-                                        <div className="flex items-center gap-2 mb-1">
-                                            {msg.role === 'user' ? (
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">&gt;&gt; USER_EXEC</span>
-                                            ) : (
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-primary">&gt;&gt; SYS_RES</span>
-                                            )}
-                                        </div>
-                                        <div 
-                                            className={`p-4 text-sm leading-relaxed ${
-                                                msg.role === 'user' 
-                                                ? 'bg-primary/5 text-slate-200 border border-primary/30' 
-                                                : 'text-slate-300 bg-ui-border/10 border border-ui-border'
-                                            }`}
+                                {activeSession.messages.map((msg, i) => {
+                                    const ts = msg.timestamp 
+                                        ? new Date(msg.timestamp).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + '_UTC'
+                                        : '';
+                                    return (
+                                        <motion.div
+                                            key={i}
+                                            className={`flex flex-col gap-2 max-w-3xl ${ msg.role === 'user' ? 'ml-auto text-right' : 'mr-auto'}`}
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ duration: 0.2 }}
                                         >
-                                            <div className="whitespace-pre-wrap font-mono">{msg.content}</div>
-                                        </div>
-                                    </motion.div>
-                                ))}
+                                            {msg.role === 'user' ? (
+                                                <div className="flex items-center justify-end gap-2 text-[10px] text-slate-500">
+                                                    <span className="border-t border-[#2A2F35] flex-1"></span>
+                                                    {ts && <span>{ts}</span>}
+                                                    <span className="text-v-accent font-bold">OPERATOR_01</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                                    <span className="text-slate-300 font-bold">SYS_RES</span>
+                                                    {ts && <span>{ts}</span>}
+                                                    <span className="border-t border-[#2A2F35] flex-1"></span>
+                                                </div>
+                                            )}
+                                            <div 
+                                                className={`p-4 text-sm leading-relaxed ${
+                                                    msg.role === 'user' 
+                                                    ? 'border border-v-accent/30 bg-v-accent/5 inline-block' 
+                                                    : 'border border-[#2A2F35]'
+                                                }`}
+                                            >
+                                                <div className="whitespace-pre-wrap font-mono text-slate-200">{msg.content}</div>
+                                            </div>
+                                            {msg.role === 'user' && (
+                                                <div className="text-[9px] text-slate-600">DELIVERED // ENCRYPTED</div>
+                                            )}
+                                        </motion.div>
+                                    );
+                                })}
                             </AnimatePresence>
                             
                             {sending && (
-                                <div className="flex flex-col items-start max-w-[85%] mr-auto">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-primary">&gt;&gt; SYS_RES</span>
+                                <div className="flex flex-col gap-2 max-w-3xl mr-auto">
+                                    <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                        <span className="text-slate-300 font-bold">SYS_RES</span>
+                                        <span className="border-t border-[#2A2F35] flex-1"></span>
                                     </div>
-                                    <div className="p-4 text-primary bg-ui-border/10 border border-ui-border flex items-center gap-3 min-w-[120px]">
-                                        <span className="material-symbols-outlined animate-spin text-[18px]">sync</span>
-                                        <span className="text-[10px] uppercase tracking-widest font-bold monospaced relative after:content-[''] after:animate-ping after:absolute after:right-[-10px] after:bottom-[2px] after:w-1 after:h-1 after:bg-primary after:rounded-full">Processing</span>
+                                    <div className="border border-[#2A2F35] p-4 flex items-center gap-3 min-w-[160px]">
+                                        <span className="material-symbols-outlined text-v-accent animate-spin text-[18px]">sync</span>
+                                        <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Processing stream...</span>
                                     </div>
                                 </div>
                             )}
                             <div ref={bottomRef} className="h-4" />
                         </div>
 
-                        {/* Attached Files Preview */}
-                        {files.length > 0 && (
-                            <div className="px-4 py-2 border-t border-ui-border bg-background-dark flex flex-wrap gap-2 relative z-10">
-                                {files.map((f, i) => (
-                                    <div key={i} className={`flex items-center gap-2 p-2 bg-ui-border/20 border ${f.error ? 'border-red-500' : 'border-ui-border'} max-w-[200px]`}>
-                                        {f.thumbnail ? (
-                                            <img src={f.thumbnail} alt="preview" className="w-8 h-8 object-cover border border-white/20 shrink-0" />
-                                        ) : (
-                                            <span className="material-symbols-outlined text-slate-400 text-[18px] shrink-0">description</span>
-                                        )}
-                                        <div className="flex flex-col min-w-0 flex-1">
-                                            <span className={`text-[10px] font-bold truncate ${f.error ? 'text-red-500' : 'text-slate-300'}`}>
-                                                {f.name}
-                                            </span>
-                                            {f.error && <span className="text-[9px] text-red-500 font-black tracking-widest">{f.error}</span>}
-                                            {!f.error && <span className="text-[9px] text-slate-500">{(f.size / 1024).toFixed(1)}KB</span>}
-                                        </div>
-                                        <button className="text-slate-500 hover:text-white transition-colors shrink-0" onClick={() => removeFile(i)}>
-                                            <span className="material-symbols-outlined text-[14px]">close</span>
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
                         {/* Input Area */}
-                        <div className="p-6 border-t border-ui-border bg-background-dark flex flex-col gap-3 relative z-10">
-                            {/* Toolbar */}
-                            <div className="flex justify-between items-center px-2">
-                                <div className="flex items-center gap-4">
-                                    {/* Attach button */}
-                                    <button
-                                        className="flex items-center gap-2 text-xs font-bold tracking-widest text-slate-400 hover:text-primary uppercase px-3 py-1.5 border border-transparent hover:border-primary/30 transition-colors"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        title="Attach files (images, PDF, code) or paste with Ctrl+V"
-                                    >
-                                        <span className="material-symbols-outlined text-[16px]">attach_file</span>
-                                        ATTACH
-                                    </button>
-
+                        <div className="p-6 border-t border-[#2A2F35] bg-v-bg flex flex-col gap-4 relative z-10">
+                            {/* Status bar */}
+                            <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold px-1">
+                                <div className="flex gap-4">
+                                    <span className="flex items-center gap-1">
+                                        <span className="h-1.5 w-1.5 bg-v-accent rounded-full inline-block"></span> LINK: STABLE
+                                    </span>
                                     {selectedPipelineId && (
-                                        <span className="text-[10px] text-primary font-bold tracking-widest uppercase flex items-center gap-1">
-                                            <span className="material-symbols-outlined text-[14px]">link</span>
-                                            LINKED
+                                        <span className="text-v-nominal flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[12px]">link</span>
+                                            {selectedPipelineName?.replace(/\s+/g,'_').toUpperCase()}
                                         </span>
                                     )}
                                 </div>
-
-                                {activeSession.messages.length >= 2 && (
-                                    <button
-                                        className={`text-[10px] font-black px-4 py-1.5 uppercase tracking-widest flex items-center gap-2 transition-colors relative overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed ${
-                                            selectedPipelineId
-                                            ? 'bg-red-500 text-white hover:bg-white hover:text-background-dark'
-                                            : 'bg-primary text-background-dark hover:bg-white'
-                                        }`}
-                                        onClick={handleAction}
-                                        disabled={launching || sending}
-                                        title={selectedPipelineId ? 'Execute Modification Protocol' : 'Execute Pipeline Deployment Protocol'}
-                                    >
-                                        <span className={`material-symbols-outlined text-[14px] ${launching ? 'animate-bounce' : ''}`}>
-                                            {selectedPipelineId ? 'edit_square' : 'rocket_launch'}
-                                        </span>
-                                        {launching 
-                                            ? 'EXECUTING...' 
-                                            : (selectedPipelineId ? 'EXECUTE_MODIFY' : 'INITIATE_DEPLOYMENT')
-                                        }
-                                    </button>
-                                )}
+                                <div className="flex gap-4 uppercase">
+                                    <span>{selectedPipelineId ? 'MODE: MODIFY_PROJECT' : 'MODE: NEW_PROJECT'}</span>
+                                    {activeSession.messages.length >= 2 && (
+                                        <button
+                                            className={`text-[10px] font-black px-3 py-1 uppercase tracking-widest flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                                selectedPipelineId
+                                                ? 'text-v-alert border border-v-alert hover:bg-v-alert hover:text-v-bg'
+                                                : 'text-v-accent border border-v-accent hover:bg-v-accent hover:text-v-bg'
+                                            }`}
+                                            onClick={handleAction}
+                                            disabled={launching || sending}
+                                        >
+                                            <span className={`material-symbols-outlined text-[12px] ${launching ? 'animate-bounce' : ''}`}>
+                                                {selectedPipelineId ? 'edit_square' : 'rocket_launch'}
+                                            </span>
+                                            {launching ? 'EXECUTING...' : (selectedPipelineId ? 'EXECUTE_MODIFY' : 'DEPLOY')}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
-                            
+
+                            {/* Attached Files Preview */}
+                            {files.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                    {files.map((f, i) => (
+                                        <div key={i} className={`flex items-center gap-2 p-2 bg-v-bg border ${f.error ? 'border-v-alert' : 'border-[#2A2F35]'} max-w-[200px]`}>
+                                            {f.thumbnail ? (
+                                                <img src={f.thumbnail} alt="preview" className="w-8 h-8 object-cover border border-white/20 shrink-0" />
+                                            ) : (
+                                                <span className="material-symbols-outlined text-slate-400 text-[18px] shrink-0">description</span>
+                                            )}
+                                            <div className="flex flex-col min-w-0 flex-1">
+                                                <span className={`text-[10px] font-bold truncate ${f.error ? 'text-v-alert' : 'text-slate-300'}`}>
+                                                    {f.name}
+                                                </span>
+                                                {f.error && <span className="text-[9px] text-v-alert font-black tracking-widest">{f.error}</span>}
+                                                {!f.error && <span className="text-[9px] text-slate-500">{(f.size / 1024).toFixed(1)}KB</span>}
+                                            </div>
+                                            <button className="text-slate-500 hover:text-white transition-colors shrink-0" onClick={() => removeFile(i)}>
+                                                <span className="material-symbols-outlined text-[14px]">close</span>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Input bar */}
                             <div className="relative group">
-                                <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 to-transparent blur opacity-0 group-hover:opacity-100 transition duration-500 pointer-events-none"></div>
-                                <div className="relative flex items-end gap-3 bg-ui-border border border-ui-border p-4 pl-6 focus-within:border-primary transition-colors">
-                                    <label className="font-black text-xl text-primary pb-1 font-mono">&gt;</label>
-                                    <textarea
-                                        ref={textareaRef}
-                                        className="bg-transparent border-none focus:ring-0 p-0 text-white font-mono text-lg flex-grow placeholder:text-slate-500 w-full resize-none min-h-[30px] max-h-[200px] overflow-y-auto"
-                                        value={input}
-                                        onChange={(e) => setInput(e.target.value)}
-                                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                                        onPaste={handlePaste}
-                                        placeholder={selectedPipelineId ? 'DESCRIBE MODIFICATIONS...' : 'ENTER COMMAND...\n(Shift+Enter for newline)'}
-                                        disabled={sending}
-                                        autoFocus
-                                        spellCheck="false"
-                                    />
+                                {/* Corner brackets */}
+                                <div className="absolute bottom-0 left-0 w-3 h-3 border-l border-b border-slate-700 pointer-events-none"></div>
+                                <div className="absolute bottom-0 right-0 w-3 h-3 border-r border-b border-slate-700 pointer-events-none"></div>
+                                <div className="absolute top-0 left-0 w-3 h-3 border-l border-t border-slate-700 pointer-events-none"></div>
+                                <div className="absolute top-0 right-0 w-3 h-3 border-r border-t border-slate-700 pointer-events-none"></div>
+
+                                <div className="absolute left-4 top-4 text-v-accent font-bold text-lg select-none z-10">&gt;</div>
+                                <textarea
+                                    ref={textareaRef}
+                                    className="w-full bg-[#2A2F35]/20 border border-[#2A2F35] p-4 pl-10 pr-24 text-sm text-white placeholder:text-slate-700 focus:outline-none focus:border-v-accent transition-colors font-mono resize-none min-h-[52px] max-h-[200px] overflow-y-auto"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                                    onPaste={handlePaste}
+                                    placeholder="ENTER_COMMAND_OR_MESSAGE... (Shift+Enter for newline)"
+                                    disabled={sending}
+                                    autoFocus
+                                    spellCheck="false"
+                                />
+                                <div className="absolute right-4 top-4 flex gap-3">
+                                    <span
+                                        className="material-symbols-outlined text-slate-600 hover:text-v-accent cursor-pointer text-sm transition-colors"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        title="Attach file"
+                                    >attach_file</span>
                                     <button
-                                        className="bg-primary text-background-dark px-6 py-2 text-sm font-bold hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                                        className="material-symbols-outlined text-slate-600 hover:text-v-accent cursor-pointer text-sm transition-colors disabled:opacity-30"
                                         onClick={handleSend}
                                         disabled={(!input.trim() && files.length === 0) || sending}
-                                        title="Execute [Enter]"
-                                    >
-                                        EXECUTE
-                                    </button>
+                                        title="Send [Enter]"
+                                    >send</button>
                                 </div>
                             </div>
                         </div>
