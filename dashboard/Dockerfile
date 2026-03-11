@@ -4,7 +4,9 @@ FROM node:20-alpine as build
 WORKDIR /app
 
 # Cache buster to force a rebuild on the VPS
-ARG CACHE_BUSTER=2026-03-11T20:18:00
+ARG CACHE_BUSTER=20260311-2140
+
+ENV NODE_OPTIONS="--max-old-space-size=512"
 
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
