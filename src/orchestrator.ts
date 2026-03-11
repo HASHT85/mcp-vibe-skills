@@ -40,15 +40,24 @@ export class Orchestrator extends EventEmitter {
     private pipelines: Map<string, Pipeline> = new Map();
     private running: Set<string> = new Set();
     private abortControllers: Map<string, AbortController> = new Map();
+    public ready: Promise<void>;
 
     constructor() {
         super();
-        loadPipelinesState(this.pipelines).catch(() => { /* first run */ });
+        this.ready = this.init();
 
         agentEvents.on("action", (action: AgentAction) => {
             // @ts-ignore
             this.emit("agent-action", action);
         });
+    }
+
+    private async init() {
+        try {
+            await loadPipelinesState(this.pipelines);
+        } catch (err) {
+            console.error("[Orchestrator] FAILED to load pipelines state:", err);
+        }
     }
 
     // ─── Pipeline Management ───

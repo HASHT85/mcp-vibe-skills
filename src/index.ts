@@ -637,13 +637,17 @@ app.get("/events", async (req: Request, res: Response) => {
     res.json({ events });
 });
 
-// Start HTTP server
+// Start HTTP server (wait for orchestrator to finish loading state)
 const PORT = Number(process.env.PORT) || 3000;
-app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 VibeCraft HQ listening on port ${PORT}`);
-    console.log(`   Docker/Traefik Mode: ✓ Active`);
-    console.log(`   GitHub: ${process.env.GITHUB_TOKEN ? "✓ configured" : "✗ not configured"}`);
-    console.log(`   AI Model: ${getCurrentModel()}`);
-});
+
+(async () => {
+    await orchestrator.ready;
+    app.listen(PORT, "0.0.0.0", () => {
+        console.log(`🚀 VibeCraft HQ listening on port ${PORT}`);
+        console.log(`   Docker/Traefik Mode: ✓ Active`);
+        console.log(`   GitHub: ${process.env.GITHUB_TOKEN ? "✓ configured" : "✗ not configured"}`);
+        console.log(`   AI Model: ${getCurrentModel()}`);
+    });
+})();
 
 export default app;
