@@ -23,9 +23,9 @@ export default {
         "marathon-yellow": "#D7FF2F"
       },
       fontFamily: {
-        "sans": ["'Space Grotesk'", "system-ui", "sans-serif"],
+        "sans": ["'Inter'", "system-ui", "sans-serif"],
         "display": ["'Space Grotesk'", "sans-serif"],
-        "mono": ["'JetBrains Mono'", "'IBM Plex Mono'", "monospace"],
+        "mono": ["'IBM Plex Mono'", "monospace"],
       },
       letterSpacing: {
         "widest": "0.3em",

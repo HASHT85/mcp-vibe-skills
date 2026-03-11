@@ -491,7 +491,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                                 : 'text-v-accent bg-v-bg'
                                             }`}
                                         >
-                                            <div className="whitespace-pre-wrap font-mono uppercase">{msg.content}</div>
+                                            <div className="whitespace-pre-wrap font-mono">{msg.content}</div>
                                         </div>
                                     </motion.div>
                                 ))}
@@ -581,15 +581,16 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                 )}
                             </div>
                             
-                            <div className="flex items-center gap-3">
-                                <label className="font-black text-xl text-white">&gt;</label>
-                                <input
-                                    className="bg-transparent border-none focus:ring-0 p-0 text-v-accent font-mono text-lg flex-grow uppercase placeholder:text-v-accent/30 w-full"
+                            <div className="flex items-end gap-3">
+                                <label className="font-black text-xl text-white pb-1">&gt;</label>
+                                <textarea
+                                    className="bg-transparent border-none focus:ring-0 p-0 text-v-accent font-mono text-lg flex-grow placeholder:text-v-accent/30 w-full resize-none min-h-[30px] max-h-[200px] overflow-y-auto"
+                                    rows={Math.min(8, Math.max(1, input.split('\n').length))}
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
                                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                                     onPaste={handlePaste}
-                                    placeholder={selectedPipelineId ? 'DESCRIBE MODIFICATIONS...' : 'ENTER COMMAND...'}
+                                    placeholder={selectedPipelineId ? 'DESCRIBE MODIFICATIONS...' : 'ENTER COMMAND...\n(Shift+Enter for newline)'}
                                     disabled={sending}
                                     autoFocus
                                     spellCheck="false"
