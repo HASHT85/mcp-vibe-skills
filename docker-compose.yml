@@ -1,6 +1,9 @@
 services:
   orchestrator:
-    build: .
+    build:
+      context: .
+      args:
+        CACHE_BUSTER: "20260311-2135"
     container_name: mcp-vibe-skills
     restart: unless-stopped
     environment:
@@ -34,7 +37,10 @@ services:
       start_period: 10s
 
   dashboard:
-    build: ./dashboard
+    build:
+      context: ./dashboard
+      args:
+        CACHE_BUSTER: "20260311-2135"
     container_name: mcp-vibe-dashboard
     restart: unless-stopped
     networks:
