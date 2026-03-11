@@ -41,6 +41,36 @@ export class SkillsEnrichmentNode extends DagNode {
         const descWords = summary.toLowerCase().match(/\b(react|vue|svelte|angular|next|nuxt|vite|express|fastapi|flask|django|node|python|typescript|tailwind|docker|api|dashboard|weather|chart|animation)\b/g);
         if (descWords) keywords.push(...descWords);
 
+        // ─── From Research Findings (ResearchNode) ───
+        const research = context.pipeline.artifacts.research as any;
+        if (research && typeof research === "object" && !research.raw) {
+            // Extract framework/lib names discovered during web research
+            if (Array.isArray(research.modernFrameworks)) {
+                for (const fw of research.modernFrameworks) {
+                    const name = (fw.name || "").toLowerCase().trim();
+                    if (name) keywords.push(...name.split(/[\s,/]+/).filter((s: string) => s.length > 1));
+                }
+            }
+
+            // Extract trending tech keywords
+            if (Array.isArray(research.trendingTech)) {
+                for (const tech of research.trendingTech) {
+                    const t = String(tech).toLowerCase().trim();
+                    if (t.length > 1) keywords.push(...t.split(/[\s,/]+/).filter((s: string) => s.length > 1));
+                }
+            }
+
+            // Extract stack info from similar projects
+            if (Array.isArray(research.similarProjects)) {
+                for (const proj of research.similarProjects) {
+                    const stack = (proj.stack || "").toLowerCase().trim();
+                    if (stack) keywords.push(...stack.split(/[\s,/+]+/).filter((s: string) => s.length > 1));
+                }
+            }
+
+            context.addEvent("Orchestrator", "📚", `Keywords enrichis via la veille web`, "info");
+        }
+
         // Deduplicate
         const uniqueKeywords = [...new Set(keywords.map((k: string) => k.toLowerCase()).filter((k: string) => k.length > 1))];
 

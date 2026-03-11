@@ -19,6 +19,7 @@ import type { NodeContext } from "./dag/Node.js";
 import { AnalysisNode, ArchitectureNode, ScaffoldNode, DevelopmentNode, QANode, DeployNode } from "./dag/nodes/VibeCraftNodes.js";
 import { SupervisorNode } from "./dag/nodes/SupervisorNode.js";
 import { SkillsEnrichmentNode } from "./dag/nodes/SkillsEnrichmentNode.js";
+import { ResearchNode } from "./dag/nodes/ResearchNode.js";
 import { createRepo } from "./github_api.js";
 
 import type { Pipeline, PipelinePhase, AgentStatus, PipelineAgent, PipelineEvent } from "./orchestrator_types.js";
@@ -516,6 +517,7 @@ RÈGLES ABSOLUES:
 
             manager.on("node-start", (node: any) => {
                 const phaseMap: Record<string, PipelinePhase> = {
+                    "research": "ANALYSIS",
                     "analysis": "ANALYSIS",
                     "skills_enrichment": "ANALYSIS",
                     "architecture": "ARCHITECTURE",
@@ -529,6 +531,7 @@ RÈGLES ABSOLUES:
 
             manager.on("node-complete", ({ node }: { node: any }) => {
                 const progressMap: Record<string, number> = {
+                    "research": 5,
                     "analysis": 10,
                     "skills_enrichment": 15,
                     "architecture": 30,
@@ -540,6 +543,7 @@ RÈGLES ABSOLUES:
                 if (progressMap[node.id]) p.progress = progressMap[node.id];
             });
 
+            manager.addNode(new ResearchNode());
             manager.addNode(new AnalysisNode());
             manager.addNode(new SkillsEnrichmentNode());
             manager.addNode(new ArchitectureNode());

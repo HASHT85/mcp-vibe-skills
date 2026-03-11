@@ -11,17 +11,29 @@ export class AnalysisNode extends AgentNode {
             name: "Analyse des besoins",
             role: "Analyst",
             emoji: "🔎",
-            maxTurns: 5,
+            dependencies: ["research"],
+            maxTurns: 8,
             allowedTools: ["web_search", "fetch_url", "read_memory", "write_memory"]
         });
     }
 
     protected getPrompt(context: NodeContext): string {
-        return `Analyse la demande suivante :\n\n"${context.pipeline.description}"\n\nProduis un JSON strict contenant :\n1. Le type de projet (static, spa, api, fullstack, python-worker, node-worker)\n2. La stack technique recommandée (frontend, backend)\n3. Un résumé des fonctionnalités attendues`;
+        const research = context.pipeline.artifacts.research;
+        const hasResearch = research && typeof research === "object" && !research.raw;
+
+        let researchSection = "";
+        if (hasResearch) {
+            researchSection = `\n\n📚 RÉSULTATS DE LA VEILLE TECHNOLOGIQUE :\n${JSON.stringify(research, null, 2)}\n\nUtilise ces découvertes pour proposer une stack MODERNE et INNOVANTE. Ne te limite pas aux choix classiques si des alternatives plus récentes et meilleures existent.`;
+        } else {
+            // Fallback: read from shared memory
+            researchSection = `\n\nCommence par lire la mémoire partagée avec read_memory(key: "research_findings") pour récupérer les résultats de la veille technologique.`;
+        }
+
+        return `Analyse la demande suivante :\n\n"${context.pipeline.description}"${researchSection}\n\nProduis un JSON strict contenant :\n1. "type": Le type de projet (static, spa, api, fullstack, python-worker, node-worker)\n2. "stack": { "frontend": "...", "backend": "..." } — La stack technique recommandée. PRIVILÉGIE les technologies modernes découvertes lors de la veille si elles sont pertinentes.\n3. "summary": Un résumé des fonctionnalités attendues\n4. "inspiration": Les sources web et projets similaires qui ont influencé tes choix (URLs, noms de projets)\n5. "innovativeFeatures": Des fonctionnalités bonus ou des approches innovantes découvertes pendant la veille que l'utilisateur n'a peut-être pas envisagées\n\n⚠️ NE TE LIMITE PAS à ce que l'utilisateur a demandé. Si la veille a révélé des approches ou features intéressantes, propose-les dans "innovativeFeatures".`;
     }
 
     protected getSystemPrompt(context: NodeContext): string {
-        return "Tu es un Chef de Projet Technique. Rends UNIQUEMENT un JSON valide.";
+        return "Tu es un Chef de Projet Technique visionnaire. Tu t'appuies sur les résultats de la veille technologique pour proposer la stack la plus moderne et pertinente. Rends UNIQUEMENT un JSON valide. Ose proposer des technologies récentes si elles apportent un vrai avantage.";
     }
 
     protected processResult(output: string, context: NodeContext): any {
