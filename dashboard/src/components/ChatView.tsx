@@ -144,6 +144,9 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
         } else {
             setProjectName('');
         }
+        // Clear secrets — they're per-session, not global
+        setSecrets([]);
+        setSecretsExpanded(false);
         // Then fetch full session with all messages
         try {
             const data = await getChatSession(s.id);
