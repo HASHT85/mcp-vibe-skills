@@ -573,6 +573,52 @@ app.get("/containers/:name/logs", async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────
+// 🔐 Secrets Vault
+// ─────────────────────────────────────
+
+import { SecretsService } from "./secrets_service.js";
+const secretsService = new SecretsService(storePath);
+
+// Save/update secrets for a pipeline
+app.put("/pipeline/:id/secrets", async (req: Request, res: Response) => {
+    try {
+        const secrets = req.body?.secrets;
+        if (!secrets || typeof secrets !== "object") {
+            return res.status(400).json({ error: "secrets must be a key-value object" });
+        }
+        secretsService.setSecrets(req.params.id, secrets);
+        res.json({ ok: true, count: Object.keys(secrets).length });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get secrets (masked values for display)
+app.get("/pipeline/:id/secrets", async (req: Request, res: Response) => {
+    try {
+        const masked = secretsService.getMaskedSecrets(req.params.id);
+        res.json({ secrets: masked });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Delete a specific secret or all secrets
+app.delete("/pipeline/:id/secrets", async (req: Request, res: Response) => {
+    try {
+        const key = req.query.key as string | undefined;
+        if (key) {
+            secretsService.deleteSecret(req.params.id, key);
+        } else {
+            secretsService.deleteAllSecrets(req.params.id);
+        }
+        res.json({ ok: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─────────────────────────────────────
 // 💬 Chat Mode (Pre-Pipeline)
 // ─────────────────────────────────────
 

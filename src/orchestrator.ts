@@ -21,6 +21,7 @@ import { SupervisorNode } from "./dag/nodes/SupervisorNode.js";
 import { SkillsEnrichmentNode } from "./dag/nodes/SkillsEnrichmentNode.js";
 import { ResearchNode } from "./dag/nodes/ResearchNode.js";
 import { createRepo } from "./github_api.js";
+import { SecretsService } from "./secrets_service.js";
 
 
 import type { Pipeline, PipelinePhase, AgentStatus, PipelineAgent, PipelineEvent } from "./orchestrator_types.js";
@@ -712,6 +713,35 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
                         addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⏭️", `Skip: ${nodeId} (déjà complété)`, "info");
                     }
                 }
+            }
+
+            // ─── Inject Secrets into .env (never passed to AI) ───
+            try {
+                const secretsSvc = new SecretsService();
+                const envContent = secretsSvc.toEnvString(id);
+                if (envContent) {
+                    const envPath = path.join(p.workspace, ".env");
+                    // Append to existing .env or create new
+                    const hasExisting = await fs.access(envPath).then(() => true).catch(() => false);
+                    if (hasExisting) {
+                        const existing = await fs.readFile(envPath, "utf-8");
+                        // Avoid duplicates: only add keys not already present
+                        const existingKeys = new Set(existing.split("\n").map(l => l.split("=")[0]).filter(Boolean));
+                        const newLines = envContent.split("\n").filter(l => {
+                            const key = l.split("=")[0];
+                            return key && !existingKeys.has(key);
+                        });
+                        if (newLines.length > 0) {
+                            await fs.appendFile(envPath, "\n# ─── Injected by Secrets Vault ───\n" + newLines.join("\n") + "\n");
+                        }
+                    } else {
+                        await fs.writeFile(envPath, "# ─── Injected by Secrets Vault ───\n" + envContent);
+                    }
+                    const keyCount = envContent.split("\n").filter(Boolean).length;
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔐", `${keyCount} secret(s) injecté(s) dans .env`, "info");
+                }
+            } catch (secretsErr: any) {
+                console.error("[Orchestrator] Failed to inject secrets:", secretsErr);
             }
 
             await manager.executeAll();

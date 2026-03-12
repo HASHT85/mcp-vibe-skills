@@ -282,6 +282,19 @@ export async function retryPipeline(id: string) {
     });
 }
 
+// ─── 🔐 Secrets Vault ───
+
+export async function saveSecrets(pipelineId: string, secrets: Record<string, string>) {
+    return api<{ ok: boolean; count: number }>(`/pipeline/${pipelineId}/secrets`, {
+        method: 'PUT',
+        body: JSON.stringify({ secrets }),
+    });
+}
+
+export async function getSecrets(pipelineId: string) {
+    return api<{ secrets: Record<string, string> }>(`/pipeline/${pipelineId}/secrets`);
+}
+
 // ─── 💬 Chat Mode ───
 
 export type ChatMessage = {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     createChatSession, sendChatMessage, listChatSessions, getChatSession, launchFromChat, deleteChatSession,
-    modifyPipeline, launchIdea, getRepoContext, connectAllSSE, getPipeline,
+    modifyPipeline, launchIdea, getRepoContext, connectAllSSE, getPipeline, saveSecrets,
 } from '../api/client';
 import type { ChatSession, ChatMessage, Pipeline } from '../api/client';
 
@@ -41,6 +41,8 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     const [files, setFiles] = useState<AttachedFile[]>([]);
     const [dragOver, setDragOver] = useState(false);
     const [projectName, setProjectName] = useState('');
+    const [secrets, setSecrets] = useState<{key: string; value: string}[]>([]);
+    const [secretsExpanded, setSecretsExpanded] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const modifyCleanupRef = useRef<(() => void) | null>(null);
@@ -289,17 +291,27 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                 return; // Don't setLaunching(false) yet — polling will do it
             } else {
                 // ─── CREATE new project ───
-                await launchFromChat(activeSession.id, projectName.trim() || undefined);
+                const result = await launchFromChat(activeSession.id, projectName.trim() || undefined);
                 const launchName = projectName.trim() || 'AUTO_NAMED';
+
+                // Save secrets to vault if any are defined
+                const validSecrets = secrets.filter(s => s.key.trim() && s.value.trim());
+                if (validSecrets.length > 0 && result?.pipeline?.id) {
+                    const secretsObj: Record<string, string> = {};
+                    for (const s of validSecrets) secretsObj[s.key.trim()] = s.value.trim();
+                    await saveSecrets(result.pipeline.id, secretsObj);
+                }
+
                 setActiveSession(prev => prev ? {
                     ...prev,
                     messages: [...prev.messages, {
                         role: 'assistant',
-                        content: `DEPLOYMENT_INITIATED → Pipeline "${launchName}" spawned. Orchestrator is bootstrapping agents.`,
+                        content: `DEPLOYMENT_INITIATED → Pipeline "${launchName}" spawned.${validSecrets.length > 0 ? ` 🔐 ${validSecrets.length} secret(s) saved to vault.` : ''} Orchestrator is bootstrapping agents.`,
                         timestamp: new Date().toISOString(),
                     }],
                 } : null);
                 setProjectName('');
+                setSecrets([]);
                 onPipelineLaunched?.();
             }
         } catch (err: any) {
@@ -383,6 +395,66 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                 placeholder="AUTO_GENERATED"
                                 spellCheck="false"
                             />
+                        </div>
+                    )}
+
+                    {/* 🔐 Secrets Vault (only in NEW_PROJECT mode) */}
+                    {!selectedPipelineId && (
+                        <div className="brutalist-border">
+                            <button
+                                className="w-full flex items-center justify-between px-2 py-1.5 text-[9px] text-slate-400 font-bold tracking-widest uppercase hover:text-v-accent transition-colors"
+                                onClick={() => setSecretsExpanded(!secretsExpanded)}
+                            >
+                                <span>🔐 SECRETS_VAULT {secrets.length > 0 && `(${secrets.length})`}</span>
+                                <span className="material-symbols-outlined text-[14px]">{secretsExpanded ? 'expand_less' : 'expand_more'}</span>
+                            </button>
+                            {secretsExpanded && (
+                                <div className="px-2 pb-2 flex flex-col gap-1.5">
+                                    {secrets.map((s, i) => (
+                                        <div key={i} className="flex gap-1 items-center">
+                                            <input
+                                                className="flex-1 bg-v-bg border border-slate-700 text-[10px] text-v-accent p-1.5 outline-none rounded-none placeholder:text-slate-600 uppercase font-mono"
+                                                value={s.key}
+                                                onChange={(e) => {
+                                                    const updated = [...secrets];
+                                                    updated[i] = { ...s, key: e.target.value };
+                                                    setSecrets(updated);
+                                                }}
+                                                placeholder="KEY"
+                                                spellCheck="false"
+                                            />
+                                            <input
+                                                className="flex-1 bg-v-bg border border-slate-700 text-[10px] text-v-accent p-1.5 outline-none rounded-none placeholder:text-slate-600 font-mono"
+                                                type="password"
+                                                value={s.value}
+                                                onChange={(e) => {
+                                                    const updated = [...secrets];
+                                                    updated[i] = { ...s, value: e.target.value };
+                                                    setSecrets(updated);
+                                                }}
+                                                placeholder="value"
+                                                spellCheck="false"
+                                            />
+                                            <button
+                                                className="text-v-alert hover:text-red-400 shrink-0"
+                                                onClick={() => setSecrets(secrets.filter((_, j) => j !== i))}
+                                                title="Remove"
+                                            >
+                                                <span className="material-symbols-outlined text-[14px]">close</span>
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <button
+                                        className="w-full text-[9px] text-slate-500 hover:text-v-accent border border-dashed border-slate-700 hover:border-v-accent py-1 transition-colors uppercase tracking-widest"
+                                        onClick={() => setSecrets([...secrets, { key: '', value: '' }])}
+                                    >
+                                        + ADD_SECRET
+                                    </button>
+                                    <p className="text-[8px] text-slate-600 leading-tight mt-0.5">
+                                        Injected into .env — never sent to AI
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
