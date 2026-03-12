@@ -43,21 +43,7 @@ export function LiveActivityPanel({ events }: { events: PipelineEvent[] }) {
                     );
                 })}
 
-                {/* HUD-like visualization static element at the bottom */}
-                <div className="pt-6 mt-8 border-t border-border-muted/50">
-                    <div className="h-24 w-full bg-accent/5 border border-accent/20 flex flex-col items-center justify-center relative overflow-hidden">
-                        <div className="absolute inset-0 flex items-center justify-around opacity-20">
-                            <div className="w-[1px] h-full bg-accent"></div>
-                            <div className="w-[1px] h-full bg-accent"></div>
-                            <div className="w-[1px] h-full bg-accent"></div>
-                            <div className="w-[1px] h-full bg-accent"></div>
-                        </div>
-                        <div className="z-10 text-center">
-                            <div className="text-[10px] text-accent font-black tracking-widest uppercase">Network_Load</div>
-                            <div className="text-2xl font-black text-white monospaced">42.8<span className="text-xs text-accent">GB/s</span></div>
-                        </div>
-                    </div>
-                </div>
+
             </div>
 
             <div className="p-4 bg-background-dark/80 border-t border-border-muted mt-auto">

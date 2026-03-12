@@ -130,12 +130,15 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     const selectSession = async (s: ChatSession) => {
         // Set immediately with truncated data for responsiveness
         setActiveSession(s);
+        // Sync model selector with session's model
+        if (s.model) setModel(s.model);
         // Restore linked pipeline if any
         setSelectedPipelineId((s as any).projectId || '');
         // Then fetch full session with all messages
         try {
             const data = await getChatSession(s.id);
             setActiveSession(data.session);
+            if (data.session.model) setModel(data.session.model);
             setSelectedPipelineId((data.session as any).projectId || '');
         } catch {
             // Keep truncated version if fetch fails
@@ -374,6 +377,9 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                     
                     {sessions.map(s => {
                         const isActive = activeSession?.id === s.id;
+                        const modelLabel = MODEL_OPTIONS.find(m => m.value === s.model)?.label || s.model || 'N/A';
+                        const chatTitle = s.messages?.[0]?.content?.slice(0, 30) || `SESSION_${(s.id || '').slice(0,6)}`;
+                        const linkedProject = (s as any).projectId ? true : false;
                         return (
                             <div
                                 key={s.id}
@@ -387,11 +393,16 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                 <span className="material-symbols-outlined text-[16px] shrink-0">chat_bubble</span>
                                 <div className="flex-1 overflow-hidden flex flex-col">
                                     <span className="text-xs font-bold tracking-wider truncate">
-                                        {s.messages?.[0]?.content?.slice(0, 30) || `SESSION_${(s.id || '').slice(0,6)}`}
+                                        {chatTitle}
                                     </span>
-                                    <span className="text-[9px] uppercase tracking-widest monospaced opacity-50 truncate mt-0.5">
-                                        {(s as any).projectId ? `🔗 LINKED` : `ID: ${s.id}`}
+                                    <span className={`text-[9px] uppercase tracking-widest monospaced truncate mt-0.5 ${isActive ? 'opacity-70' : 'opacity-50'}`}>
+                                        🤖 {modelLabel}
                                     </span>
+                                    {linkedProject && (
+                                        <span className={`text-[9px] uppercase tracking-widest monospaced truncate mt-0.5 ${isActive ? 'opacity-70' : 'opacity-50'}`}>
+                                            🔗 LINKED_PROJECT
+                                        </span>
+                                    )}
                                 </div>
                                 <button
                                     className={`p-1 rounded opacity-0 transition-opacity hover:bg-v-alert/20 text-v-alert ${isActive ? 'opacity-100 hover:text-white' : 'group-hover:opacity-100'}`}
@@ -460,6 +471,9 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                         → {selectedPipelineName.replace(/\s+/g, '_').toUpperCase()}
                                     </span>
                                 )}
+                                <span className="text-[10px] bg-v-bg/20 px-2 py-0.5 font-mono">
+                                    🤖 {(MODEL_OPTIONS.find(m => m.value === model)?.label || model).replace(/\s+/g, '_').toUpperCase()}
+                                </span>
                             </div>
                             <span className="text-[10px] uppercase">
                                 {selectedPipelineId ? 'MODE: MODIFY_PROJECT' : 'MODE: NEW_PROJECT'}
