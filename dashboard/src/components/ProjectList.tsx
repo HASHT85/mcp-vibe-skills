@@ -5,11 +5,12 @@ import { ProjectCard } from './ProjectCard';
 interface ProjectListProps {
     pipelines: Pipeline[];
     onSelect: (id: string) => void;
+    onRetry?: (id: string) => void;
 }
 
 const HIDDEN_PROJECTS = ['mcp-vibe-skills', 'mcp-vibe-dashboard'];
 
-export function ProjectList({ pipelines, onSelect }: ProjectListProps) {
+export function ProjectList({ pipelines, onSelect, onRetry }: ProjectListProps) {
     const filtered = pipelines.filter(p => !HIDDEN_PROJECTS.some(h => (p.name || '').toLowerCase().includes(h) || (p.id || '').toLowerCase().includes(h)));
     if (!filtered.length) {
         return (
@@ -60,7 +61,7 @@ export function ProjectList({ pipelines, onSelect }: ProjectListProps) {
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: i * 0.05, duration: 0.2 }}
                     >
-                        <ProjectCard pipeline={p} onClick={() => onSelect(p.id)} />
+                        <ProjectCard pipeline={p} onClick={() => onSelect(p.id)} onRetry={onRetry} />
                     </motion.div>
                 ))}
             </div>

@@ -4,9 +4,10 @@ import { formatTokenCount } from '../utils';
 interface ProjectCardProps {
     pipeline: Pipeline;
     onClick: () => void;
+    onRetry?: (id: string) => void;
 }
 
-export function ProjectCard({ pipeline: p, onClick }: ProjectCardProps) {
+export function ProjectCard({ pipeline: p, onClick, onRetry }: ProjectCardProps) {
     const totalTokens = (p.tokenUsage?.inputTokens || 0) + (p.tokenUsage?.outputTokens || 0);
 
     const isCompleted = p.phase === 'COMPLETED';
@@ -80,6 +81,16 @@ export function ProjectCard({ pipeline: p, onClick }: ProjectCardProps) {
                         <span className="font-bold">{(p.id || '').substring(0, 8)}</span>
                     </div>
                 </div>
+
+                {isFailed && onRetry && (
+                    <button
+                        className="w-full border border-v-accent/50 bg-v-accent/10 text-v-accent font-bold text-[10px] px-3 py-2 hover:bg-v-accent/30 uppercase flex items-center justify-center gap-2 transition-colors mt-1"
+                        onClick={(e) => { e.stopPropagation(); onRetry(p.id); }}
+                        title="Retry Pipeline"
+                    >
+                        <span className="material-symbols-outlined text-[14px]">replay</span> RETRY
+                    </button>
+                )}
             </div>
         </section>
     );

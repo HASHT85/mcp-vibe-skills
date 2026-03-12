@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { checkAuth, setAuth, listPipelines, killPipeline, deletePipeline, connectAllSSE, modifyPipeline } from './api/client';
+import { checkAuth, setAuth, listPipelines, killPipeline, deletePipeline, connectAllSSE, modifyPipeline, retryPipeline } from './api/client';
 import type { Pipeline, PipelineEvent, PipelineAgent } from './api/client';
 import './index.css';
 
@@ -220,6 +220,7 @@ function Dashboard() {
             key="list"
             pipelines={pipelines}
             onSelect={(id) => setSelectedId(id)}
+            onRetry={async (id) => { try { await retryPipeline(id); load(); } catch (err: any) { alert(`RETRY_FAILED: ${err.message}`); } }}
           />
         );
       case 'containers':

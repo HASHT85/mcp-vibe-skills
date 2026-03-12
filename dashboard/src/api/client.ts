@@ -274,6 +274,14 @@ export async function getContainerLogs(name: string, lines = 100) {
     return api<{ logs: string }>(`/containers/${name}/logs?lines=${lines}`);
 }
 
+// ─── 🔄 Pipeline Retry ───
+
+export async function retryPipeline(id: string) {
+    return api<{ pipeline: Pipeline; retriedFrom: string }>(`/pipeline/${id}/retry`, {
+        method: 'POST',
+    });
+}
+
 // ─── 💬 Chat Mode ───
 
 export type ChatMessage = {

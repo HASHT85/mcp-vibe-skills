@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { killPipeline, deletePipeline, type Pipeline } from '../api/client';
+import { killPipeline, deletePipeline, retryPipeline, type Pipeline } from '../api/client';
 import { Terminal } from './Terminal';
 import { ProjectNodeMap } from './ProjectNodeMap';
 import { formatTokenCount } from '../utils';
@@ -36,6 +36,18 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
                 } catch (err2: any) {
                     alert(`DELETE_FAILED: ${err2.message || err.message}`);
                 }
+            }
+        }
+    };
+
+    const handleRetry = async () => {
+        if (confirm(`RETRY: Relancer le pipeline [${p.name}] avec les mêmes paramètres ?`)) {
+            try {
+                await retryPipeline(p.id);
+                onBack();
+                onRefresh();
+            } catch (err: any) {
+                alert(`RETRY_FAILED: ${err.message}`);
             }
         }
     };
@@ -90,6 +102,15 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
                     </div>
 
                     <div className="flex items-center gap-3 relative z-10">
+                        {isFailed && (
+                            <button
+                                onClick={handleRetry}
+                                className="border border-v-accent/50 bg-v-accent/10 text-v-accent font-bold text-[10px] px-4 py-2 hover:bg-v-accent/20 uppercase flex items-center gap-2 transition-colors"
+                                title="Retry Pipeline"
+                            >
+                                <span className="material-symbols-outlined text-[16px]">replay</span> RETRY
+                            </button>
+                        )}
                         {!['COMPLETED', 'FAILED'].includes(p.phase) && (
                             <button
                                 onClick={handleKill}
