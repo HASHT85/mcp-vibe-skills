@@ -468,8 +468,11 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                     {sessions.map(s => {
                         const isActive = activeSession?.id === s.id;
                         const modelLabel = MODEL_OPTIONS.find(m => m.value === s.model)?.label || s.model || 'N/A';
-                        const chatTitle = s.messages?.[0]?.content?.slice(0, 30) || `SESSION_${(s.id || '').slice(0,6)}`;
-                        const linkedProject = (s as any).projectId ? true : false;
+                        const linkedPipeline = pipelines.find(p => p.id === (s as any).projectId);
+                        const chatTitle = linkedPipeline
+                            ? `📦 ${linkedPipeline.name?.replace(/\s+/g, '_').toUpperCase() || 'PROJECT'}`
+                            : (s.messages?.[0]?.content?.slice(0, 30) || `SESSION_${(s.id || '').slice(0,6)}`);
+                        const linkedProject = !!(s as any).projectId;
                         return (
                             <div
                                 key={s.id}
@@ -480,7 +483,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                 }`}
                                 onClick={() => selectSession(s)}
                             >
-                                <span className="material-symbols-outlined text-[16px] shrink-0">chat_bubble</span>
+                                <span className="material-symbols-outlined text-[16px] shrink-0">{linkedProject ? 'deployed_code' : 'chat_bubble'}</span>
                                 <div className="flex-1 overflow-hidden flex flex-col">
                                     <span className="text-xs font-bold tracking-wider truncate">
                                         {chatTitle}
@@ -488,9 +491,9 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                     <span className={`text-[9px] uppercase tracking-widest monospaced truncate mt-0.5 ${isActive ? 'opacity-70' : 'opacity-50'}`}>
                                         🤖 {modelLabel}
                                     </span>
-                                    {linkedProject && (
+                                    {linkedProject && !linkedPipeline && (
                                         <span className={`text-[9px] uppercase tracking-widest monospaced truncate mt-0.5 ${isActive ? 'opacity-70' : 'opacity-50'}`}>
-                                            🔗 {pipelines.find(p => p.id === (s as any).projectId)?.name?.toUpperCase() || 'LINKED_PROJECT'}
+                                            🔗 LINKED_PROJECT
                                         </span>
                                     )}
                                 </div>

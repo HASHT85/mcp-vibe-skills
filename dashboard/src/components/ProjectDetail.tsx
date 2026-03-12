@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { killPipeline, deletePipeline, retryPipeline, type Pipeline } from '../api/client';
+import { killPipeline, deletePipeline, retryPipeline, getSecrets, saveSecrets, type Pipeline } from '../api/client';
 import { Terminal } from './Terminal';
 import { ProjectNodeMap } from './ProjectNodeMap';
 import { formatTokenCount } from '../utils';
@@ -9,6 +9,114 @@ interface ProjectDetailProps {
     pipeline: Pipeline;
     onBack: () => void;
     onRefresh: () => void;
+}
+
+// ─── SecretsPanel sub-component ───
+function SecretsPanel({ pipelineId }: { pipelineId: string }) {
+    const [expanded, setExpanded] = useState(false);
+    const [entries, setEntries] = useState<{key: string; value: string; masked?: boolean}[]>([]);
+    const [loaded, setLoaded] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (expanded && !loaded) {
+            getSecrets(pipelineId).then(data => {
+                const existing = Object.entries(data.secrets || {}).map(([key, value]) => ({
+                    key, value: value as string, masked: true
+                }));
+                setEntries(existing);
+                setLoaded(true);
+            }).catch(() => setLoaded(true));
+        }
+    }, [expanded, loaded, pipelineId]);
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            const secrets: Record<string, string> = {};
+            for (const e of entries) {
+                if (e.key.trim() && e.value.trim() && !e.masked) {
+                    secrets[e.key.trim()] = e.value.trim();
+                }
+            }
+            if (Object.keys(secrets).length > 0) {
+                await saveSecrets(pipelineId, secrets);
+                setLoaded(false); // reload
+            }
+        } catch (err: any) {
+            alert(`SECRETS_SAVE_FAILED: ${err.message}`);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="bg-panel border border-border-muted">
+            <button
+                className="w-full flex items-center justify-between px-4 py-3 text-[11px] text-slate-400 font-bold tracking-widest uppercase hover:text-white transition-colors"
+                onClick={() => setExpanded(!expanded)}
+            >
+                <span className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[16px]">lock</span>
+                    SECRETS_VAULT {entries.length > 0 && `(${entries.length})`}
+                </span>
+                <span className="material-symbols-outlined text-[14px]">{expanded ? 'expand_less' : 'expand_more'}</span>
+            </button>
+            {expanded && (
+                <div className="px-4 pb-4 flex flex-col gap-2 border-t border-border-muted pt-3">
+                    {entries.map((e, i) => (
+                        <div key={i} className="flex gap-2 items-center">
+                            <input
+                                className="w-40 bg-background-dark border border-border-muted text-[11px] text-white p-2 outline-none font-mono uppercase tracking-wider"
+                                value={e.key}
+                                onChange={(ev) => {
+                                    const u = [...entries]; u[i] = { ...e, key: ev.target.value, masked: false }; setEntries(u);
+                                }}
+                                placeholder="KEY"
+                                spellCheck="false"
+                            />
+                            <input
+                                className="flex-1 bg-background-dark border border-border-muted text-[11px] text-white p-2 outline-none font-mono"
+                                type="password"
+                                value={e.value}
+                                onChange={(ev) => {
+                                    const u = [...entries]; u[i] = { ...e, value: ev.target.value, masked: false }; setEntries(u);
+                                }}
+                                placeholder={e.masked ? '••••••' : 'value'}
+                                spellCheck="false"
+                            />
+                            <button
+                                className="text-red-400 hover:text-red-300 shrink-0 p-1"
+                                onClick={() => setEntries(entries.filter((_, j) => j !== i))}
+                            >
+                                <span className="material-symbols-outlined text-[16px]">close</span>
+                            </button>
+                        </div>
+                    ))}
+                    <div className="flex gap-2">
+                        <button
+                            className="flex-1 text-[10px] text-slate-500 hover:text-white border border-dashed border-border-muted hover:border-white py-1.5 transition-colors uppercase tracking-widest"
+                            onClick={() => setEntries([...entries, { key: '', value: '', masked: false }])}
+                        >
+                            + ADD_SECRET
+                        </button>
+                        {entries.some(e => !e.masked) && (
+                            <button
+                                className="px-4 text-[10px] text-v-accent border border-v-accent/50 bg-v-accent/10 hover:bg-v-accent/20 py-1.5 transition-colors uppercase tracking-widest font-bold"
+                                onClick={handleSave}
+                                disabled={saving}
+                            >
+                                {saving ? 'SAVING...' : '💾 SAVE'}
+                            </button>
+                        )}
+                    </div>
+                    <p className="text-[9px] text-slate-600 leading-tight">
+                        Injected into .env — never sent to AI
+                    </p>
+                </div>
+            )}
+        </div>
+    );
 }
 
 export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailProps) {
@@ -172,6 +280,9 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
                     )}
                 </div>
             </div>
+
+            {/* 🔐 Secrets Vault */}
+            <SecretsPanel pipelineId={p.id} />
 
             {/* Main Content Layout */}
             <div className="flex flex-col gap-6">
