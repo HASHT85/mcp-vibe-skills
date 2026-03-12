@@ -644,6 +644,73 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
 
             await manager.executeAll();
 
+            // ─── Generate Professional README ───
+            try {
+                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "📝", "Génération du README professionnel...", "info");
+                
+                const analysis = p.artifacts.analysis || {};
+                const architecture = p.artifacts.architecture || {};
+                const topology = p.topology || [];
+                
+                const readmeResult = await runClaudeAgent({
+                    model: p.model,
+                    prompt: `Generate a professional, comprehensive README.md for this project.
+
+PROJECT NAME: ${p.name}
+DESCRIPTION: ${p.description}
+
+ANALYSIS (tech stack, features):
+${JSON.stringify(analysis, null, 2)}
+
+ARCHITECTURE:
+${JSON.stringify(architecture, null, 2)}
+
+PIPELINE AGENTS USED: ${topology.map((t: any) => `${t.emoji} ${t.role}`).join(', ')}
+
+Write the README in English (or match the project language if description is in French).
+Include these sections:
+1. **Project Title** with a short tagline
+2. **Overview** — What the project does, in 2-3 sentences
+3. **Features** — Bullet list of key features
+4. **Tech Stack** — Frontend, Backend, Database, etc. with version info
+5. **Getting Started** — Prerequisites, installation, environment variables (.env.example), and how to run locally
+6. **Project Structure** — Tree of important directories/files
+7. **Architecture** — High-level architecture overview
+8. **Deployment** — Docker deployment steps (docker-compose.prod.yml + Traefik)
+9. **Environment Variables** — Table of required env vars
+10. **License** — MIT
+
+Use proper markdown formatting with emojis for section headers.
+Make it look PROFESSIONAL — like a real open-source project README.
+Do NOT include any chat context, conversation logs, or pre-pipeline discussion.
+Output ONLY the raw markdown content of the README, nothing else.`,
+                    systemPrompt: "You are a technical documentation expert. Generate only the README.md content. No code blocks wrapping the output, no explanations — just the raw markdown.",
+                    cwd: p.workspace,
+                    allowedTools: ["list_dir", "read_file"],
+                    maxTurns: 5,
+                    timeoutMs: 3 * 60 * 1000,
+                    abortSignal: abortController.signal,
+                });
+
+                addTokenUsage(this.pipelines, id, readmeResult);
+
+                if (readmeResult.success && readmeResult.finalResult) {
+                    let readmeContent = readmeResult.finalResult.trim();
+                    // Strip markdown code fences if the model wrapped it
+                    if (readmeContent.startsWith("```")) {
+                        readmeContent = readmeContent.replace(/^```(?:markdown|md)?\n?/, "").replace(/\n?```$/, "").trim();
+                    }
+                    const readmePath = path.join(p.workspace, "README.md");
+                    await fs.writeFile(readmePath, readmeContent, "utf-8");
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "📝", "README.md professionnel généré ✓", "success");
+                } else {
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", "README generation skipped (agent error)", "warning");
+                }
+            } catch (readmeErr: any) {
+                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `README generation failed: ${readmeErr.message}`, "warning");
+                // Non-fatal — continue with push
+            }
+
             // ─── Final GitHub Push ───
             if (p.github) {
                 try {
