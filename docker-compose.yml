@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        CACHE_BUSTER: "20260312-2200"
+        CACHE_BUSTER: "20260312-2230"
     container_name: mcp-vibe-skills
     restart: unless-stopped
     environment:
@@ -40,7 +40,7 @@ services:
     build:
       context: ./dashboard
       args:
-        CACHE_BUSTER: "20260312-2200"
+        CACHE_BUSTER: "20260312-2230"
     container_name: mcp-vibe-dashboard
     restart: unless-stopped
     networks:

@@ -636,6 +636,10 @@ app.post("/chat/sessions/:id/launch", async (req: Request, res: Response) => {
             nameOverride || brief.name,
             brief.model
         );
+
+        // Auto-link the new pipeline to this chat session
+        chatService.linkProject(req.params.id, pipeline.id);
+
         res.json({ pipeline, brief });
     } catch (err: any) {
         res.status(500).json({ error: err.message });

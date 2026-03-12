@@ -133,13 +133,28 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
         // Sync model selector with session's model
         if (s.model) setModel(s.model);
         // Restore linked pipeline if any
-        setSelectedPipelineId((s as any).projectId || '');
+        const pid = (s as any).projectId || '';
+        setSelectedPipelineId(pid);
+        // Sync projectName from linked pipeline or reset
+        if (pid) {
+            const linked = pipelines.find(p => p.id === pid);
+            setProjectName(linked?.name || '');
+        } else {
+            setProjectName('');
+        }
         // Then fetch full session with all messages
         try {
             const data = await getChatSession(s.id);
             setActiveSession(data.session);
             if (data.session.model) setModel(data.session.model);
-            setSelectedPipelineId((data.session as any).projectId || '');
+            const fullPid = (data.session as any).projectId || '';
+            setSelectedPipelineId(fullPid);
+            if (fullPid) {
+                const linked = pipelines.find(p => p.id === fullPid);
+                setProjectName(linked?.name || '');
+            } else {
+                setProjectName('');
+            }
         } catch {
             // Keep truncated version if fetch fails
         }
@@ -400,7 +415,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                     </span>
                                     {linkedProject && (
                                         <span className={`text-[9px] uppercase tracking-widest monospaced truncate mt-0.5 ${isActive ? 'opacity-70' : 'opacity-50'}`}>
-                                            🔗 LINKED_PROJECT
+                                            🔗 {pipelines.find(p => p.id === (s as any).projectId)?.name?.toUpperCase() || 'LINKED_PROJECT'}
                                         </span>
                                     )}
                                 </div>
