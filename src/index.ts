@@ -271,21 +271,12 @@ app.post("/pipeline/:id/kill", async (req: Request, res: Response) => {
     }
 });
 
-// Retry a failed pipeline (re-launch with same params)
+// Smart Retry — resume a failed pipeline from where it stopped
 app.post("/pipeline/:id/retry", async (req: Request, res: Response) => {
     try {
-        const original = orchestrator.getPipeline(req.params.id);
-        if (!original) return res.status(404).json({ error: "pipeline_not_found" });
-        if (original.phase !== "FAILED") {
-            return res.status(400).json({ error: "pipeline_not_failed", phase: original.phase });
-        }
-
-        const newPipeline = await orchestrator.launchIdea(
-            original.description,
-            original.name,
-            original.model
-        );
-        res.json({ pipeline: newPipeline, retriedFrom: req.params.id });
+        const result = await orchestrator.retryPipeline(req.params.id);
+        if (!result) return res.status(400).json({ error: "pipeline_not_found_or_not_failed" });
+        res.json({ pipeline: result });
     } catch (err: any) {
         console.error("Retry pipeline error:", err);
         res.status(500).json({ error: err.message });

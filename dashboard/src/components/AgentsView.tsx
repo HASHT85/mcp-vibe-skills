@@ -3,7 +3,7 @@ import type { Pipeline } from '../api/client';
 
 export function AgentsView({ pipelines }: { pipelines: Pipeline[] }) {
     const allAgents = pipelines.flatMap(p =>
-        (p.agents || []).map(a => ({ ...a, pipelineName: p.name, pipelinePhase: p.phase }))
+        (p.agents || []).filter(Boolean).map(a => ({ ...a, pipelineName: p.name, pipelinePhase: p.phase }))
     );
 
     const byRole = allAgents.reduce((acc, a) => {

@@ -19,6 +19,14 @@ export class GraphManager extends (EventEmitter as any) {
         this.nodes.set(node.id, node);
     }
 
+    /** Pre-mark a node as completed (for resume/retry — skips execution) */
+    markCompleted(nodeId: string) {
+        const node = this.nodes.get(nodeId);
+        if (node) {
+            node.status = "COMPLETED";
+        }
+    }
+
     async executeAll(): Promise<void> {
         this.running = true;
         // Generic concurrent executor

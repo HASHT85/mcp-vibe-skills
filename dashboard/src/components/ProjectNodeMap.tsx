@@ -55,12 +55,13 @@ export function ProjectNodeMap({ topology, agents, events }: ProjectNodeMapProps
     const safeTopology = useMemo(() => {
         if (topology && topology.length > 0) return topology;
         // Mock topology to show something if backend doesn't provide it
-        return agents.map((a, i) => ({
+        const safeAgents = agents.filter(Boolean);
+        return safeAgents.map((a, i) => ({
             id: a.role.replace(/\s+/g, '_').toLowerCase(),
             role: a.role,
             emoji: a.emoji,
             description: "Legacy node",
-            dependencies: i > 0 ? [agents[i-1].role.replace(/\s+/g, '_').toLowerCase()] : []
+            dependencies: i > 0 ? [safeAgents[i-1].role.replace(/\s+/g, '_').toLowerCase()] : []
         }));
     }, [topology, agents]);
 

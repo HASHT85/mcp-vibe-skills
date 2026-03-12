@@ -41,10 +41,9 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
     };
 
     const handleRetry = async () => {
-        if (confirm(`RETRY: Relancer le pipeline [${p.name}] avec les mêmes paramètres ?`)) {
+        if (confirm(`RESUME: Reprendre le pipeline [${p.name}] depuis le dernier point de contrôle ?`)) {
             try {
                 await retryPipeline(p.id);
-                onBack();
                 onRefresh();
             } catch (err: any) {
                 alert(`RETRY_FAILED: ${err.message}`);

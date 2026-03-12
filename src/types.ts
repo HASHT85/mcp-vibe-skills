@@ -67,9 +67,12 @@ export type Pipeline = {
         url: string;
     };
     topology?: NodeTopology[];
+    nodeStatuses?: Record<string, "COMPLETED" | "FAILED" | "PENDING">;
     artifacts: Record<string, unknown>;
     tokenUsage: { inputTokens: number; outputTokens: number };
     createdAt: string;
     updatedAt: string;
     error?: string;
+    dokploy?: { applicationId?: string; url?: string };
+    projectType?: string;
 };
