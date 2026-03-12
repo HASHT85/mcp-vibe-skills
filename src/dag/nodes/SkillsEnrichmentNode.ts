@@ -27,8 +27,10 @@ export class SkillsEnrichmentNode extends DagNode {
         const keywords: string[] = [];
 
         // From stack
-        const frontend = analysis?.stack?.frontend || "";
-        const backend = analysis?.stack?.backend || "";
+        const rawFrontend = analysis?.stack?.frontend;
+        const rawBackend = analysis?.stack?.backend;
+        const frontend = typeof rawFrontend === 'string' ? rawFrontend : (Array.isArray(rawFrontend) ? rawFrontend.join(' ') : String(rawFrontend || ''));
+        const backend = typeof rawBackend === 'string' ? rawBackend : (Array.isArray(rawBackend) ? rawBackend.join(' ') : String(rawBackend || ''));
         if (frontend) keywords.push(...frontend.split(/[\s,/]+/).filter((s: string) => s.length > 1));
         if (backend) keywords.push(...backend.split(/[\s,/]+/).filter((s: string) => s.length > 1));
 
