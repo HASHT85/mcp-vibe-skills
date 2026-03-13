@@ -836,13 +836,81 @@ Output ONLY the raw markdown content of the README, nothing else.`,
                     const { execSync } = await import("node:child_process");
                     const slug = slugify(p.name);
                     const projectName = `vibe-${slug}`;
+                    const hostDomain = `${id}.hach.dev`;
+
+                    // Ensure 'web' network exists (for Traefik)
+                    try { execSync(`docker network create web`, { stdio: "pipe" }); } catch { /* already exists */ }
+
+                    // ─── Multi-Container Path: use docker-compose.prod.yml if it exists ───
+                    const composeProdPath = path.join(p.workspace, "docker-compose.prod.yml");
+                    const composeDevPath = path.join(p.workspace, "docker-compose.yml");
+                    const hasComposeProd = await fs.access(composeProdPath).then(() => true).catch(() => false);
+
+                    if (hasComposeProd) {
+                        console.log(`[Deploy] Found docker-compose.prod.yml — using multi-container deploy`);
+                        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", "Mode multi-container détecté (docker-compose.prod.yml)", "info");
+
+                        // Read and fix compose: ensure web network is external
+                        let composeContent = await fs.readFile(composeProdPath, "utf-8");
+                        
+                        // Ensure it has the external web network
+                        if (!composeContent.includes("external: true") && !composeContent.includes("external:true")) {
+                            if (composeContent.includes("networks:")) {
+                                // Already has networks, ensure web is external
+                                composeContent = composeContent.replace(
+                                    /networks:\s*\n(\s+web:\s*\n)/,
+                                    'networks:\n$1    external: true\n'
+                                );
+                            } else {
+                                composeContent += '\n\nnetworks:\n  web:\n    external: true\n';
+                            }
+                            await fs.writeFile(composeProdPath, composeContent, "utf-8");
+                        }
+
+                        // Stop old deployment if exists
+                        try {
+                            execSync(`docker compose -p ${projectName} -f ${composeProdPath} down --remove-orphans`, {
+                                cwd: p.workspace, stdio: "pipe", timeout: 30000
+                            });
+                        } catch { /* didn't exist */ }
+
+                        // Build all images defined in the compose
+                        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔨", "Build des images multi-container...", "info");
+                        try {
+                            execSync(`docker compose -p ${projectName} -f ${composeProdPath} build --no-cache`, {
+                                cwd: p.workspace, stdio: "pipe", timeout: 300000 // 5 minutes for multi-build
+                            });
+                        } catch (buildErr: any) {
+                            const buildStdErr = buildErr.stderr?.toString()?.slice(-500) || buildErr.message;
+                            console.error(`[Deploy] Multi-container build error: ${buildStdErr}`);
+                            addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `Build multi-container échoué: ${buildStdErr}`, "warning");
+                            throw buildErr;
+                        }
+
+                        // Deploy all containers
+                        execSync(`docker compose -p ${projectName} -f ${composeProdPath} up -d`, {
+                            cwd: p.workspace,
+                            timeout: 60000,
+                            stdio: "pipe",
+                        });
+
+                        // Count running services
+                        try {
+                            const psOutput = execSync(`docker compose -p ${projectName} ps --format json`, {
+                                cwd: p.workspace, stdio: "pipe", timeout: 10000
+                            }).toString();
+                            const runningServices = psOutput.split('\n').filter(Boolean).length;
+                            addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", `${runningServices} container(s) déployé(s) ! URL: https://${hostDomain}`, "success");
+                        } catch {
+                            addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", `Multi-container déployé ! URL: https://${hostDomain}`, "success");
+                        }
+
+                        p.artifacts.deployed = true;
+                        p.artifacts.deployedUrl = `https://${hostDomain}`;
+                    } else {
+                    // ─── Single-Container Path (legacy) ───
                     const imageName = `vibe-${slug}:latest`;
                     const containerName = `${projectName}-app`;
-                    const hostDomain = `${id}.hach.dev`; // Keep hash for DNS uniqueness
-
-                                     console.log(`[Deploy] Building image ${imageName} from ${p.workspace}`);
-
-                    // Smart Dockerfile detection with monorepo awareness
                     let dockerfilePath = "";
                     let buildContext = p.workspace;
 
@@ -1071,6 +1139,7 @@ CMD ["node", "dist/index.js"]`;
                     p.artifacts.deployed = true;
                     p.artifacts.deployedUrl = `https://${hostDomain}`;
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", `Container déployé! Accessible sur ${p.artifacts.deployedUrl}`, "success");
+                    } // end else (single-container path)
             } catch (deployErr: any) {
                 const errMsg = deployErr.stderr ? deployErr.stderr.toString().slice(-500) : deployErr.message;
                 console.error(`[Deploy] ❌ Error: ${errMsg}`);

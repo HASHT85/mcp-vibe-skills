@@ -291,45 +291,66 @@ Instructions:
    - \`traefik.http.services.NOM-SERVICE.loadbalancer.server.port=PORT_INTERNE\`
 7. Valide la syntaxe du fichier généré.
 
+MULTI-CONTAINER / BASE DE DONNÉES:
+- Si le docker-compose.yml local contient des services comme postgres, redis, mongodb, etc., GARDE-LES dans docker-compose.prod.yml.
+- Les services de base de données ne doivent PAS avoir de labels Traefik (ils ne sont pas exposés au web).
+- Les DB doivent communiquer avec l'app via un réseau interne (réseau "internal", driver bridge).
+- L'app doit être sur les deux réseaux: "web" (Traefik) et "internal" (communication avec DB).
+- Ajoute des healthchecks pour les services de base de données.
+- Utilise \`env_file: .env\` pour injecter les variables d'environnement depuis le Secrets Vault.
+- Utilise des volumes nommés pour la persistance des données.
+
 IMPORTANT - PRODUCTION DOCKERFILE:
 Si le projet est une SPA (React/Vue/Vite), tu DOIS créer un Dockerfile multi-stage:
 - Stage 1 "builder": FROM node:20-alpine, npm install, npm run build  
 - Stage 2: FROM nginx:alpine, copie dist/ vers /usr/share/nginx/html
 - Le port interne nginx doit être 80
-- Crée aussi un nginx.conf avec: try_files $uri $uri/ /index.html; pour le routing SPA
 - N'utilise JAMAIS "npm run dev" ou "npm run preview" en production
-- Le Dockerfile DOIT se trouver au même niveau que package.json du projet
 
-Exemple de Dockerfile production pour SPA:
-\`\`\`dockerfile
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
-\`\`\`
-
-Exemple de nginx.conf minimal:
-\`\`\`nginx
-server {
-    listen 80;
-    root /usr/share/nginx/html;
-    index index.html;
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
+Exemple docker-compose.prod.yml multi-container:
+\`\`\`yaml
+version: "3.8"
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      - web
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.myapp.rule=Host(\`${p.id}.hach.dev\`)"
+      - "traefik.http.routers.myapp.entrypoints=websecure"
+      - "traefik.http.routers.myapp.tls.certresolver=letsencrypt"
+      - "traefik.http.services.myapp.loadbalancer.server.port=3000"
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+volumes:
+  pgdata:
+networks:
+  web:
+    external: true
+  internal:
+    driver: bridge
 \`\`\``;
     }
 
     protected getSystemPrompt(context: NodeContext): string {
-        return "Tu es un ingénieur DevOps expert en Docker et Traefik. Ton rôle est de préparer le docker-compose.prod.yml pour la mise en production native sur Hostinger VPS, en gardant le dev local séparé.";
+        return "Tu es un ingénieur DevOps expert en Docker, Traefik et architecture multi-container. Ton rôle est de préparer le docker-compose.prod.yml pour la mise en production sur Hostinger VPS, supportant les projets avec bases de données (PostgreSQL, Redis, MongoDB) et services multiples.";
     }
 }
