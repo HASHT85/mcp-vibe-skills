@@ -168,10 +168,10 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
                 const filePath = path.resolve(cwd, input.path);
                 const content = await fs.readFile(filePath, "utf-8");
                 const lines = content.split("\n");
-                const MAX_LINES = 200;
+                const MAX_LINES = 500;
                 if (lines.length > MAX_LINES) {
                     const chunk = lines.slice(0, MAX_LINES).join("\n");
-                    return `${chunk}\n\n[⚠️ FILE TRUNCATED: ${lines.length} total lines, showing first ${MAX_LINES}. Use bash with sed to read specific line ranges: sed -n '201,400p' ${input.path}]`;
+                    return `${chunk}\n\n[⚠️ FILE TRUNCATED: ${lines.length} total lines, showing first ${MAX_LINES}. Use bash with sed to read specific line ranges: sed -n '501,1000p' ${input.path}]`;
                 }
                 return content;
             }
@@ -231,36 +231,49 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
             }
             case "web_search": {
                 try {
-                    // Primitive search parsing DuckDuckGo HTML using cheerio
                     const encodedQuery = encodeURIComponent(input.query);
+                    const controller = new AbortController();
+                    const searchTimeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+                    
                     const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodedQuery}`, {
-                        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36" }
+                        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+                        signal: controller.signal
                     });
+                    clearTimeout(searchTimeout);
                     const html = await res.text();
 
                     const $ = cheerio.load(html);
                     const results: string[] = [];
 
-                    $('.result').each((i, el) => {
-                        if (i >= 5) return false;
-                        const title = $(el).find('.result__title a').text().trim();
-                        const url = $(el).find('.result__url').attr('href') || $(el).find('a.result__url').attr('href') || $(el).find('.result__a').attr('href');
-                        const snippet = $(el).find('.result__snippet').text().trim();
+                    // Try primary selectors, then fallback alternatives
+                    const selectors = [
+                        { container: '.result', title: '.result__title a', url: '.result__a', snippet: '.result__snippet' },
+                        { container: '.web-result', title: '.result__a', url: '.result__url', snippet: '.result__snippet' },
+                        { container: '[data-testid="result"]', title: 'a[data-testid="result-title-a"]', url: 'a', snippet: '[data-testid="result-snippet"]' },
+                    ];
 
-                        if (title && url) {
-                            // Extract actual URL from DuckDuckGo redirect if needed
-                            let realUrl = url;
-                            if (url.startsWith('//duckduckgo.com/l/?uddg=')) {
-                                realUrl = decodeURIComponent(url.split('uddg=')[1].split('&')[0]);
+                    for (const sel of selectors) {
+                        $(sel.container).each((i, el) => {
+                            if (i >= 5) return false;
+                            const title = $(el).find(sel.title).text().trim();
+                            const url = $(el).find(sel.url).attr('href') || '';
+                            const snippet = $(el).find(sel.snippet).text().trim();
+
+                            if (title && url) {
+                                let realUrl = url;
+                                if (url.startsWith('//duckduckgo.com/l/?uddg=')) {
+                                    realUrl = decodeURIComponent(url.split('uddg=')[1].split('&')[0]);
+                                }
+                                results.push(`[${title}] URL: ${realUrl}\nSnippet: ${snippet}`);
                             }
-                            results.push(`[${title}] URL: ${realUrl}\nSnippet: ${snippet}`);
-                        }
-                    });
+                        });
+                        if (results.length > 0) break; // Found results with this selector
+                    }
 
-                    if (results.length === 0) return `No search results found. Try alternative keywords or a different language.`;
+                    if (results.length === 0) return `No search results found for "${input.query}". Try alternative keywords.`;
                     return `Search Results for "${input.query}":\n\n${results.join('\n\n')}`;
                 } catch (e: any) {
-                    return `Search failed: ${e.message}`;
+                    return `Search failed: ${e.message}. The agent can continue without web search results.`;
                 }
             }
             case "fetch_url": {
@@ -334,11 +347,11 @@ function runBash(command: string, cwd: string): Promise<string> {
         proc.stdout.on("data", (d) => { stdout += d.toString(); });
         proc.stderr.on("data", (d) => { stderr += d.toString(); });
 
-        // Timeout for bash commands: 60s
+        // Timeout for bash commands: 180s (npm install on heavy projects can take 2-3 min)
         const timeout = setTimeout(() => {
             proc.kill("SIGTERM");
-            resolve(`Command timed out after 60s.\nStdout: ${stdout} \nStderr: ${stderr} `);
-        }, 60000);
+            resolve(`Command timed out after 180s.\nStdout: ${stdout} \nStderr: ${stderr} `);
+        }, 180000);
 
         proc.on("close", (code) => {
             clearTimeout(timeout);
@@ -518,7 +531,8 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
                 // Sliding window: keep initial user message + last N exchange pairs
                 // to prevent quadratic token growth over many turns.
                 // NOTE: 3 was too aggressive — agents forgot their own reads and looped.
-                const KEEP_PAIRS = 8;
+                // 8 was still losing context on complex multi-file projects.
+                const KEEP_PAIRS = 12;
                 if (messages.length > 1 + KEEP_PAIRS * 2) {
                     const initial = messages[0];
                     const tail = messages.slice(-(KEEP_PAIRS * 2));
@@ -645,7 +659,7 @@ export async function gitPush(cwd: string, message: string, authRemoteUrl?: stri
                 ["git", ["remote", "set-url", "origin", authRemoteUrl]],
                 ["git", ["add", "-A"]],
                 ["git", ["commit", "-m", message]],
-                // --force because GitHub creates a README commit when making the repo
+                // --force only on first push (authRemoteUrl = fresh repo with README conflict)
                 ["git", ["push", "--force", "origin", "main"]],
             ]
             : [
@@ -653,7 +667,7 @@ export async function gitPush(cwd: string, message: string, authRemoteUrl?: stri
                 ["git", ["config", "--global", "user.name", "VibeCraft"]],
                 ["git", ["add", "-A"]],
                 ["git", ["commit", "-m", message]],
-                ["git", ["push", "--force", "origin", "main"]],
+                ["git", ["push", "origin", "main"]],
             ];
 
         let idx = 0;

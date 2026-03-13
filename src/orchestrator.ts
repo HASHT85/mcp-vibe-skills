@@ -66,6 +66,12 @@ export class Orchestrator extends EventEmitter {
     // ─── Pipeline Management ───
 
     async launchIdea(description: string, name?: string, model?: string, files?: { base64: string; type: string }[]): Promise<Pipeline> {
+        // #14: Prevent too many concurrent pipelines
+        const MAX_CONCURRENT = 3;
+        if (this.running.size >= MAX_CONCURRENT) {
+            throw new Error(`Maximum de ${MAX_CONCURRENT} pipelines simultanés atteint. Attendez qu'un pipeline se termine.`);
+        }
+        
         const id = crypto.randomUUID().slice(0, 8);
         const projectName = name || slugify(description);
         const workspace = path.join(WORKSPACE_ROOT, id);
@@ -135,7 +141,40 @@ export class Orchestrator extends EventEmitter {
     }
 
     async deletePipeline(id: string): Promise<boolean> {
+        const p = this.pipelines.get(id);
         this.killPipeline(id);
+        
+        // #13: Stop and remove Docker containers for this project
+        if (p && p.artifacts.deployed) {
+            try {
+                const { execSync } = await import("node:child_process");
+                const pName = `vibe-${slugify(p.name)}`;
+                // Try multi-container first
+                const composeProd = path.join(p.workspace, "docker-compose.prod.yml");
+                const composeDeploy = path.join(p.workspace, "docker-compose.deploy.yml");
+                const hasProd = await fs.access(composeProd).then(() => true).catch(() => false);
+                const hasDeploy = await fs.access(composeDeploy).then(() => true).catch(() => false);
+                if (hasProd) {
+                    execSync(`docker compose -p ${pName} -f ${composeProd} down --remove-orphans -v`, {
+                        cwd: p.workspace, stdio: "pipe", timeout: 30000
+                    });
+                } else if (hasDeploy) {
+                    execSync(`docker compose -p ${pName} -f ${composeDeploy} down --remove-orphans -v`, {
+                        cwd: p.workspace, stdio: "pipe", timeout: 30000
+                    });
+                }
+                console.log(`[Delete] Cleaned up Docker containers for ${pName}`);
+            } catch (err: any) {
+                console.warn(`[Delete] Container cleanup failed: ${err.message}`);
+            }
+        }
+        
+        // Clean up secrets
+        try {
+            const secretsSvc = new SecretsService();
+            secretsSvc.deleteAllSecrets(id);
+        } catch { /* optional */ }
+        
         this.running.delete(id);
         this.pipelines.delete(id);
         await savePipelinesState(this.pipelines);
@@ -465,33 +504,73 @@ RÈGLES ABSOLUES:
                     const { execSync } = await import("node:child_process");
                     const slug = slugify(p.name);
                     const projectName = `vibe-${slug}`;
-                    const imageName = `vibe-${slug}:latest`;
 
-                    // Find Dockerfile
-                    const rootDockerfile = path.join(p.workspace, "Dockerfile");
-                    const rootDockerfileProd = path.join(p.workspace, "Dockerfile.prod");
-                    let dockerfilePath = rootDockerfile;
-                    if (await fs.access(rootDockerfileProd).then(() => true).catch(() => false)) {
-                        dockerfilePath = rootDockerfileProd;
-                    }
+                    // Re-inject secrets into .env before rebuild (#10)
+                    try {
+                        const secretsSvc = new SecretsService();
+                        const envContent = secretsSvc.toEnvString(id);
+                        if (envContent) {
+                            const envPath = path.join(p.workspace, ".env");
+                            const hasExisting = await fs.access(envPath).then(() => true).catch(() => false);
+                            if (hasExisting) {
+                                const existing = await fs.readFile(envPath, "utf-8");
+                                const existingKeys = new Set(existing.split("\n").map(l => l.split("=")[0]).filter(Boolean));
+                                const newLines = envContent.split("\n").filter(l => {
+                                    const key = l.split("=")[0];
+                                    return key && !existingKeys.has(key);
+                                });
+                                if (newLines.length > 0) {
+                                    await fs.appendFile(envPath, "\n" + newLines.join("\n") + "\n");
+                                }
+                            } else {
+                                await fs.writeFile(envPath, envContent);
+                            }
+                        }
+                    } catch { /* secrets injection optional */ }
 
-                    // Rebuild image with --no-cache to pick up code changes
-                    const buildCmd = `docker build --no-cache -f ${dockerfilePath} -t ${imageName} ${p.workspace}`;
-                    console.log(`[Deploy-Modify] Rebuilding: ${buildCmd}`);
-                    execSync(buildCmd, { cwd: p.workspace, timeout: 5 * 60 * 1000, stdio: "pipe" });
+                    // Check for multi-container (docker-compose.prod.yml) first
+                    const composeProdPath = path.join(p.workspace, "docker-compose.prod.yml");
+                    const hasComposeProd = await fs.access(composeProdPath).then(() => true).catch(() => false);
 
-                    // Restart container via compose
-                    const deployComposePath = path.join(p.workspace, "docker-compose.deploy.yml");
-                    if (await fs.access(deployComposePath).then(() => true).catch(() => false)) {
+                    if (hasComposeProd) {
+                        // Multi-container rebuild
+                        console.log(`[Deploy-Modify] Multi-container rebuild via docker-compose.prod.yml`);
                         try {
-                            execSync(`docker compose -p ${projectName} -f ${deployComposePath} down`, {
+                            execSync(`docker compose -p ${projectName} -f ${composeProdPath} down --remove-orphans`, {
                                 cwd: p.workspace, stdio: "pipe", timeout: 30000
                             });
                         } catch { /* didn't exist */ }
-
-                        execSync(`docker compose -p ${projectName} -f ${deployComposePath} up -d`, {
-                            cwd: p.workspace, timeout: 30 * 1000, stdio: "pipe",
+                        execSync(`docker compose -p ${projectName} -f ${composeProdPath} build --no-cache`, {
+                            cwd: p.workspace, timeout: 10 * 60 * 1000, stdio: "pipe"
                         });
+                        execSync(`docker compose -p ${projectName} -f ${composeProdPath} up -d`, {
+                            cwd: p.workspace, timeout: 60000, stdio: "pipe",
+                        });
+                    } else {
+                        // Single-container rebuild (legacy)
+                        const imageName = `vibe-${slug}:latest`;
+                        const rootDockerfile = path.join(p.workspace, "Dockerfile");
+                        const rootDockerfileProd = path.join(p.workspace, "Dockerfile.prod");
+                        let dockerfilePath = rootDockerfile;
+                        if (await fs.access(rootDockerfileProd).then(() => true).catch(() => false)) {
+                            dockerfilePath = rootDockerfileProd;
+                        }
+
+                        const buildCmd = `docker build --no-cache -f ${dockerfilePath} -t ${imageName} ${p.workspace}`;
+                        console.log(`[Deploy-Modify] Rebuilding: ${buildCmd}`);
+                        execSync(buildCmd, { cwd: p.workspace, timeout: 10 * 60 * 1000, stdio: "pipe" });
+
+                        const deployComposePath = path.join(p.workspace, "docker-compose.deploy.yml");
+                        if (await fs.access(deployComposePath).then(() => true).catch(() => false)) {
+                            try {
+                                execSync(`docker compose -p ${projectName} -f ${deployComposePath} down`, {
+                                    cwd: p.workspace, stdio: "pipe", timeout: 30000
+                                });
+                            } catch { /* didn't exist */ }
+                            execSync(`docker compose -p ${projectName} -f ${deployComposePath} up -d`, {
+                                cwd: p.workspace, timeout: 60000, stdio: "pipe",
+                            });
+                        }
                     }
 
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", `Container reconstruit et redéployé! ${p.artifacts.deployedUrl || ''}`, "success");
@@ -1078,7 +1157,7 @@ CMD ["node", "dist/index.js"]`;
                         console.log(`[Deploy] Build cmd: ${buildCmd}`);
                         execSync(buildCmd, {
                             cwd: p.workspace,
-                            timeout: 5 * 60 * 1000,
+                            timeout: 10 * 60 * 1000, // 10 min for heavy builds
                             stdio: "pipe",
                         });
                     } catch (buildErr: any) {
@@ -1089,11 +1168,6 @@ CMD ["node", "dist/index.js"]`;
                     }
 
                     console.log(`[Deploy] Image built. Deploying container ${containerName}`);
-
-                    // Ensure 'web' network exists
-                    try {
-                        execSync(`docker network create web`, { stdio: "pipe" });
-                    } catch { /* already exists */ }
 
                     // Generate a deterministic compose file with Traefik labels
                     // so it appears as a "project" in Hostinger Docker Manager
@@ -1132,7 +1206,7 @@ CMD ["node", "dist/index.js"]`;
                     // Deploy using docker compose (creates a "project" visible in Hostinger)
                     execSync(`docker compose -p ${projectName} -f ${deployComposePath} up -d`, {
                         cwd: p.workspace,
-                        timeout: 30 * 1000,
+                        timeout: 60 * 1000, // 60s for container startup
                         stdio: "pipe",
                     });
 

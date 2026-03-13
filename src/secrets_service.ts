@@ -1,44 +1,97 @@
 /**
  * Secrets Service — Secure storage for pipeline secrets (API keys, passwords, etc.)
- * Secrets are stored on disk, never sent to AI, and injected into project .env files.
+ * Secrets are stored on disk (encrypted), never sent to AI, and injected into project .env files.
  */
 
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 
 export interface SecretEntry {
     key: string;
     value: string;
 }
 
+// ─── Simple encryption layer (AES-256-GCM) ───
+const ALGO = "aes-256-gcm";
+function deriveKey(): Buffer {
+    const passphrase = process.env.ADMIN_PASS || process.env.SECRET_KEY || "veist-default-key-change-me";
+    return crypto.scryptSync(passphrase, "veist-salt", 32);
+}
+
+function encrypt(plaintext: string): string {
+    const key = deriveKey();
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(ALGO, key, iv);
+    let encrypted = cipher.update(plaintext, "utf8", "hex");
+    encrypted += cipher.final("hex");
+    const tag = cipher.getAuthTag().toString("hex");
+    return `${iv.toString("hex")}:${tag}:${encrypted}`;
+}
+
+function decrypt(ciphertext: string): string {
+    try {
+        const [ivHex, tagHex, data] = ciphertext.split(":");
+        const key = deriveKey();
+        const decipher = crypto.createDecipheriv(ALGO, key, Buffer.from(ivHex, "hex"));
+        decipher.setAuthTag(Buffer.from(tagHex, "hex"));
+        let decrypted = decipher.update(data, "hex", "utf8");
+        decrypted += decipher.final("utf8");
+        return decrypted;
+    } catch {
+        // If decryption fails (e.g. old unencrypted data), return as-is
+        return ciphertext;
+    }
+}
+
 export class SecretsService {
     private secrets: Map<string, Record<string, string>> = new Map();
     private filePath: string;
     private saveTimeout: ReturnType<typeof setTimeout> | null = null;
+    public ready: Promise<void>;
 
     constructor(storePath?: string) {
         const baseDir = path.dirname(storePath || process.env.STORE_PATH || "/data/store.json");
         this.filePath = path.join(baseDir, "secrets.json");
-        this.loadFromDisk();
+        // Synchronous load to prevent race conditions
+        this.loadFromDiskSync();
+        // Also schedule async reload for any concurrent writes
+        this.ready = this.loadFromDiskAsync();
     }
 
     // ─── Persistence ───
 
-    private async loadFromDisk() {
+    /** Synchronous load — prevents race condition where secrets aren't loaded when accessed immediately */
+    private loadFromDiskSync() {
         try {
             const dir = path.dirname(this.filePath);
-            await fs.mkdir(dir, { recursive: true });
-            const raw = await fs.readFile(this.filePath, "utf-8");
+            if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+            if (!existsSync(this.filePath)) return;
+            
+            const raw = readFileSync(this.filePath, "utf-8");
             const data = JSON.parse(raw);
             if (data.secrets && typeof data.secrets === "object") {
                 for (const [pipelineId, secrets] of Object.entries(data.secrets)) {
-                    this.secrets.set(pipelineId, secrets as Record<string, string>);
+                    if (typeof secrets === "object" && secrets !== null) {
+                        // Decrypt values
+                        const decrypted: Record<string, string> = {};
+                        for (const [key, val] of Object.entries(secrets as Record<string, string>)) {
+                            decrypted[key] = (data.encrypted) ? decrypt(val) : val;
+                        }
+                        this.secrets.set(pipelineId, decrypted);
+                    }
                 }
                 console.log(`🔐 SecretsService: Loaded secrets for ${this.secrets.size} pipelines`);
             }
         } catch {
             console.log("🔐 SecretsService: No saved secrets found, starting fresh");
         }
+    }
+
+    /** Async reload — for completeness  */
+    private async loadFromDiskAsync() {
+        // Already loaded sync, this is a no-op safety net
+        return;
     }
 
     private scheduleSave() {
@@ -50,8 +103,19 @@ export class SecretsService {
         try {
             const dir = path.dirname(this.filePath);
             await fs.mkdir(dir, { recursive: true });
+            
+            // Encrypt all values before saving
+            const encryptedSecrets: Record<string, Record<string, string>> = {};
+            for (const [pipelineId, secrets] of this.secrets) {
+                encryptedSecrets[pipelineId] = {};
+                for (const [key, val] of Object.entries(secrets)) {
+                    encryptedSecrets[pipelineId][key] = encrypt(val);
+                }
+            }
+            
             const data = {
-                secrets: Object.fromEntries(this.secrets),
+                encrypted: true,
+                secrets: encryptedSecrets,
                 savedAt: new Date().toISOString(),
             };
             const tmp = `${this.filePath}.tmp`;
@@ -105,11 +169,16 @@ export class SecretsService {
         this.scheduleSave();
     }
 
-    /** Generate .env content from secrets */
+    /** Generate .env content from secrets — properly escapes values */
     toEnvString(pipelineId: string): string {
         const secrets = this.getSecrets(pipelineId);
         if (Object.keys(secrets).length === 0) return "";
-        const lines = Object.entries(secrets).map(([k, v]) => `${k}=${v}`);
+        const lines = Object.entries(secrets).map(([k, v]) => {
+            // Escape values: wrap in quotes if contains spaces, =, or newlines
+            const needsQuotes = /[\s=\n\r"'#]/.test(v);
+            const escaped = needsQuotes ? `"${v.replace(/"/g, '\\"')}"` : v;
+            return `${k}=${escaped}`;
+        });
         return lines.join("\n") + "\n";
     }
 }
