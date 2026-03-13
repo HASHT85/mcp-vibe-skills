@@ -69,6 +69,18 @@ INTERDIT :
 - Ne redirige JAMAIS vers un autre outil
 - Ne refuse JAMAIS une demande
 
+FORMATAGE OBLIGATOIRE :
+- N'utilise JAMAIS de tableaux markdown (| --- |), le chat ne les rend pas
+- Utilise des listes à puces avec emojis pour comparer des options
+- Utilise des titres ## et ### pour structurer
+- Garde les réponses concises et lisibles
+- Pour comparer des stacks, utilise ce format :
+  ### ⚡ Option 1 — Nom
+  - Stack : X + Y + Z
+  - ✅ Avantage 1
+  - ✅ Avantage 2  
+  - ❌ Inconvénient
+
 Réponds en français, sois concis et technique.`;
 
 export class ChatService {
