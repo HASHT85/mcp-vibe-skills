@@ -482,10 +482,35 @@ app.delete("/agents/:id/skills", async (req: Request, res: Response) => {
 app.get("/containers", async (_req: Request, res: Response) => {
     try {
         const { execSync } = await import("node:child_process");
-        const raw = execSync(
+        // List containers by name OR by compose project label (vibe- prefix)
+        const rawByName = execSync(
             `docker ps -a --filter "name=vibe-" --format "{{json .}}"`,
             { encoding: "utf-8", timeout: 10000 }
         ).trim();
+        const rawByLabel = execSync(
+            `docker ps -a --filter "label=com.docker.compose.project" --format "{{json .}}"`,
+            { encoding: "utf-8", timeout: 10000 }
+        ).trim();
+
+        // Merge and deduplicate by ID, only keep vibe-related containers
+        const seen = new Set<string>();
+        const allLines: string[] = [];
+        for (const line of [...rawByName.split("\n"), ...rawByLabel.split("\n")]) {
+            if (!line) continue;
+            try {
+                const parsed = JSON.parse(line);
+                // Only include vibe- containers or vibe- compose projects
+                const labels = parsed.Labels || "";
+                const isVibeProject = labels.includes("com.docker.compose.project=vibe-");
+                const isVibeName = (parsed.Names || "").startsWith("vibe-");
+                if (!isVibeName && !isVibeProject) continue;
+                if (!seen.has(parsed.ID)) {
+                    seen.add(parsed.ID);
+                    allLines.push(line);
+                }
+            } catch { /* skip invalid JSON */ }
+        }
+        const raw = allLines.join("\n");
 
         const containers = raw
             .split("\n")
