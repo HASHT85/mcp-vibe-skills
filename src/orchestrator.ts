@@ -21,7 +21,7 @@ import { SupervisorNode } from "./dag/nodes/SupervisorNode.js";
 import { SkillsEnrichmentNode } from "./dag/nodes/SkillsEnrichmentNode.js";
 import { ResearchNode } from "./dag/nodes/ResearchNode.js";
 import { createRepo } from "./github_api.js";
-import { SecretsService } from "./secrets_service.js";
+import { SecretsService, getSecretsService } from "./secrets_service.js";
 
 
 import type { Pipeline, PipelinePhase, AgentStatus, PipelineAgent, PipelineEvent } from "./orchestrator_types.js";
@@ -171,7 +171,7 @@ export class Orchestrator extends EventEmitter {
         
         // Clean up secrets
         try {
-            const secretsSvc = new SecretsService();
+            const secretsSvc = getSecretsService();
             secretsSvc.deleteAllSecrets(id);
         } catch { /* optional */ }
         
@@ -490,7 +490,7 @@ RÈGLES ABSOLUES:
                         const pushed = await gitPush(p.workspace, `fix: QA auto-corrections applied`, authUrl);
                         addPipelineEvent(this, this.pipelines, id, "QA", "💻", "Push → correctifs QA appliqués", "success");
                     } else {
-                        addPipelineEvent(this, this.pipelines, id, "QA", "⚠️", "Push QA échoué", "warning");
+                        addPipelineEvent(this, this.pipelines, id, "QA", "✅", "Aucun changement par QA — code déjà correct", "info");
                     }
                 }
             }
@@ -507,7 +507,7 @@ RÈGLES ABSOLUES:
 
                     // Re-inject secrets into .env before rebuild (#10)
                     try {
-                        const secretsSvc = new SecretsService();
+                        const secretsSvc = getSecretsService();
                         const envContent = secretsSvc.toEnvString(id);
                         if (envContent) {
                             const envPath = path.join(p.workspace, ".env");
@@ -796,7 +796,7 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
 
             // ─── Inject Secrets into .env (never passed to AI) ───
             try {
-                const secretsSvc = new SecretsService();
+                const secretsSvc = getSecretsService();
                 const envContent = secretsSvc.toEnvString(id);
                 if (envContent) {
                     const envPath = path.join(p.workspace, ".env");
@@ -957,7 +957,7 @@ Output ONLY the raw markdown content of the README, nothing else.`,
                         addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔨", "Build des images multi-container...", "info");
                         try {
                             execSync(`docker compose -p ${projectName} -f ${composeProdPath} build --no-cache`, {
-                                cwd: p.workspace, stdio: "pipe", timeout: 300000 // 5 minutes for multi-build
+                                cwd: p.workspace, stdio: "pipe", timeout: 600000 // 10 minutes for multi-container builds
                             });
                         } catch (buildErr: any) {
                             const buildStdErr = buildErr.stderr?.toString()?.slice(-500) || buildErr.message;

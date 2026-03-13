@@ -121,12 +121,14 @@ export class GraphManager extends (EventEmitter as any) {
         }
     }
 
-    private isTransitiveDependent(nodeId: string, targetId: string): boolean {
+    private isTransitiveDependent(nodeId: string, targetId: string, visited: Set<string> = new Set()): boolean {
+        if (visited.has(nodeId)) return false; // Guard against circular deps
+        visited.add(nodeId);
         const node = this.nodes.get(nodeId);
         if (!node) return false;
         if (node.dependencies.includes(targetId)) return true;
         for (const dep of node.dependencies) {
-            if (this.isTransitiveDependent(dep, targetId)) return true;
+            if (this.isTransitiveDependent(dep, targetId, visited)) return true;
         }
         return false;
     }

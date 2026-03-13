@@ -182,3 +182,10 @@ export class SecretsService {
         return lines.join("\n") + "\n";
     }
 }
+
+// ─── Singleton ───
+let _instance: SecretsService | null = null;
+export function getSecretsService(): SecretsService {
+    if (!_instance) _instance = new SecretsService();
+    return _instance;
+}

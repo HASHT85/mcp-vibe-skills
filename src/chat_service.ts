@@ -8,7 +8,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "node:crypto";
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
 // ─── Types ───
@@ -73,16 +73,18 @@ export class ChatService {
         // Store chat sessions next to the main store
         const baseDir = path.dirname(storePath || process.env.STORE_PATH || "/data/store.json");
         this.filePath = path.join(baseDir, "chat_sessions.json");
-        this.loadFromDisk();
+        this.loadFromDiskSync();
     }
 
     // ─── Persistence ───
 
-    private async loadFromDisk() {
+    /** Synchronous load — prevents race condition on immediate access */
+    private loadFromDiskSync() {
         try {
             const dir = path.dirname(this.filePath);
-            await fs.mkdir(dir, { recursive: true });
-            const raw = await fs.readFile(this.filePath, "utf-8");
+            if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+            if (!existsSync(this.filePath)) return;
+            const raw = readFileSync(this.filePath, "utf-8");
             const data = JSON.parse(raw);
             if (Array.isArray(data.sessions)) {
                 for (const s of data.sessions) {
@@ -91,7 +93,6 @@ export class ChatService {
                 console.log(`💬 ChatService: Loaded ${this.sessions.size} sessions from disk`);
             }
         } catch {
-            // File doesn't exist yet — start fresh
             console.log("💬 ChatService: No saved sessions found, starting fresh");
         }
     }

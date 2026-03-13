@@ -576,8 +576,8 @@ app.get("/containers/:name/logs", async (req: Request, res: Response) => {
 // 🔐 Secrets Vault
 // ─────────────────────────────────────
 
-import { SecretsService } from "./secrets_service.js";
-const secretsService = new SecretsService(storePath);
+import { getSecretsService } from "./secrets_service.js";
+const secretsService = getSecretsService();
 
 // Save/update secrets for a pipeline
 app.put("/pipeline/:id/secrets", async (req: Request, res: Response) => {
