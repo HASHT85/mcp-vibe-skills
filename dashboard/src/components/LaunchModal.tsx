@@ -11,13 +11,24 @@ const MODEL_OPTIONS = [
     { value: 'o3-mini', label: 'o3-mini (OpenAI)' },
 ];
 
+const TEMPLATE_OPTIONS = [
+    { id: 'web-spa', emoji: '🌐', name: 'Web App', desc: 'React, Vue, Svelte' },
+    { id: 'api-only', emoji: '⚡', name: 'API Backend', desc: 'Express, FastAPI' },
+    { id: 'fullstack', emoji: '🏗️', name: 'Fullstack', desc: 'Frontend + API + DB' },
+    { id: 'discord-bot', emoji: '🤖', name: 'Bot', desc: 'Discord, Telegram' },
+    { id: 'cli-tool', emoji: '🔧', name: 'CLI Tool', desc: 'Scripts, Scrapers' },
+    { id: 'python-app', emoji: '🐍', name: 'Python', desc: 'FastAPI, Flask, ML' },
+    { id: 'game', emoji: '🎮', name: 'Jeu Web', desc: 'Phaser, Three.js' },
+];
+
 export function LaunchModal({ onClose, onLaunch }: {
     onClose: () => void;
-    onLaunch: (desc: string, name?: string, model?: string, files?: { base64: string; type: string }[]) => void;
+    onLaunch: (desc: string, name?: string, model?: string, files?: { base64: string; type: string }[], templateId?: string) => void;
 }) {
     const [desc, setDesc] = useState('');
     const [name, setName] = useState('');
     const [model, setModel] = useState('');
+    const [templateId, setTemplateId] = useState('');
     const [files, setFiles] = useState<{ name: string; type: string; data: string; size: number; error?: string; thumbnail?: string }[]>([]);
     const [loading, setLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -26,7 +37,6 @@ export function LaunchModal({ onClose, onLaunch }: {
         if (e.target.files) {
             Array.from(e.target.files).forEach(processFile);
         }
-        // clear input so same file can be selected again if needed
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
@@ -56,11 +66,9 @@ export function LaunchModal({ onClose, onLaunch }: {
             const base64 = result.split(',')[1];
             if (base64) {
                 let thumbnail: string | undefined = undefined;
-                // If image, use the data URL directly as thumbnail
                 if (f.type.startsWith('image/')) {
                     thumbnail = result;
                 }
-
                 setFiles(prev => [...prev, { name: f.name, type: f.type, data: base64, size: f.size, thumbnail }]);
             }
         };
@@ -76,7 +84,7 @@ export function LaunchModal({ onClose, onLaunch }: {
         setLoading(true);
         try {
             const validFiles = files.filter(f => !f.error).map(f => ({ base64: f.data, type: f.type }));
-            await onLaunch(desc.trim(), name.trim() || undefined, model || undefined, validFiles.length > 0 ? validFiles : undefined);
+            await onLaunch(desc.trim(), name.trim() || undefined, model || undefined, validFiles.length > 0 ? validFiles : undefined, templateId || undefined);
         } finally {
             setLoading(false);
         }
@@ -91,7 +99,7 @@ export function LaunchModal({ onClose, onLaunch }: {
             onClick={onClose}
         >
             <motion.div
-                className="bg-panel border border-accent/30 w-full max-w-2xl flex flex-col scanline shadow-[0_0_30px_rgba(212,255,0,0.1)] relative origin-center overflow-hidden"
+                className="bg-panel border border-accent/30 w-full max-w-2xl flex flex-col scanline shadow-[0_0_30px_rgba(212,255,0,0.1)] relative origin-center overflow-hidden max-h-[90vh]"
                 initial={{ opacity: 0, scale: 0.95, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -108,48 +116,76 @@ export function LaunchModal({ onClose, onLaunch }: {
                     <div>
                         <h2 className="text-xl font-black text-white tracking-widest uppercase m-0">Initialize_Project</h2>
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
-                            Provide architectural directives for autonomous matrix deployment
+                            Select project type & provide architectural directives
                         </p>
                     </div>
                 </div>
 
-                <div className="p-6 flex flex-col gap-4 relative z-10">
-                    <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-black text-slate-400 tracking-widest uppercase">Project Identifier (Optional)</label>
-                        <input
-                            className="bg-black border border-border-muted focus:border-accent text-white p-3 font-medium outline-none transition-colors placeholder:text-slate-600 rounded-none w-full"
-                            placeholder="e.g. Nexus_Dashboard_v2"
-                            value={name}
-                            onChange={(e: any) => setName(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-black text-slate-400 tracking-widest uppercase">Select Neural Engine (Optional)</label>
-                        <div className="relative">
-                            <input
-                                list="model-options-launch"
-                                className="bg-black border border-border-muted focus:border-accent text-white p-3 font-medium outline-none transition-colors placeholder:text-slate-600 rounded-none w-full"
-                                placeholder="Default: Claude 3.7 Sonnet"
-                                value={model}
-                                onChange={(e: any) => setModel(e.target.value)}
-                            />
-                            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">expand_more</span>
-                        </div>
-                        <datalist id="model-options-launch">
-                            {MODEL_OPTIONS.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                <div className="p-6 flex flex-col gap-4 relative z-10 overflow-y-auto custom-scrollbar">
+                    {/* Template Picker */}
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[10px] font-black text-accent tracking-widest uppercase flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">widgets</span> Project Type
+                        </label>
+                        <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+                            {TEMPLATE_OPTIONS.map(t => (
+                                <button
+                                    key={t.id}
+                                    onClick={() => setTemplateId(templateId === t.id ? '' : t.id)}
+                                    className={`flex flex-col items-center gap-1 p-2 border transition-all text-center cursor-pointer ${
+                                        templateId === t.id 
+                                            ? 'border-accent bg-accent/15 text-accent shadow-[0_0_10px_rgba(212,255,0,0.15)]' 
+                                            : 'border-border-muted/50 bg-black/30 text-slate-400 hover:border-slate-500 hover:text-slate-300'
+                                    }`}
+                                >
+                                    <span className="text-xl leading-none">{t.emoji}</span>
+                                    <span className="text-[9px] font-black tracking-wider uppercase leading-tight">{t.name}</span>
+                                    <span className="text-[8px] opacity-60 leading-tight hidden sm:block">{t.desc}</span>
+                                </button>
                             ))}
-                        </datalist>
+                        </div>
+                        {!templateId && (
+                            <p className="text-[9px] text-slate-500 italic">Auto-détection si non sélectionné</p>
+                        )}
                     </div>
 
-                    <div className="flex flex-col gap-1 flex-1 min-h-[150px]">
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1">
+                            <label className="text-[10px] font-black text-slate-400 tracking-widest uppercase">Project Identifier</label>
+                            <input
+                                className="bg-black border border-border-muted focus:border-accent text-white p-2.5 text-sm font-medium outline-none transition-colors placeholder:text-slate-600 rounded-none w-full"
+                                placeholder="e.g. Nexus_Dashboard"
+                                value={name}
+                                onChange={(e: any) => setName(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-[10px] font-black text-slate-400 tracking-widest uppercase">Neural Engine</label>
+                            <div className="relative">
+                                <input
+                                    list="model-options-launch"
+                                    className="bg-black border border-border-muted focus:border-accent text-white p-2.5 text-sm font-medium outline-none transition-colors placeholder:text-slate-600 rounded-none w-full"
+                                    placeholder="Default: Claude Sonnet"
+                                    value={model}
+                                    onChange={(e: any) => setModel(e.target.value)}
+                                />
+                                <span className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none text-[16px]">expand_more</span>
+                            </div>
+                            <datalist id="model-options-launch">
+                                {MODEL_OPTIONS.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                            </datalist>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1 flex-1 min-h-[120px]">
                         <label className="text-[10px] font-black text-accent tracking-widest uppercase flex items-center gap-1">
                             <span className="material-symbols-outlined text-[12px]">terminal</span> Architectural Directives
                         </label>
                         <textarea
-                            className="bg-black border border-border-muted focus:border-accent text-white p-3 font-medium outline-none transition-colors placeholder:text-slate-600 rounded-none w-full flex-1 resize-y min-h-[150px] custom-scrollbar"
-                            placeholder="Ex: Un dashboard React analytique, avec un backend FastAPI et une base de données PostgreSQL..."
+                            className="bg-black border border-border-muted focus:border-accent text-white p-3 font-medium outline-none transition-colors placeholder:text-slate-600 rounded-none w-full flex-1 resize-y min-h-[120px] custom-scrollbar"
+                            placeholder="Ex: Un dashboard React avec un backend FastAPI et PostgreSQL pour tracker les crypto..."
                             value={desc}
                             onChange={(e) => setDesc(e.target.value)}
                             onPaste={handlePaste}

@@ -65,7 +65,7 @@ export class Orchestrator extends EventEmitter {
 
     // ─── Pipeline Management ───
 
-    async launchIdea(description: string, name?: string, model?: string, files?: { base64: string; type: string }[]): Promise<Pipeline> {
+    async launchIdea(description: string, name?: string, model?: string, files?: { base64: string; type: string }[], templateId?: string): Promise<Pipeline> {
         // #14: Prevent too many concurrent pipelines
         const MAX_CONCURRENT = 3;
         if (this.running.size >= MAX_CONCURRENT) {
@@ -77,6 +77,11 @@ export class Orchestrator extends EventEmitter {
         const workspace = path.join(WORKSPACE_ROOT, id);
 
         await fs.mkdir(workspace, { recursive: true });
+
+        // Auto-detect template if not provided
+        const { detectTemplate, getTemplateById } = await import("./templates/registry.js");
+        const template = templateId ? getTemplateById(templateId) : detectTemplate(description);
+        const resolvedTemplateId = template?.id || "web-spa";
 
         const pipeline: Pipeline = {
             id,
@@ -93,12 +98,13 @@ export class Orchestrator extends EventEmitter {
             tokenUsage: { inputTokens: 0, outputTokens: 0 },
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
+            templateId: resolvedTemplateId,
         };
 
         if (files && files.length > 0) pipeline.artifacts.initialFiles = files;
 
         this.pipelines.set(id, pipeline);
-        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🚀", `Pipeline créé: "${description}"`, "info");
+        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🚀", `Pipeline créé: "${description}" [Template: ${template?.emoji || "🌐"} ${template?.name || resolvedTemplateId}]`, "info");
         await savePipelinesState(this.pipelines);
 
         this.executePipeline(id).catch(err => {

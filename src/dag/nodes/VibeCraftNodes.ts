@@ -2,6 +2,13 @@ import { AgentNode, type AgentNodeOptions } from "./AgentNode.js";
 import type { NodeContext } from "../Node.js";
 import type { SkillContent } from "../../skills.js";
 import { tryParseJson, detectProjectType, getArchitectureGuidance, getScaffoldGuidance, getDockerfileTemplate } from "../../utils/project_helpers.js";
+import { getTemplateById, type ProjectTemplate } from "../../templates/registry.js";
+
+/** Helper: get pipeline's template or undefined */
+function getTemplate(ctx: NodeContext): ProjectTemplate | undefined {
+    const tid = ctx.pipeline.templateId;
+    return tid ? getTemplateById(tid) : undefined;
+}
 
 // --- ANALYSIS NODE ---
 export class AnalysisNode extends AgentNode {
@@ -20,16 +27,21 @@ export class AnalysisNode extends AgentNode {
     protected getPrompt(context: NodeContext): string {
         const research = context.pipeline.artifacts.research;
         const hasResearch = research && typeof research === "object" && !research.raw;
+        const template = getTemplate(context);
 
         let researchSection = "";
         if (hasResearch) {
-            researchSection = `\n\n📚 RÉSULTATS DE LA VEILLE TECHNOLOGIQUE :\n${JSON.stringify(research, null, 2)}\n\nUtilise ces découvertes pour proposer une stack MODERNE et INNOVANTE. Ne te limite pas aux choix classiques si des alternatives plus récentes et meilleures existent.`;
+            researchSection = `\n\n📚 RÉSULTATS DE LA VEILLE TECHNOLOGIQUE :\n${JSON.stringify(research, null, 2)}\n\nUtilise ces découvertes pour proposer une stack MODERNE et INNOVANTE.`;
         } else {
-            // Fallback: read from shared memory
             researchSection = `\n\nCommence par lire la mémoire partagée avec read_memory(key: "research_findings") pour récupérer les résultats de la veille technologique.`;
         }
 
-        return `Analyse la demande suivante :\n\n"${context.pipeline.description}"${researchSection}\n\nProduis un JSON strict contenant :\n1. "type": Le type de projet (static, spa, api, fullstack, python-worker, node-worker)\n2. "stack": { "frontend": "...", "backend": "..." } — La stack technique recommandée. PRIVILÉGIE les technologies modernes découvertes lors de la veille si elles sont pertinentes.\n3. "summary": Un résumé des fonctionnalités attendues\n4. "inspiration": Les sources web et projets similaires qui ont influencé tes choix (URLs, noms de projets)\n5. "innovativeFeatures": Des fonctionnalités bonus ou des approches innovantes découvertes pendant la veille que l'utilisateur n'a peut-être pas envisagées\n\n⚠️ NE TE LIMITE PAS à ce que l'utilisateur a demandé. Si la veille a révélé des approches ou features intéressantes, propose-les dans "innovativeFeatures".`;
+        // Use template-specific analysis prompt if available
+        const templateHint = template
+            ? `\n\n🎯 TYPE DE PROJET DÉTECTÉ: ${template.emoji} ${template.name}\nStack par défaut recommandée: ${JSON.stringify(template.defaultStack)}\n\nINSTRUCTIONS SPÉCIFIQUES:\n${template.prompts.analysis}`
+            : `\n\nProduis un JSON strict contenant :\n1. "type": Le type de projet\n2. "stack": { "frontend": "...", "backend": "..." }\n3. "summary": Résumé des fonctionnalités`;
+
+        return `Analyse la demande suivante :\n\n"${context.pipeline.description}"${researchSection}${templateHint}\n\n⚠️ NE TE LIMITE PAS à ce que l'utilisateur a demandé. Propose des features innovantes dans "innovativeFeatures".`;
     }
 
     protected getSystemPrompt(context: NodeContext): string {
@@ -68,7 +80,13 @@ export class ArchitectureNode extends AgentNode {
 
     protected getPrompt(context: NodeContext): string {
         const analysis = context.pipeline.artifacts.analysis;
-        return `Crée une architecture détaillée pour ce projet :\n\nAnalyse:\n${JSON.stringify(analysis, null, 2)}\n\nProduis un JSON structuré décrivant l'arborescence des fichiers.`;
+        const template = getTemplate(context);
+
+        const templateHint = template
+            ? `\n\n🎯 CONTRAINTES TEMPLATE (${template.name}):\n${template.prompts.architecture}`
+            : "";
+
+        return `Crée une architecture détaillée pour ce projet :\n\nAnalyse:\n${JSON.stringify(analysis, null, 2)}${templateHint}\n\nProduis un JSON structuré décrivant l'arborescence des fichiers.`;
     }
 
     protected getSystemPrompt(context: NodeContext): string {
@@ -107,10 +125,16 @@ export class ScaffoldNode extends AgentNode {
     protected getPrompt(context: NodeContext): string {
         const architecture = context.pipeline.artifacts.architecture;
         const p = context.pipeline;
-        let prompt = `Crée le scaffold initial de ce projet dans le répertoire courant.\n\nArchitecture globale: ${JSON.stringify(architecture, null, 2)}\n\nTypes de services: ${p.services.map((s: any) => s.type).join(', ')}\n\nN'oublie pas de créer le docker-compose.yml pour le développement LOCAL (avec les ports exposés sur 0.0.0.0, sans labels Traefik).`;
+        const template = getTemplate(context);
+
+        const templateHint = template
+            ? `\n\n🎯 INSTRUCTIONS SCAFFOLD (${template.name}):\n${template.prompts.scaffold}`
+            : `\nN'oublie pas de créer le docker-compose.yml pour le développement LOCAL.`;
+
+        let prompt = `Crée le scaffold initial de ce projet dans le répertoire courant.\n\nArchitecture globale: ${JSON.stringify(architecture, null, 2)}\n\nTypes de services: ${p.services.map((s: any) => s.type).join(', ')}${templateHint}`;
 
         if ((this as any).supervisorFeedback) {
-            prompt += `\n\n⚠️ ATTENTION: Lors de ta précédente tentative, le superviseur a REJETÉ ton travail et émis la critique suivante:\n\n${(this as any).supervisorFeedback}\n\nApplique ces corrections IMMÉDIATEMENT.`;
+            prompt += `\n\n⚠️ ATTENTION: Le superviseur a REJETÉ ton travail:\n${(this as any).supervisorFeedback}\n\nApplique ces corrections IMMÉDIATEMENT.`;
         }
         return prompt;
     }
@@ -274,7 +298,26 @@ export class DeployNode extends AgentNode {
 
     protected getPrompt(context: NodeContext): string {
         const p = context.pipeline;
+        const template = getTemplate(context);
+
+        // If template says no Traefik, use simplified deploy
+        if (template && !template.needsTraefik) {
+            return `Tu dois configurer le déploiement de ce projet.
+
+🎯 TYPE: ${template.emoji} ${template.name}
+${template.prompts.deploy}
+
+IMPORTANT: Ce type de projet n'a PAS besoin de Traefik.
+Crée un docker-compose.prod.yml simple avec:
+- restart: unless-stopped
+- env_file: .env
+- Volumes pour la persistance si nécessaire
+- PAS de labels Traefik
+- PAS de réseau web externe`;
+        }
+
         return `Tu dois configurer le déploiement de ce projet pour la production Hostinger via Traefik.
+${template ? `\n🎯 TYPE: ${template.emoji} ${template.name}\n${template.prompts.deploy}\n` : ''}
         
 Instructions:
 1. Ne modifie pas le \`docker-compose.yml\` existant qui est réservé au développement local.

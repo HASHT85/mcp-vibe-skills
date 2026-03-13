@@ -36,10 +36,10 @@ async function api<T = unknown>(path: string, options?: RequestInit): Promise<T>
 
 // ─── Pipeline (Orchestrator) ───
 
-export async function launchIdea(description: string, name?: string, model?: string, files?: { base64: string; type: string }[]) {
+export async function launchIdea(description: string, name?: string, model?: string, files?: { base64: string; type: string }[], templateId?: string) {
     return api<{ pipeline: Pipeline }>('/pipeline/launch', {
         method: 'POST',
-        body: JSON.stringify({ description, name, model, files }),
+        body: JSON.stringify({ description, name, model, files, templateId }),
     });
 }
 
@@ -333,10 +333,10 @@ export async function listChatSessions() {
     return api<{ sessions: ChatSession[] }>('/chat/sessions');
 }
 
-export async function launchFromChat(sessionId: string, name?: string) {
+export async function launchFromChat(sessionId: string, name?: string, templateId?: string) {
     return api<{ pipeline: Pipeline; brief: any }>(`/chat/sessions/${sessionId}/launch`, {
         method: 'POST',
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, templateId }),
     });
 }
 

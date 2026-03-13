@@ -75,4 +75,5 @@ export type Pipeline = {
     error?: string;
     dokploy?: { applicationId?: string; url?: string };
     projectType?: string;
+    templateId?: string;
 };

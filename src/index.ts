@@ -77,16 +77,29 @@ app.post("/pipeline/launch", async (req: Request, res: Response) => {
         const name = req.body?.name ? String(req.body.name).trim() : undefined;
         const model = req.body?.model ? String(req.body.model).trim() : undefined;
         const files = req.body?.files as { base64: string; type: string }[] | undefined;
+        const templateId = req.body?.templateId ? String(req.body.templateId).trim() : undefined;
 
         if (!description) {
             return res.status(400).json({ error: "missing_description" });
         }
 
-        const pipeline = await orchestrator.launchIdea(description, name, model, files);
+        const pipeline = await orchestrator.launchIdea(description, name, model, files, templateId);
         res.json({ pipeline });
     } catch (err: any) {
         console.error("Pipeline launch error:", err);
         res.status(500).json({ error: err.message });
+    }
+});
+
+// Get available project templates
+app.get("/templates", (_req: Request, res: Response) => {
+    const { TEMPLATE_REGISTRY, suggestTemplates } = require("./templates/registry.js");
+    const query = _req.query.q ? String(_req.query.q) : undefined;
+    if (query) {
+        const suggestions = suggestTemplates(query);
+        res.json({ templates: suggestions.map((t: any) => ({ id: t.id, name: t.name, emoji: t.emoji, description: t.description, defaultStack: t.defaultStack })) });
+    } else {
+        res.json({ templates: TEMPLATE_REGISTRY.map((t: any) => ({ id: t.id, name: t.name, emoji: t.emoji, description: t.description, defaultStack: t.defaultStack })) });
     }
 });
 
@@ -674,18 +687,18 @@ app.post("/chat/sessions/:id/launch", async (req: Request, res: Response) => {
         const brief = chatService.generateBrief(req.params.id);
         if (!brief) return res.status(404).json({ error: "session_not_found" });
 
-        // Allow frontend to override the auto-derived name
         const nameOverride = req.body?.name ? String(req.body.name).trim() : undefined;
+        const templateId = req.body?.templateId ? String(req.body.templateId).trim() : undefined;
 
         const pipeline = await orchestrator.launchIdea(
             brief.description,
             nameOverride || brief.name,
-            brief.model
+            brief.model,
+            undefined,
+            templateId
         );
 
-        // Auto-link the new pipeline to this chat session
         chatService.linkProject(req.params.id, pipeline.id);
-
         res.json({ pipeline, brief });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
