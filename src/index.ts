@@ -656,7 +656,23 @@ app.post("/chat/sessions/:id/message", async (req: Request, res: Response) => {
         const content = String(req.body?.content ?? "").trim();
         if (!content) return res.status(400).json({ error: "missing_content" });
 
-        const result = await chatService.sendMessage(req.params.id, content);
+        // Build pipeline context if a project is linked
+        const session = chatService.getSession(req.params.id);
+        let pipelineContext: { name: string; phase: string; error?: string; events: string[]; workspace?: string } | undefined;
+        if (session?.projectId) {
+            const pipeline = orchestrator.getPipeline(session.projectId);
+            if (pipeline) {
+                pipelineContext = {
+                    name: pipeline.name,
+                    phase: pipeline.phase,
+                    error: pipeline.error,
+                    events: (pipeline.events || []).slice(-15).map((e: any) => `${e.emoji} ${e.role}: ${e.action}`),
+                    workspace: pipeline.workspace,
+                };
+            }
+        }
+
+        const result = await chatService.sendMessage(req.params.id, content, pipelineContext);
         res.json(result);
     } catch (err: any) {
         console.error(`[Chat] Error in session ${req.params.id}:`, err.message || err);

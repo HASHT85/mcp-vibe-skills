@@ -197,7 +197,7 @@ export class ChatService {
         return result;
     }
 
-    async sendMessage(sessionId: string, content: string): Promise<{ reply: string; session: ChatSession }> {
+    async sendMessage(sessionId: string, content: string, pipelineContext?: { name: string; phase: string; error?: string; events: string[]; workspace?: string }): Promise<{ reply: string; session: ChatSession }> {
         const session = this.sessions.get(sessionId);
         if (!session) throw new Error("session_not_found");
 
@@ -207,6 +207,26 @@ export class ChatService {
             content,
             timestamp: new Date().toISOString(),
         });
+
+        // Build dynamic system prompt with project context
+        let systemPrompt = SYSTEM_PROMPT;
+        if (pipelineContext) {
+            systemPrompt += `\n\nPROJET LIÉ À CETTE CONVERSATION :
+- Nom : ${pipelineContext.name}
+- Status : ${pipelineContext.phase}
+${pipelineContext.error ? `- ❌ Erreur : ${pipelineContext.error}` : ''}
+
+ÉVÉNEMENTS RÉCENTS DU PIPELINE :
+${pipelineContext.events.slice(-10).join('\n')}
+
+INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
+- Tu as le contexte complet du projet ci-dessus
+- Comprends le problème décrit par l'utilisateur
+- Formule des instructions CLAIRES et PRÉCISES pour corriger le problème
+- Dis à l'utilisateur de cliquer sur **EXECUTE_MODIFY** pour appliquer les corrections
+- N'aie PAS besoin de demander les erreurs — tu les as déjà ci-dessus
+- Sois PROACTIF : propose directement la solution`;
+        }
 
         // Build messages for Claude API
         const apiMessages = session.messages.map(m => ({
@@ -218,7 +238,7 @@ export class ChatService {
             const response = await this.client.messages.create({
                 model: session.model,
                 max_tokens: 2048,
-                system: SYSTEM_PROMPT,
+                system: systemPrompt,
                 messages: apiMessages,
             });
 
