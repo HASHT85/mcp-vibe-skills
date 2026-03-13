@@ -504,7 +504,10 @@ RÈGLES ABSOLUES:
             delete p.artifacts.pendingModification;
 
             // ─── Rebuild and redeploy Docker container after modification ───
-            if (p.artifacts.deployed) {
+            // Deploy if: already deployed OR workspace has deploy files (initial deploy may have failed)
+            const hasDockerfile = await fs.access(path.join(p.workspace, "Dockerfile")).then(() => true).catch(() => false);
+            const hasComposeProdForDeploy = await fs.access(path.join(p.workspace, "docker-compose.prod.yml")).then(() => true).catch(() => false);
+            if (p.artifacts.deployed || hasDockerfile || hasComposeProdForDeploy) {
                 try {
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", "Reconstruction du container avec les modifications...", "info");
                     const { execSync } = await import("node:child_process");

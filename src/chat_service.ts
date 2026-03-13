@@ -225,7 +225,9 @@ INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
 - Formule des instructions CLAIRES et PRÉCISES pour corriger le problème
 - Dis à l'utilisateur de cliquer sur **EXECUTE_MODIFY** pour appliquer les corrections
 - N'aie PAS besoin de demander les erreurs — tu les as déjà ci-dessus
-- Sois PROACTIF : propose directement la solution`;
+- Sois PROACTIF : propose directement la solution
+- TOUT tourne sur le VPS Hostinger — ne dis JAMAIS "teste en local" ou "compile localement"
+- Quand EXECUTE_MODIFY est cliqué, un agent a accès au workspace et peut exécuter des commandes (npm, build, etc.) directement`;
         }
 
         // Build messages for Claude API
