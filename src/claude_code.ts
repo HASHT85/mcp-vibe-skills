@@ -860,7 +860,7 @@ export async function invokeModel(
     } else if (model.includes("gemini")) {
         // Google GenAI Adapter
         const { GoogleGenAI } = await import("@google/genai");
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY });
 
         const geminiTools = [{
             functionDeclarations: tools.map(t => ({
