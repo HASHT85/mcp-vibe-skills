@@ -717,12 +717,12 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
                     { id: "skills_enrichment", role: "Tech Lead", emoji: "📚", description: "Injection de best practices", systemPrompt: "", dependencies: ["analysis"] },
                     { id: "architecture", role: "Architect", emoji: "🏗️", description: "Conception architecturale", systemPrompt: "", dependencies: ["skills_enrichment"] },
                     { id: "scaffold", role: "DevOps", emoji: "🔨", description: "Génération de la base", systemPrompt: "", dependencies: ["architecture"] },
-                    { id: "supervisor_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", dependencies: ["scaffold"] },
+                    { id: "supervisor_for_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", dependencies: ["scaffold"] },
                 ];
 
                 dynamicNodes = dynamicTopology.map(t => ({
                     ...t,
-                    dependencies: t.dependencies.length > 0 ? t.dependencies : ["supervisor_scaffold"]
+                    dependencies: t.dependencies.length > 0 ? t.dependencies : ["supervisor_for_scaffold"]
                 }));
 
                 dynamicIds = dynamicNodes.map(d => d.id);
