@@ -391,24 +391,46 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
 
                     {/* Project Name & GitHub URL (only when no project linked = new project mode) */}
                     {!selectedPipelineId && (
-                        <div>
-                            <label className="text-[9px] text-slate-400 font-bold tracking-widest uppercase mb-1 block">PROJECT_ID (OPT.)</label>
-                            <input
-                                className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 outline-none focus:ring-0 rounded-none placeholder:text-v-accent/20 uppercase mb-3"
-                                value={projectName}
-                                onChange={(e) => setProjectName(e.target.value)}
-                                placeholder="AUTO_GENERATED"
-                                spellCheck="false"
-                            />
-                            <label className="text-[9px] text-slate-400 font-bold tracking-widest uppercase mb-1 block">GITHUB_URL (OPT.)</label>
-                            <input
-                                className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 outline-none focus:ring-0 rounded-none placeholder:text-v-accent/20"
-                                value={githubUrl}
-                                onChange={(e) => setGithubUrl(e.target.value)}
-                                placeholder="https://github.com/..."
-                                spellCheck="false"
-                            />
-                        </div>
+                            <div className="flex flex-col gap-3 mb-3">
+                                <div>
+                                    <label className="text-[9px] text-slate-400 font-bold tracking-widest uppercase mb-1 block">GITHUB_URL (OPT.)</label>
+                                    <input
+                                        className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 outline-none focus:ring-0 rounded-none placeholder:text-v-accent/20"
+                                        value={githubUrl}
+                                        onChange={(e) => {
+                                            const url = e.target.value;
+                                            setGithubUrl(url);
+                                            // Auto-derive project name if URL is provided
+                                            if (url) {
+                                                const match = url.match(/github\.com\/[^\/]+\/([^\/\.]+)/);
+                                                if (match && match[1]) {
+                                                    setProjectName(match[1].toLowerCase().replace(/[^a-z0-9-]/g, '-'));
+                                                }
+                                            } else {
+                                                setProjectName('');
+                                            }
+                                        }}
+                                        placeholder="https://github.com/owner/repo"
+                                        spellCheck="false"
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="text-[9px] text-slate-400 font-bold tracking-widest uppercase mb-1 flex items-center justify-between">
+                                        <span>PROJECT_ID (OPT.)</span>
+                                        {githubUrl && <span className="text-v-accent/60 text-[8px] italic">AUTO-LINKED FROM REPO</span>}
+                                    </label>
+                                    <input
+                                        className={`w-full brutalist-border text-xs p-2 outline-none focus:ring-0 rounded-none placeholder:text-v-accent/20 uppercase transition-all ${githubUrl ? 'bg-v-bg/50 text-v-accent/50 cursor-not-allowed border-v-accent/30' : 'bg-v-bg text-v-accent'}`}
+                                        value={projectName}
+                                        onChange={(e) => setProjectName(e.target.value)}
+                                        placeholder={githubUrl ? "AUTO-DERIVED" : "AUTO_GENERATED"}
+                                        spellCheck="false"
+                                        disabled={!!githubUrl}
+                                        title={githubUrl ? "Project ID is locked and derived from the GitHub repository URL" : ""}
+                                    />
+                                </div>
+                            </div>
                     )}
 
                     {/* 🔐 Secrets Vault (only in NEW_PROJECT mode) */}
