@@ -709,33 +709,7 @@ export async function gitPush(cwd: string, message: string, authRemoteUrl?: stri
         runNext();
     });
 }
-export async function gitClone(url: string, cwd: string): Promise<boolean> {
-    return new Promise((resolve) => {
-        const commands = [
-            ["git", ["clone", url, "."]],
-            ["git", ["config", "--global", "user.email", "veistcraft@auto.dev"]],
-            ["git", ["config", "--global", "user.name", "veistCraft"]],
-        ] as const;
 
-        let idx = 0;
-        function runNext() {
-            if (idx >= commands.length) { resolve(true); return; }
-            const [cmd, args] = commands[idx++];
-            console.log(`[Git] ${cmd} ${args.join(" ")}`);
-            const proc = spawn(cmd, [...args], {
-                cwd,
-                env: { ...process.env, HOME: "/root" },
-                stdio: ["pipe", "pipe", "pipe"],
-            });
-            proc.on("close", (code) => {
-                if (code !== 0 && idx === 1) resolve(false); // Fail if `clone` fails
-                else runNext();
-            });
-            proc.on("error", () => resolve(false));
-        }
-        runNext();
-    });
-}
 
 
 export async function gitInit(cwd: string, remoteUrl: string): Promise<boolean> {
