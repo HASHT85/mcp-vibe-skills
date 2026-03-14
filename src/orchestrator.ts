@@ -515,6 +515,7 @@ RÈGLES ABSOLUES:
                     const projectName = `vibe-${slug}`;
 
                     // Re-inject secrets into .env before rebuild (#10)
+                    // Vault secrets OVERWRITE existing keys (fixes placeholder bug)
                     try {
                         const secretsSvc = getSecretsService();
                         const envContent = secretsSvc.toEnvString(id);
@@ -523,14 +524,29 @@ RÈGLES ABSOLUES:
                             const hasExisting = await fs.access(envPath).then(() => true).catch(() => false);
                             if (hasExisting) {
                                 const existing = await fs.readFile(envPath, "utf-8");
-                                const existingKeys = new Set(existing.split("\n").map(l => l.split("=")[0]).filter(Boolean));
-                                const newLines = envContent.split("\n").filter(l => {
-                                    const key = l.split("=")[0];
-                                    return key && !existingKeys.has(key);
-                                });
-                                if (newLines.length > 0) {
-                                    await fs.appendFile(envPath, "\n" + newLines.join("\n") + "\n");
+                                const vaultKeys = new Map<string, string>();
+                                for (const line of envContent.split("\n").filter(Boolean)) {
+                                    const eqIdx = line.indexOf("=");
+                                    if (eqIdx > 0) vaultKeys.set(line.slice(0, eqIdx), line.slice(eqIdx + 1));
                                 }
+                                // Replace existing keys with vault values, keep non-vault keys
+                                const updatedLines = existing.split("\n").map(line => {
+                                    const eqIdx = line.indexOf("=");
+                                    if (eqIdx > 0) {
+                                        const key = line.slice(0, eqIdx);
+                                        if (vaultKeys.has(key)) {
+                                            const val = vaultKeys.get(key)!;
+                                            vaultKeys.delete(key);
+                                            return `${key}=${val}`;
+                                        }
+                                    }
+                                    return line;
+                                });
+                                // Append any vault keys not already in file
+                                for (const [key, val] of vaultKeys) {
+                                    updatedLines.push(`${key}=${val}`);
+                                }
+                                await fs.writeFile(envPath, updatedLines.join("\n"));
                             } else {
                                 await fs.writeFile(envPath, envContent);
                             }
@@ -804,24 +820,38 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
             }
 
             // ─── Inject Secrets into .env (never passed to AI) ───
+            // Vault secrets OVERWRITE existing keys (fixes placeholder bug)
             try {
                 const secretsSvc = getSecretsService();
                 const envContent = secretsSvc.toEnvString(id);
                 if (envContent) {
                     const envPath = path.join(p.workspace, ".env");
-                    // Append to existing .env or create new
                     const hasExisting = await fs.access(envPath).then(() => true).catch(() => false);
                     if (hasExisting) {
                         const existing = await fs.readFile(envPath, "utf-8");
-                        // Avoid duplicates: only add keys not already present
-                        const existingKeys = new Set(existing.split("\n").map(l => l.split("=")[0]).filter(Boolean));
-                        const newLines = envContent.split("\n").filter(l => {
-                            const key = l.split("=")[0];
-                            return key && !existingKeys.has(key);
-                        });
-                        if (newLines.length > 0) {
-                            await fs.appendFile(envPath, "\n# ─── Injected by Secrets Vault ───\n" + newLines.join("\n") + "\n");
+                        const vaultKeys = new Map<string, string>();
+                        for (const line of envContent.split("\n").filter(Boolean)) {
+                            const eqIdx = line.indexOf("=");
+                            if (eqIdx > 0) vaultKeys.set(line.slice(0, eqIdx), line.slice(eqIdx + 1));
                         }
+                        // Replace existing keys with vault values, keep non-vault keys
+                        const updatedLines = existing.split("\n").map(line => {
+                            const eqIdx = line.indexOf("=");
+                            if (eqIdx > 0) {
+                                const key = line.slice(0, eqIdx);
+                                if (vaultKeys.has(key)) {
+                                    const val = vaultKeys.get(key)!;
+                                    vaultKeys.delete(key);
+                                    return `${key}=${val}`;
+                                }
+                            }
+                            return line;
+                        });
+                        // Append any vault keys not already in file
+                        for (const [key, val] of vaultKeys) {
+                            updatedLines.push(`${key}=${val}`);
+                        }
+                        await fs.writeFile(envPath, updatedLines.join("\n"));
                     } else {
                         await fs.writeFile(envPath, "# ─── Injected by Secrets Vault ───\n" + envContent);
                     }
