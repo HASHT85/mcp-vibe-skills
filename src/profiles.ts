@@ -17,14 +17,14 @@ export const PROFILES: SkillProfile[] = [
     {
         id: "mcp-observability",
         name: "MCP + Observability",
-        description: "Base orchestrateur + events (Vibecraft cockpit).",
+        description: "Base orchestrateur + events (veistcraft cockpit).",
         skills: [
             {
                 owner: "Nearcyan",
-                repo: "vibecraft",
-                skill: "vibecraft",
-                href: "https://skills.sh/Nearcyan/vibecraft/vibecraft",
-                title: "Vibecraft integration",
+                repo: "veistcraft",
+                skill: "veistcraft",
+                href: "https://skills.sh/Nearcyan/veistcraft/veistcraft",
+                title: "veistcraft integration",
             },
         ],
     },

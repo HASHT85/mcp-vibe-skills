@@ -16,7 +16,7 @@ import { EventEmitter } from "node:events";
 import { runClaudeAgent, gitPush, gitClone, gitInit, agentEvents, type AgentAction } from "./claude_code.js";
 import { GraphManager } from "./dag/Graph.js";
 import type { NodeContext } from "./dag/Node.js";
-import { AnalysisNode, ArchitectureNode, ScaffoldNode, DevelopmentNode, QANode, DeployNode } from "./dag/nodes/VibeCraftNodes.js";
+import { AnalysisNode, ArchitectureNode, ScaffoldNode, DevelopmentNode, QANode, DeployNode } from "./dag/nodes/veistCraftNodes.js";
 import { SupervisorNode } from "./dag/nodes/SupervisorNode.js";
 import { SkillsEnrichmentNode } from "./dag/nodes/SkillsEnrichmentNode.js";
 import { ResearchNode } from "./dag/nodes/ResearchNode.js";
@@ -154,7 +154,7 @@ export class Orchestrator extends EventEmitter {
         if (p && p.artifacts.deployed) {
             try {
                 const { execSync } = await import("node:child_process");
-                const pName = `vibe-${slugify(p.name)}`;
+                const pName = `veist-${slugify(p.name)}`;
                 // Try multi-container first
                 const composeProd = path.join(p.workspace, "docker-compose.prod.yml");
                 const composeDeploy = path.join(p.workspace, "docker-compose.deploy.yml");
@@ -512,7 +512,7 @@ RÈGLES ABSOLUES:
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", "Reconstruction du container avec les modifications...", "info");
                     const { execSync } = await import("node:child_process");
                     const slug = slugify(p.name);
-                    const projectName = `vibe-${slug}`;
+                    const projectName = `veist-${slug}`;
 
                     // Re-inject secrets into .env before rebuild (#10)
                     // Vault secrets OVERWRITE existing keys (fixes placeholder bug)
@@ -573,7 +573,7 @@ RÈGLES ABSOLUES:
                         });
                     } else {
                         // Single-container rebuild (legacy)
-                        const imageName = `vibe-${slug}:latest`;
+                        const imageName = `veist-${slug}:latest`;
                         const rootDockerfile = path.join(p.workspace, "Dockerfile");
                         const rootDockerfileProd = path.join(p.workspace, "Dockerfile.prod");
                         let dockerfilePath = rootDockerfile;
@@ -953,7 +953,7 @@ Output ONLY the raw markdown content of the README, nothing else.`,
 
                     const { execSync } = await import("node:child_process");
                     const slug = slugify(p.name);
-                    const projectName = `vibe-${slug}`;
+                    const projectName = `veist-${slug}`;
                     const hostDomain = `${id}.hach.dev`;
 
                     // Ensure 'web' network exists (for Traefik)
@@ -1027,7 +1027,7 @@ Output ONLY the raw markdown content of the README, nothing else.`,
                         p.artifacts.deployedUrl = `https://${hostDomain}`;
                     } else {
                     // ─── Single-Container Path (legacy) ───
-                    const imageName = `vibe-${slug}:latest`;
+                    const imageName = `veist-${slug}:latest`;
                     const containerName = `${projectName}-app`;
                     let dockerfilePath = "";
                     let buildContext = p.workspace;

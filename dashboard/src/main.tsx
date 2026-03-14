@@ -18,7 +18,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
           <h1 style={{ fontSize: 24, marginBottom: 20 }}>[ SYSTEM_CRASH ]</h1>
           <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, color: '#FF6A3D' }}>{this.state.error}</pre>
           <button
-            onClick={() => { localStorage.removeItem('vibe_auth'); window.location.reload(); }}
+            onClick={() => { localStorage.removeItem('veist_auth'); window.location.reload(); }}
             style={{ marginTop: 20, background: '#D7FF2F', color: '#0B0F14', padding: '12px 24px', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'monospace', textTransform: 'uppercase' }}
           >
             CLEAR_AUTH &amp; RELOAD

@@ -56,7 +56,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       onLogin();
     } catch (err: any) {
       // Clear bad credentials
-      localStorage.removeItem('vibe_auth');
+      localStorage.removeItem('veist_auth');
       setError('SECURITY BREACH DETECTED: ACCESS DENIED');
     } finally {
       setLoading(false);

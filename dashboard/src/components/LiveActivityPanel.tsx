@@ -21,7 +21,7 @@ export function LiveActivityPanel({ events }: { events: PipelineEvent[] }) {
                 )}
                 
                 {events.map((ev) => {
-                    // Different border colors based on the role/event for vibe
+                    // Different border colors based on the role/event for veist
                     const borderColorClass = ev.agentRole === 'developer' || ev.agentRole === 'architect' ? 'border-primary/50' : 'border-accent/30';
                     const textColorClass = ev.agentRole === 'developer' || ev.agentRole === 'architect' ? 'text-primary' : 'text-accent';
 

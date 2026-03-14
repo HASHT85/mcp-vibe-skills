@@ -21,7 +21,7 @@ function titleFromSlug(slug: string) {
 export async function fetchSkillDetail(owner: string, repo: string, skill: string): Promise<SkillDetail> {
     const href = `https://skills.sh/${owner}/${repo}/${skill}`;
 
-    const res = await fetch(href, { headers: { "user-agent": "mcp-vibe-skills/1.0" } });
+    const res = await fetch(href, { headers: { "user-agent": "mcp-veist-skills/1.0" } });
     if (!res.ok) throw new Error(`skills.sh http ${res.status}`);
 
     const html = await res.text();

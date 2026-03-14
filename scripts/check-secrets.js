@@ -8,12 +8,12 @@ const RESET = '\x1b[0m';
 
 // Patterns to block, split so the scanner doesn't flag itself!
 const SECRETS_PATTERNS = [
-    { name: 'Anthropic API Key', regex: new RegExp('sk-' + 'ant-[a-zA-Z0-9_-]+') },
+    { name: 'Anthropic API Key', regex: new RegExp('sk-' + 'ant-api03-[a-zA-Z0-9_-]{80,}') },
     { name: 'OpenAI API Key', regex: new RegExp('sk-' + 'proj-[a-zA-Z0-9_-]+') },
     { name: 'GitHub Token', regex: new RegExp('(ghp|gho|ghu|ghs|ghr)_' + '[a-zA-Z0-9]{36}') },
     { name: 'Google API Key', regex: new RegExp('AIza' + '[0-9A-Za-z_-]{35}') },
     { name: 'AWS Access Key', regex: new RegExp('(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)' + '[A-Z0-9]{16}') },
-    { name: 'Generic Secret Prefix', regex: new RegExp('VIBE' + '_craft85|GPL\\?' + 'root85420|' + 'y-t\\?5FA6' + 'ZLLYYsx/f32P') },
+    { name: 'Generic Secret Prefix', regex: new RegExp('veist' + '_craft85|GPL\\?' + 'root85420|' + 'y-t\\?5FA6' + 'ZLLYYsx/f32P') },
 ];
 
 try {

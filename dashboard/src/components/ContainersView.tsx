@@ -3,9 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { listContainers, stopContainer, startContainer, restartContainer, deleteContainer, getContainerLogs } from '../api/client';
 import type { Container, Pipeline } from '../api/client';
 
-// Extract pipeline ID from container name (format: vibe-{pipelineId}-app)
+// Extract pipeline ID from container name (format: veist-{pipelineId}-app)
 function getPipelineForContainer(name: string, pipelines: Pipeline[]): Pipeline | undefined {
-    const match = name.match(/^vibe-([a-f0-9]+)-/);
+    const match = name.match(/^veist-([a-f0-9]+)-/);
     if (!match) return undefined;
     const pipelineId = match[1];
     return pipelines.find(p => p.id && p.id.startsWith(pipelineId));

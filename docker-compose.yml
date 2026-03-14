@@ -4,7 +4,7 @@ services:
       context: .
       args:
         CACHE_BUSTER: "20260313-v3"
-    container_name: mcp-vibe-skills
+    container_name: mcp-veist-skills
     restart: unless-stopped
     environment:
       - PORT=8080
@@ -16,10 +16,10 @@ services:
       - ADMIN_PASS=${ADMIN_PASS}
       - WORKSPACE_ROOT=/workspace
       - PIPELINES_STORE=/data/pipelines.json
-      - HOST_WORKSPACE_PATH=${HOST_WORKSPACE_PATH:-/opt/vibecraft/workspace}
+      - HOST_WORKSPACE_PATH=${HOST_WORKSPACE_PATH:-/opt/veistcraft/workspace}
     volumes:
-      - /opt/vibecraft/data:/data
-      - ${HOST_WORKSPACE_PATH:-/opt/vibecraft/workspace}:/workspace
+      - /opt/veistcraft/data:/data
+      - ${HOST_WORKSPACE_PATH:-/opt/veistcraft/workspace}:/workspace
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - web
@@ -41,7 +41,7 @@ services:
       context: ./dashboard
       args:
         CACHE_BUSTER: "20260314-v1"
-    container_name: mcp-vibe-dashboard
+    container_name: mcp-veist-dashboard
     restart: unless-stopped
     networks:
       - web

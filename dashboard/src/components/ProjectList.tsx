@@ -8,7 +8,7 @@ interface ProjectListProps {
     onRetry?: (id: string) => void;
 }
 
-const HIDDEN_PROJECTS = ['mcp-vibe-skills', 'mcp-vibe-dashboard'];
+const HIDDEN_PROJECTS = ['mcp-veist-skills', 'mcp-veist-dashboard'];
 
 export function ProjectList({ pipelines, onSelect, onRetry }: ProjectListProps) {
     const filtered = pipelines.filter(p => !HIDDEN_PROJECTS.some(h => (p.name || '').toLowerCase().includes(h) || (p.id || '').toLowerCase().includes(h)));

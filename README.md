@@ -1,7 +1,7 @@
-# mcp-vibe-skills
+# mcp-veist-skills
 
 Orchestrateur MVP exposant **API HTTP** + **MCP stdio** + **events persistés**.
-Conçu pour s'intégrer avec [Vibecraft](https://github.com/Nearcyan/vibecraft) et [skills.sh](https://skills.sh).
+Conçu pour s'intégrer avec [veistcraft](https://github.com/Nearcyan/veistcraft) et [skills.sh](https://skills.sh).
 
 ---
 
@@ -153,11 +153,11 @@ type SkillRef = {
 
 ---
 
-## Vibecraft Integration
+## veistcraft Integration
 
-Vibecraft ne fait que visualiser les events. Ce serveur produit les events structurés que Vibecraft consomme via `GET /events`.
+veistcraft ne fait que visualiser les events. Ce serveur produit les events structurés que veistcraft consomme via `GET /events`.
 
-Point de contact: `GET /events?limit=200` retourne les derniers events pour le dashboard Vibecraft.
+Point de contact: `GET /events?limit=200` retourne les derniers events pour le dashboard veistcraft.
 
 ---
 

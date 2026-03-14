@@ -3,7 +3,7 @@ const API_BASE = import.meta.env.DEV ? '/api' : 'https://api.veist.hach.dev';
 // ─── Auth ───
 
 const getAuthHeaders = (): Record<string, string> => {
-    const auth = localStorage.getItem('vibe_auth');
+    const auth = localStorage.getItem('veist_auth');
     if (auth) {
         return { 'Authorization': `Basic ${btoa(auth)}` };
     }
@@ -11,11 +11,11 @@ const getAuthHeaders = (): Record<string, string> => {
 };
 
 export function setAuth(user: string, pass: string) {
-    localStorage.setItem('vibe_auth', `${user}:${pass}`);
+    localStorage.setItem('veist_auth', `${user}:${pass}`);
 }
 
 export function checkAuth() {
-    return !!localStorage.getItem('vibe_auth');
+    return !!localStorage.getItem('veist_auth');
 }
 
 // ─── API Fetch Helper ───
@@ -74,7 +74,7 @@ export async function deletePipeline(id: string) {
 // ─── SSE (Server-Sent Events) ───
 
 export function connectPipelineSSE(id: string, onEvent: (event: PipelineEvent) => void): () => void {
-    const auth = localStorage.getItem('vibe_auth');
+    const auth = localStorage.getItem('veist_auth');
     const url = `${API_BASE}/pipeline/${id}/events${auth ? `?auth=${btoa(auth)}` : ''}`;
     const es = new EventSource(url);
 
@@ -103,7 +103,7 @@ export function connectAllSSE(onEvent: (event: PipelineEvent) => void): () => vo
 
     function connect() {
         if (closed) return;
-        const auth = localStorage.getItem('vibe_auth');
+        const auth = localStorage.getItem('veist_auth');
         const url = `${API_BASE}/pipeline/events/all${auth ? `?auth=${btoa(auth)}` : ''}`;
         es = new EventSource(url);
 

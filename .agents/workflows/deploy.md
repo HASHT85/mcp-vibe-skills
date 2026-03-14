@@ -15,18 +15,18 @@ git add -A; git commit -m "deploy: <description>"; git push
 ```
 
 3. **Deploy via Hostinger MCP** — use `createNewProjectV1` with:
-   - `content`: `https://github.com/HASHT85/mcp-vibe-skills`
-   - `project_name`: `mcp-vibe-skills`
+   - `content`: `https://github.com/HASHT85/mcp-veist-skills`
+   - `project_name`: `mcp-veist-skills`
    - `virtualMachineId`: `1287719`
-   - `environment`: Read from the local `.env` file at `c:\Projet\mcp-vibe-skills\mcp-vibe-skills\.env`
+   - `environment`: Read from the local `.env` file at `c:\Projet\mcp-veist-skills\mcp-veist-skills\.env`
    
    > This replaces the existing project config but **preserves volumes** because it runs `docker compose up -d --build` under the hood.
 
 4. **Wait ~60s** then check action status with `getActionDetailsV1`
 
 5. **Verify** containers are running with `getProjectContainersV1`:
-   - `mcp-vibe-dashboard` should be `running` (new container ID)
-   - `mcp-vibe-skills` should be `running` + `healthy` (new container ID)
+   - `mcp-veist-dashboard` should be `running` (new container ID)
+   - `mcp-veist-skills` should be `running` + `healthy` (new container ID)
 
 6. **If containers are empty `[]`** — the build failed. Check `getProjectLogsV1` for the `[build]` service entries to see the error.
 
@@ -42,7 +42,7 @@ If `createNewProjectV1` reuses old cached Docker images (same container IDs, old
 
 ## Environment Variables
 
-Always read from `c:\Projet\mcp-vibe-skills\mcp-vibe-skills\.env` and pass ALL variables:
+Always read from `c:\Projet\mcp-veist-skills\mcp-veist-skills\.env` and pass ALL variables:
 - `ANTHROPIC_API_KEY`
 - `OPENAI_API_KEY`  
 - `GOOGLE_API_KEY`
@@ -50,16 +50,16 @@ Always read from `c:\Projet\mcp-vibe-skills\mcp-vibe-skills\.env` and pass ALL v
 - `GITHUB_OWNER`
 - `ADMIN_USER`
 - `ADMIN_PASS`
-- `HOST_WORKSPACE_PATH=/opt/vibecraft/workspace`
+- `HOST_WORKSPACE_PATH=/opt/veistcraft/workspace`
 
 ## Key Facts
 - **VM ID**: `1287719`
-- **Project name**: `mcp-vibe-skills`
+- **Project name**: `mcp-veist-skills`
 - **Dashboard URL**: `https://veist.hach.dev`
 - **API URL**: `https://api.veist.hach.dev`
 - **Compose file**: `docker-compose.yml` (production file)
 - **Volumes to preserve**: `orchestrator-data` (pipelines.json, store.json, chat_sessions.json)
-- **Host workspace**: `/opt/vibecraft/workspace` (host-mounted, survives project recreation)
+- **Host workspace**: `/opt/veistcraft/workspace` (host-mounted, survives project recreation)
 
 ## Docker Build Gotchas (Fixed)
 - **PostCSS config MUST be CJS** (`postcss.config.cjs` with `module.exports`), NOT ESM — breaks in Docker Alpine with `"type": "module"`

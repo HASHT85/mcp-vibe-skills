@@ -24,7 +24,7 @@ Use `getProjectContentsV1` to capture current env vars BEFORE redeploying:
 ```
 mcp_hostinger-mcp_VPS_getProjectContentsV1(
   virtualMachineId: 1287719,
-  projectName: "mcp-vibe-skills"
+  projectName: "mcp-veist-skills"
 )
 ```
 Extract the `environment` field from the response. It contains all env vars as a newline-separated string.
@@ -34,8 +34,8 @@ Use `createNewProjectV1` with the captured `environment` string:
 ```
 mcp_hostinger-mcp_VPS_createNewProjectV1(
   virtualMachineId: 1287719,
-  project_name: "mcp-vibe-skills",
-  content: "https://github.com/HASHT85/mcp-vibe-skills",
+  project_name: "mcp-veist-skills",
+  content: "https://github.com/HASHT85/mcp-veist-skills",
   environment: "<paste the environment string from step 2>"
 )
 ```
@@ -59,10 +59,10 @@ Wait until `state` = `success`.
 ```
 mcp_hostinger-mcp_VPS_getProjectContainersV1(
   virtualMachineId: 1287719,
-  projectName: "mcp-vibe-skills"
+  projectName: "mcp-veist-skills"
 )
 ```
-Both `mcp-vibe-skills` and `mcp-vibe-dashboard` should be `running` + `healthy`.
+Both `mcp-veist-skills` and `mcp-veist-dashboard` should be `running` + `healthy`.
 
 > [!IMPORTANT]
 > ALWAYS read env vars with `getProjectContentsV1` BEFORE calling `createNewProjectV1`.

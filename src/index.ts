@@ -63,7 +63,7 @@ const projectsStore = new ProjectsStore(storePath);
 const orchestrator = getOrchestrator();
 
 // Health
-app.get("/", (_req: Request, res: Response) => res.json({ service: "mcp-vibe-skills", status: "running" }));
+app.get("/", (_req: Request, res: Response) => res.json({ service: "mcp-veist-skills", status: "running" }));
 app.get("/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
 // ─────────────────────────────────────
@@ -213,7 +213,7 @@ app.delete("/pipeline/:id", async (req: Request, res: Response) => {
         // 2. Delete Docker container + image (silently ignore errors)
         try {
             const { execSync } = await import("node:child_process");
-            const containerName = pipeline.name ? `vibe-${slugify(pipeline.name)}-app` : `vibe-${req.params.id}-app`;
+            const containerName = pipeline.name ? `veist-${slugify(pipeline.name)}-app` : `veist-${req.params.id}-app`;
             let imageName = "";
             try {
                 imageName = execSync(
@@ -482,9 +482,9 @@ app.delete("/agents/:id/skills", async (req: Request, res: Response) => {
 app.get("/containers", async (_req: Request, res: Response) => {
     try {
         const { execSync } = await import("node:child_process");
-        // List containers by name OR by compose project label (vibe- prefix)
+        // List containers by name OR by compose project label (veist- prefix)
         const rawByName = execSync(
-            `docker ps -a --filter "name=vibe-" --format "{{json .}}"`,
+            `docker ps -a --filter "name=veist-" --format "{{json .}}"`,
             { encoding: "utf-8", timeout: 10000 }
         ).trim();
         const rawByLabel = execSync(
@@ -492,18 +492,18 @@ app.get("/containers", async (_req: Request, res: Response) => {
             { encoding: "utf-8", timeout: 10000 }
         ).trim();
 
-        // Merge and deduplicate by ID, only keep vibe-related containers
+        // Merge and deduplicate by ID, only keep veist-related containers
         const seen = new Set<string>();
         const allLines: string[] = [];
         for (const line of [...rawByName.split("\n"), ...rawByLabel.split("\n")]) {
             if (!line) continue;
             try {
                 const parsed = JSON.parse(line);
-                // Only include vibe- containers or vibe- compose projects
+                // Only include veist- containers or veist- compose projects
                 const labels = parsed.Labels || "";
-                const isVibeProject = labels.includes("com.docker.compose.project=vibe-");
-                const isVibeName = (parsed.Names || "").startsWith("vibe-");
-                if (!isVibeName && !isVibeProject) continue;
+                const isveistProject = labels.includes("com.docker.compose.project=veist-");
+                const isveistName = (parsed.Names || "").startsWith("veist-");
+                if (!isveistName && !isveistProject) continue;
                 if (!seen.has(parsed.ID)) {
                     seen.add(parsed.ID);
                     allLines.push(line);
@@ -528,10 +528,10 @@ app.get("/containers", async (_req: Request, res: Response) => {
                     // Derive URL: match pipeline by container name
                     url: (() => {
                         const pipelines = orchestrator.listPipelines();
-                        const match = pipelines.find(p => p.name && `vibe-${slugify(p.name)}-app` === c.Names);
+                        const match = pipelines.find(p => p.name && `veist-${slugify(p.name)}-app` === c.Names);
                         if (match) return match.artifacts?.deployedUrl || `https://${match.id}.hach.dev`;
                         // Fallback: extract hash from old-style name
-                        const m = c.Names.match(/^vibe-([a-f0-9]+)/);
+                        const m = c.Names.match(/^veist-([a-f0-9]+)/);
                         return m ? `https://${m[1]}.hach.dev` : null;
                     })(),
                 };
