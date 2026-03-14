@@ -1,4 +1,4 @@
-# mcp-veist-skills
+# veist
 
 Orchestrateur MVP exposant **API HTTP** + **MCP stdio** + **events persistés**.
 Conçu pour s'intégrer avec [veistcraft](https://github.com/Nearcyan/veistcraft) et [skills.sh](https://skills.sh).

@@ -36,7 +36,7 @@ function titleFromSlug(slug: string) {
 
 async function fetchListPage(url: string, limit = 20): Promise<SkillItem[]> {
     const res = await fetch(url, {
-        headers: { "user-agent": "mcp-veist-skills/1.0" }
+        headers: { "user-agent": "veist/1.0" }
     });
     if (!res.ok) throw new Error(`skills.sh http ${res.status}`);
     const html = await res.text();

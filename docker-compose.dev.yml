@@ -4,7 +4,7 @@
 services:
   orchestrator:
     build: .
-    container_name: mcp-veist-skills
+    container_name: veist
     restart: unless-stopped
     ports:
       - "8080:8080"

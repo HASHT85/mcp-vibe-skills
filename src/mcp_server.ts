@@ -11,7 +11,7 @@ import { TEMPLATES } from "./templates.js";
 
 export function buildMcpServer() {
     const server = new McpServer({
-        name: "mcp-veist-skills",
+        name: "veist",
         version: "1.0.0",
     });
 

@@ -4,7 +4,7 @@ services:
       context: .
       args:
         CACHE_BUSTER: "20260313-v3"
-    container_name: mcp-veist-skills
+    container_name: veist
     restart: unless-stopped
     environment:
       - PORT=8080
@@ -41,7 +41,7 @@ services:
       context: ./dashboard
       args:
         CACHE_BUSTER: "20260314-v1"
-    container_name: mcp-veist-dashboard
+    container_name: veist-dashboard
     restart: unless-stopped
     networks:
       - web

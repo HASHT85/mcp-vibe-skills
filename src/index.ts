@@ -63,7 +63,7 @@ const projectsStore = new ProjectsStore(storePath);
 const orchestrator = getOrchestrator();
 
 // Health
-app.get("/", (_req: Request, res: Response) => res.json({ service: "mcp-veist-skills", status: "running" }));
+app.get("/", (_req: Request, res: Response) => res.json({ service: "veist", status: "running" }));
 app.get("/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
 // ─────────────────────────────────────

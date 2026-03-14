@@ -15,18 +15,18 @@ git add -A; git commit -m "deploy: <description>"; git push
 ```
 
 3. **Deploy via Hostinger MCP** — use `createNewProjectV1` with:
-   - `content`: `https://github.com/HASHT85/mcp-veist-skills`
-   - `project_name`: `mcp-veist-skills`
+   - `content`: `https://github.com/HASHT85/veist`
+   - `project_name`: `veist`
    - `virtualMachineId`: `1287719`
-   - `environment`: Read from the local `.env` file at `c:\Projet\mcp-veist-skills\mcp-veist-skills\.env`
+   - `environment`: Read from the local `.env` file at `c:\Projet\veist\veist\.env`
    
    > This replaces the existing project config but **preserves volumes** because it runs `docker compose up -d --build` under the hood.
 
 4. **Wait ~60s** then check action status with `getActionDetailsV1`
 
 5. **Verify** containers are running with `getProjectContainersV1`:
-   - `mcp-veist-dashboard` should be `running` (new container ID)
-   - `mcp-veist-skills` should be `running` + `healthy` (new container ID)
+   - `veist-dashboard` should be `running` (new container ID)
+   - `veist` should be `running` + `healthy` (new container ID)
 
 6. **If containers are empty `[]`** — the build failed. Check `getProjectLogsV1` for the `[build]` service entries to see the error.
 
@@ -42,7 +42,7 @@ If `createNewProjectV1` reuses old cached Docker images (same container IDs, old
 
 ## Environment Variables
 
-Always read from `c:\Projet\mcp-veist-skills\mcp-veist-skills\.env` and pass ALL variables:
+Always read from `c:\Projet\veist\veist\.env` and pass ALL variables:
 - `ANTHROPIC_API_KEY`
 - `OPENAI_API_KEY`  
 - `GOOGLE_API_KEY`
@@ -54,7 +54,7 @@ Always read from `c:\Projet\mcp-veist-skills\mcp-veist-skills\.env` and pass ALL
 
 ## Key Facts
 - **VM ID**: `1287719`
-- **Project name**: `mcp-veist-skills`
+- **Project name**: `veist`
 - **Dashboard URL**: `https://veist.hach.dev`
 - **API URL**: `https://api.veist.hach.dev`
 - **Compose file**: `docker-compose.yml` (production file)
