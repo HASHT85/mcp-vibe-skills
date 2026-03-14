@@ -3,13 +3,14 @@ services:
     build:
       context: .
       args:
-        CACHE_BUSTER: "20260315-v1"
+        CACHE_BUSTER: "20260315-v3"
     container_name: veist
     restart: unless-stopped
     environment:
       - PORT=8080
       - STORE_PATH=/data/store.json
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - GITHUB_OWNER=${GITHUB_OWNER}
       - ADMIN_USER=${ADMIN_USER}
@@ -40,7 +41,7 @@ services:
     build:
       context: ./dashboard
       args:
-        CACHE_BUSTER: "20260315-v2"
+        CACHE_BUSTER: "20260315-v3"
     container_name: veist-dashboard
     restart: unless-stopped
     networks:

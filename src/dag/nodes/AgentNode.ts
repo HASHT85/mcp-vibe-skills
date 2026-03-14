@@ -52,7 +52,7 @@ export abstract class AgentNode extends DagNode {
         }
 
         context.updateAgentStatus(this.role, "done", "Terminé");
-        context.addEvent(this.role, this.emoji, `✓ Terminé`, "success");
+        context.addEvent(this.role, this.emoji, `✓ Terminé (Tokens: ${result.inputTokens} in / ${result.outputTokens} out)`, "success");
 
         // Keep track of tokens
         if (!context.pipeline.tokenUsage) {

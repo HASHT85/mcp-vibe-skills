@@ -756,10 +756,16 @@ export async function invokeModel(
 }> {
     // Pass the exact model string from the UI directly to the underlying proxy/client
 
-    if (model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3")) {
-        // OpenAI Adapter
+    if (model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3") || model.startsWith("openrouter/")) {
+        // OpenAI / OpenRouter Adapter
+        const isOpenRouter = model.startsWith("openrouter/");
+        const actualModel = isOpenRouter ? model.replace("openrouter/", "") : model;
+
         const OpenAI = (await import("openai")).default;
-        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const client = new OpenAI({ 
+            apiKey: isOpenRouter ? process.env.OPENROUTER_API_KEY : process.env.OPENAI_API_KEY,
+            baseURL: isOpenRouter ? "https://openrouter.ai/api/v1" : undefined
+        });
 
         // Convert tools
         const openAiTools = tools.map((t: any) => ({
@@ -825,7 +831,7 @@ export async function invokeModel(
         if (abortSignal) requestOptions.signal = abortSignal;
 
         const response = await client.chat.completions.create({
-            model: model,
+            model: actualModel,
             messages: openAiMessages as any,
             tools: openAiTools as any,
         }, requestOptions);

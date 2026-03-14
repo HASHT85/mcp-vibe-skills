@@ -48,6 +48,8 @@ export type NodeTopology = {
     description: string;
     systemPrompt: string;
     dependencies: string[];
+    provider?: "anthropic" | "openrouter";
+    model?: string;
 };
 
 export type Pipeline = {

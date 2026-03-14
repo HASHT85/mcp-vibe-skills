@@ -710,9 +710,15 @@ Output MUST be a strict JSON array of objects:
     "emoji": "🎨",
     "description": "What this agent does",
     "systemPrompt": "You are a ... specialized in ...",
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet-20241022",
     "dependencies": []
   }
 ]
+
+IMPORTANT MODEL STRATEGY:
+- For complex software engineering, complex debugging or structural decisions, YOU MUST use provider: "anthropic" and model: "claude-3-5-sonnet-20241022".
+- For simpler tasks like translations, content generation, basic code reviews, or simple scripting, use provider: "openrouter" and a fast/cheap model like "meta-llama/llama-3.3-70b-instruct" or "google/gemini-2.5-flash".
 
 IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\`\`json.`;
 
@@ -745,12 +751,12 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
                 }
 
                 const baseTopology: import("./types.js").NodeTopology[] = [
-                    { id: "research", role: "Researcher", emoji: "🌐", description: "Veille technologique", systemPrompt: "", dependencies: [] },
-                    { id: "analysis", role: "Analyst", emoji: "🔎", description: "Analyse des besoins", systemPrompt: "", dependencies: ["research"] },
-                    { id: "skills_enrichment", role: "Tech Lead", emoji: "📚", description: "Injection de best practices", systemPrompt: "", dependencies: ["analysis"] },
-                    { id: "architecture", role: "Architect", emoji: "🏗️", description: "Conception architecturale", systemPrompt: "", dependencies: ["skills_enrichment"] },
-                    { id: "scaffold", role: "DevOps", emoji: "🔨", description: "Génération de la base", systemPrompt: "", dependencies: ["architecture"] },
-                    { id: "supervisor_for_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", dependencies: ["scaffold"] },
+                    { id: "research", role: "Researcher", emoji: "🌐", description: "Veille technologique", systemPrompt: "", provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct", dependencies: [] },
+                    { id: "analysis", role: "Analyst", emoji: "🔎", description: "Analyse des besoins", systemPrompt: "", provider: "anthropic", model: "claude-3-5-sonnet-20241022", dependencies: ["research"] },
+                    { id: "skills_enrichment", role: "Tech Lead", emoji: "📚", description: "Injection de best practices", systemPrompt: "", provider: "anthropic", model: "claude-3-5-sonnet-20241022", dependencies: ["analysis"] },
+                    { id: "architecture", role: "Architect", emoji: "🏗️", description: "Conception architecturale", systemPrompt: "", provider: "anthropic", model: "claude-3-5-sonnet-20241022", dependencies: ["skills_enrichment"] },
+                    { id: "scaffold", role: "DevOps", emoji: "🔨", description: "Génération de la base", systemPrompt: "", provider: "anthropic", model: "claude-3-5-sonnet-20241022", dependencies: ["architecture"] },
+                    { id: "supervisor_for_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", provider: "openrouter", model: "google/gemini-2.5-flash", dependencies: ["scaffold"] },
                 ];
 
                 dynamicNodes = dynamicTopology.map(t => ({
@@ -760,8 +766,8 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
 
                 dynamicIds = dynamicNodes.map(d => d.id);
                 const endTopology: import("./types.js").NodeTopology[] = [
-                    { id: "qa", role: "QA Engineer", emoji: "🧪", description: "Tests finaux", systemPrompt: "", dependencies: dynamicIds },
-                    { id: "deploy", role: "Release Manager", emoji: "🚀", description: "Déploiement", systemPrompt: "", dependencies: ["qa"] }
+                    { id: "qa", role: "QA Engineer", emoji: "🧪", description: "Tests finaux", systemPrompt: "", provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct", dependencies: dynamicIds },
+                    { id: "deploy", role: "Release Manager", emoji: "🚀", description: "Déploiement", systemPrompt: "", provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct", dependencies: ["qa"] }
                 ];
 
                 p.topology = [...baseTopology, ...dynamicNodes, ...endTopology];
