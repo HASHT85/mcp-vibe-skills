@@ -18,6 +18,7 @@ import { GraphManager } from "./dag/Graph.js";
 import type { NodeContext } from "./dag/Node.js";
 import { AnalysisNode, ArchitectureNode, ScaffoldNode, DevelopmentNode, QANode, DeployNode } from "./dag/nodes/veistCraftNodes.js";
 import { SupervisorNode } from "./dag/nodes/SupervisorNode.js";
+import { fetchOpenRouterModels } from "./openrouter_models.js";
 import { SkillsEnrichmentNode } from "./dag/nodes/SkillsEnrichmentNode.js";
 import { ResearchNode } from "./dag/nodes/ResearchNode.js";
 import { createRepo } from "./github_api.js";
@@ -696,6 +697,10 @@ RÈGLES ABSOLUES:
                 // Fresh run: use planner to generate dynamic topology
                 addPipelineEvent(this, this.pipelines, id, "Planner", "🛸", "Analyse de la demande: Création de l'essaim d'agents...", "info");
             
+                const liveModels = await fetchOpenRouterModels();
+                const modelsListStr = liveModels.map(m => `- ${m.id} (Prompt: $${m.pricing.prompt*1000}/1k tokens, Comp: $${m.pricing.completion*1000}/1k tokens) - ${m.name}`).join("\n");
+                const cheapestModel = liveModels[0]?.id || "google/gemini-2.5-flash";
+
                 const plannerPrompt = `Analyze the project idea: "${p.description}"
             
 We already have standard agents for Research, Analysis, Architecture, and Scaffold.
@@ -710,15 +715,19 @@ Output MUST be a strict JSON array of objects:
     "emoji": "🎨",
     "description": "What this agent does",
     "systemPrompt": "You are a ... specialized in ...",
-    "provider": "anthropic",
-    "model": "claude-3-5-sonnet-20241022",
+    "provider": "openrouter",
+    "model": "meta-llama/llama-3.3-70b-instruct",
     "dependencies": []
   }
 ]
 
-IMPORTANT MODEL STRATEGY:
-- For complex software engineering, complex debugging or structural decisions, YOU MUST use provider: "anthropic" and model: "claude-3-5-sonnet-20241022".
-- For simpler tasks like translations, content generation, basic code reviews, or simple scripting, use provider: "openrouter" and a fast/cheap model like "meta-llama/llama-3.3-70b-instruct" or "google/gemini-2.5-flash".
+### LIVE LLM MARKET PRICING (Cost per 1000 tokens)
+${modelsListStr}
+
+### MODEL ROUTING STRATEGY
+1. Analyze the complexity of each sub-agent's task.
+2. For high-complexity structural coding or deep logic, pick the best flagship model from the list above. Setting provider to "anthropic" and model to "claude-4-6-sonnet" is also an excellent default for peak performance.
+3. For low-complexity tasks (QA, research, data formatting, basic scripts), YOU MUST pick the absolute CHEAPEST model from the live list to save costs. Set provider to "openrouter" and the model to the exact ID from the list.
 
 IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\`\`json.`;
 
@@ -751,12 +760,12 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
                 }
 
                 const baseTopology: import("./types.js").NodeTopology[] = [
-                    { id: "research", role: "Researcher", emoji: "🌐", description: "Veille technologique", systemPrompt: "", provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct", dependencies: [] },
-                    { id: "analysis", role: "Analyst", emoji: "🔎", description: "Analyse des besoins", systemPrompt: "", provider: "anthropic", model: "claude-3-5-sonnet-20241022", dependencies: ["research"] },
-                    { id: "skills_enrichment", role: "Tech Lead", emoji: "📚", description: "Injection de best practices", systemPrompt: "", provider: "anthropic", model: "claude-3-5-sonnet-20241022", dependencies: ["analysis"] },
-                    { id: "architecture", role: "Architect", emoji: "🏗️", description: "Conception architecturale", systemPrompt: "", provider: "anthropic", model: "claude-3-5-sonnet-20241022", dependencies: ["skills_enrichment"] },
-                    { id: "scaffold", role: "DevOps", emoji: "🔨", description: "Génération de la base", systemPrompt: "", provider: "anthropic", model: "claude-3-5-sonnet-20241022", dependencies: ["architecture"] },
-                    { id: "supervisor_for_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", provider: "openrouter", model: "google/gemini-2.5-flash", dependencies: ["scaffold"] },
+                    { id: "research", role: "Researcher", emoji: "🌐", description: "Veille technologique", systemPrompt: "", provider: "openrouter", model: cheapestModel, dependencies: [] },
+                    { id: "analysis", role: "Analyst", emoji: "🔎", description: "Analyse des besoins", systemPrompt: "", provider: "anthropic", model: "claude-4-6-sonnet", dependencies: ["research"] },
+                    { id: "skills_enrichment", role: "Tech Lead", emoji: "📚", description: "Injection de best practices", systemPrompt: "", provider: "anthropic", model: "claude-4-6-sonnet", dependencies: ["analysis"] },
+                    { id: "architecture", role: "Architect", emoji: "🏗️", description: "Conception architecturale", systemPrompt: "", provider: "anthropic", model: "claude-4-6-sonnet", dependencies: ["skills_enrichment"] },
+                    { id: "scaffold", role: "DevOps", emoji: "🔨", description: "Génération de la base", systemPrompt: "", provider: "anthropic", model: "claude-4-6-sonnet", dependencies: ["architecture"] },
+                    { id: "supervisor_for_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", provider: "openrouter", model: cheapestModel, dependencies: ["scaffold"] },
                 ];
 
                 dynamicNodes = dynamicTopology.map(t => ({
@@ -766,8 +775,8 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
 
                 dynamicIds = dynamicNodes.map(d => d.id);
                 const endTopology: import("./types.js").NodeTopology[] = [
-                    { id: "qa", role: "QA Engineer", emoji: "🧪", description: "Tests finaux", systemPrompt: "", provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct", dependencies: dynamicIds },
-                    { id: "deploy", role: "Release Manager", emoji: "🚀", description: "Déploiement", systemPrompt: "", provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct", dependencies: ["qa"] }
+                    { id: "qa", role: "QA Engineer", emoji: "🧪", description: "Tests finaux", systemPrompt: "", provider: "openrouter", model: cheapestModel, dependencies: dynamicIds },
+                    { id: "deploy", role: "Release Manager", emoji: "🚀", description: "Déploiement", systemPrompt: "", provider: "openrouter", model: cheapestModel, dependencies: ["qa"] }
                 ];
 
                 p.topology = [...baseTopology, ...dynamicNodes, ...endTopology];
