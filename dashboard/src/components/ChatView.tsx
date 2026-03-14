@@ -41,6 +41,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     const [files, setFiles] = useState<AttachedFile[]>([]);
     const [dragOver, setDragOver] = useState(false);
     const [projectName, setProjectName] = useState('');
+    const [githubUrl, setGithubUrl] = useState('');
     const [secrets, setSecrets] = useState<{key: string; value: string}[]>([]);
     const [secretsExpanded, setSecretsExpanded] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
@@ -144,6 +145,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
         } else {
             setProjectName('');
         }
+        setGithubUrl('');
         // Clear secrets — they're per-session, not global
         setSecrets([]);
         setSecretsExpanded(false);
@@ -294,7 +296,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                 return; // Don't setLaunching(false) yet — polling will do it
             } else {
                 // ─── CREATE new project ───
-                const result = await launchFromChat(activeSession.id, projectName.trim() || undefined);
+                const result = await launchFromChat(activeSession.id, projectName.trim() || undefined, undefined, githubUrl.trim() || undefined);
                 const launchName = projectName.trim() || 'AUTO_NAMED';
 
                 // Save secrets to vault if any are defined
@@ -387,15 +389,23 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                         <span className="material-symbols-outlined absolute right-2 bottom-2 text-v-accent pointer-events-none text-[16px]">expand_more</span>
                     </div>
 
-                    {/* Project Name (only when no project linked = new project mode) */}
+                    {/* Project Name & GitHub URL (only when no project linked = new project mode) */}
                     {!selectedPipelineId && (
                         <div>
                             <label className="text-[9px] text-slate-400 font-bold tracking-widest uppercase mb-1 block">PROJECT_ID (OPT.)</label>
                             <input
-                                className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 outline-none focus:ring-0 rounded-none placeholder:text-v-accent/20 uppercase"
+                                className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 outline-none focus:ring-0 rounded-none placeholder:text-v-accent/20 uppercase mb-3"
                                 value={projectName}
                                 onChange={(e) => setProjectName(e.target.value)}
                                 placeholder="AUTO_GENERATED"
+                                spellCheck="false"
+                            />
+                            <label className="text-[9px] text-slate-400 font-bold tracking-widest uppercase mb-1 block">GITHUB_URL (OPT.)</label>
+                            <input
+                                className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 outline-none focus:ring-0 rounded-none placeholder:text-v-accent/20"
+                                value={githubUrl}
+                                onChange={(e) => setGithubUrl(e.target.value)}
+                                placeholder="https://github.com/..."
                                 spellCheck="false"
                             />
                         </div>

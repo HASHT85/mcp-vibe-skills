@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        CACHE_BUSTER: "20260313-v3"
+        CACHE_BUSTER: "20260314-v2"
     container_name: veist
     restart: unless-stopped
     environment:
@@ -40,7 +40,7 @@ services:
     build:
       context: ./dashboard
       args:
-        CACHE_BUSTER: "20260314-v1"
+        CACHE_BUSTER: "20260314-v2"
     container_name: veist-dashboard
     restart: unless-stopped
     networks:

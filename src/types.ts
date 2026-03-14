@@ -66,6 +66,7 @@ export type Pipeline = {
         repo: string;
         url: string;
     };
+    sourceGithubUrl?: string;
     topology?: NodeTopology[];
     nodeStatuses?: Record<string, "COMPLETED" | "FAILED" | "PENDING">;
     artifacts: Record<string, unknown>;

@@ -65,7 +65,7 @@ export class Orchestrator extends EventEmitter {
 
     // ─── Pipeline Management ───
 
-    async launchIdea(description: string, name?: string, model?: string, files?: { base64: string; type: string }[], templateId?: string): Promise<Pipeline> {
+    async launchIdea(description: string, name?: string, model?: string, files?: { base64: string; type: string }[], templateId?: string, githubUrl?: string): Promise<Pipeline> {
         // #14: Prevent too many concurrent pipelines
         const MAX_CONCURRENT = 3;
         if (this.running.size >= MAX_CONCURRENT) {
@@ -99,6 +99,7 @@ export class Orchestrator extends EventEmitter {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             templateId: resolvedTemplateId,
+            sourceGithubUrl: githubUrl,
         };
 
         if (files && files.length > 0) pipeline.artifacts.initialFiles = files;
@@ -644,7 +645,20 @@ RÈGLES ABSOLUES:
         try {
             // ─── GitHub Setup (skip on resume) ───
             const isResume = p.nodeStatuses && Object.keys(p.nodeStatuses).length > 0;
-            if (getGithubToken() && !p.github) {
+            if (p.sourceGithubUrl && !p.github && !isResume) {
+                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔗", `Clonage du repo: ${p.sourceGithubUrl}`, "info");
+                const success = await gitClone(p.sourceGithubUrl, p.workspace);
+                if (success) {
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔗", `Repo cloné avec succès.`, "success");
+                    const match = p.sourceGithubUrl.match(/github\.com\/([^\/]+)\/([^\/\.]+)/);
+                    if (match) {
+                        p.github = { owner: match[1], repo: match[2], url: p.sourceGithubUrl };
+                    }
+                    await savePipelinesState(this.pipelines);
+                } else {
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `Échec du clonage de ${p.sourceGithubUrl} — on continue sans repo`, "warning");
+                }
+            } else if (getGithubToken() && !p.github && !isResume) {
                 try {
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔗", "Création du repo GitHub...", "info");
                     const repo = await createRepo(p.name, p.description);

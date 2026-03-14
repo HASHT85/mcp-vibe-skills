@@ -78,12 +78,13 @@ app.post("/pipeline/launch", async (req: Request, res: Response) => {
         const model = req.body?.model ? String(req.body.model).trim() : undefined;
         const files = req.body?.files as { base64: string; type: string }[] | undefined;
         const templateId = req.body?.templateId ? String(req.body.templateId).trim() : undefined;
+        const githubUrl = req.body?.githubUrl ? String(req.body.githubUrl).trim() : undefined;
 
         if (!description) {
             return res.status(400).json({ error: "missing_description" });
         }
 
-        const pipeline = await orchestrator.launchIdea(description, name, model, files, templateId);
+        const pipeline = await orchestrator.launchIdea(description, name, model, files, templateId, githubUrl);
         res.json({ pipeline });
     } catch (err: any) {
         console.error("Pipeline launch error:", err);
@@ -730,13 +731,15 @@ app.post("/chat/sessions/:id/launch", async (req: Request, res: Response) => {
 
         const nameOverride = req.body?.name ? String(req.body.name).trim() : undefined;
         const templateId = req.body?.templateId ? String(req.body.templateId).trim() : undefined;
+        const githubUrl = req.body?.githubUrl ? String(req.body.githubUrl).trim() : undefined;
 
         const pipeline = await orchestrator.launchIdea(
             brief.description,
             nameOverride || brief.name,
             brief.model,
             undefined,
-            templateId
+            templateId,
+            githubUrl
         );
 
         chatService.linkProject(req.params.id, pipeline.id);

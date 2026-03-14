@@ -20,7 +20,7 @@ export class AnalysisNode extends AgentNode {
             emoji: "🔎",
             dependencies: ["research"],
             maxTurns: 8,
-            allowedTools: ["web_search", "fetch_url", "read_memory", "write_memory"]
+            allowedTools: ["web_search", "fetch_url", "read_memory", "write_memory", "bash", "list_dir", "read_file"]
         });
     }
 
@@ -41,7 +41,12 @@ export class AnalysisNode extends AgentNode {
             ? `\n\n🎯 TYPE DE PROJET DÉTECTÉ: ${template.emoji} ${template.name}\nStack par défaut recommandée: ${JSON.stringify(template.defaultStack)}\n\nINSTRUCTIONS SPÉCIFIQUES:\n${template.prompts.analysis}`
             : `\n\nProduis un JSON strict contenant :\n1. "type": Le type de projet\n2. "stack": { "frontend": "...", "backend": "..." }\n3. "summary": Résumé des fonctionnalités`;
 
-        return `Analyse la demande suivante :\n\n"${context.pipeline.description}"${researchSection}${templateHint}\n\n⚠️ NE TE LIMITE PAS à ce que l'utilisateur a demandé. Propose des features innovantes dans "innovativeFeatures".`;
+        const sourceGithubUrl = context.pipeline.sourceGithubUrl;
+        const gitSection = sourceGithubUrl
+            ? `\n\n📦 REPOSITORY EXISTANT CLONÉ (${sourceGithubUrl}):\nCe projet part d'un code existant qui a été cloné dans le répertoire courant. UTILISE ABSOLUMENT list_dir et read_file AVANT DE RÉPONDRE pour analyser le code existant (notamment le package.json ou équivalent, et le src/). Ton architecture proposée devra respecter ou faire évoluer intelligemment la base de code actuelle.`
+            : "";
+
+        return `Analyse la demande suivante :\n\n"${context.pipeline.description}"${researchSection}${gitSection}${templateHint}\n\n⚠️ NE TE LIMITE PAS à ce que l'utilisateur a demandé. Propose des features innovantes dans "innovativeFeatures".`;
     }
 
     protected getSystemPrompt(context: NodeContext): string {
