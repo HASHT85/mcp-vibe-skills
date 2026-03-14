@@ -18,7 +18,7 @@ services:
       - PIPELINES_STORE=/data/pipelines.json
       - HOST_WORKSPACE_PATH=${HOST_WORKSPACE_PATH:-/opt/vibecraft/workspace}
     volumes:
-      - orchestrator-data:/data
+      - /opt/vibecraft/data:/data
       - ${HOST_WORKSPACE_PATH:-/opt/vibecraft/workspace}:/workspace
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
@@ -40,7 +40,7 @@ services:
     build:
       context: ./dashboard
       args:
-        CACHE_BUSTER: "20260313-v3"
+        CACHE_BUSTER: "20260314-v1"
     container_name: mcp-vibe-dashboard
     restart: unless-stopped
     networks:
@@ -54,9 +54,6 @@ services:
     healthcheck:
       disable: true
 
-volumes:
-  orchestrator-data:
-    driver: local
 
 networks:
   web:
