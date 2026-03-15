@@ -110,9 +110,11 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
         return m;
     }, [layout]);
 
-    // Auto-fit
+    // Auto-fit only on first render
+    const hasInitialized = useRef(false);
     useEffect(() => {
-        if (!containerRef.current || layout.length === 0) return;
+        if (hasInitialized.current || !containerRef.current || layout.length === 0) return;
+        hasInitialized.current = true;
         const cw = containerRef.current.clientWidth;
         const ch = containerRef.current.clientHeight;
         const minX = Math.min(...layout.map(n => n.x)) - 40;
