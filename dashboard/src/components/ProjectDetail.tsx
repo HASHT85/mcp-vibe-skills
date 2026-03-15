@@ -51,68 +51,68 @@ function SecretsPanel({ pipelineId }: { pipelineId: string }) {
     };
 
     return (
-        <div className="bg-panel border border-border-muted">
+        <div className="bg-[#0B0F14] border border-border-muted/50 flex flex-col shrink-0">
             <button
-                className="w-full flex items-center justify-between px-4 py-3 text-[11px] text-slate-400 font-bold tracking-widest uppercase hover:text-white transition-colors"
+                className="w-full flex items-center justify-between p-4 text-[11px] text-slate-300 font-bold tracking-widest uppercase hover:text-white transition-colors bg-[#06080A] border-b border-border-muted/50"
                 onClick={() => setExpanded(!expanded)}
             >
                 <span className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[16px]">lock</span>
-                    SECRETS_VAULT {entries.length > 0 && `(${entries.length})`}
+                    <span className="material-symbols-outlined text-[16px] text-v-accent">lock</span>
+                    SECRETS_VAULT {entries.length > 0 && `[${entries.length}]`}
                 </span>
-                <span className="material-symbols-outlined text-[14px]">{expanded ? 'expand_less' : 'expand_more'}</span>
+                <span className="material-symbols-outlined text-[14px] text-slate-500 hover:text-v-accent">{expanded ? 'expand_less' : 'expand_more'}</span>
             </button>
             {expanded && (
-                <div className="px-4 pb-4 flex flex-col gap-2 border-t border-border-muted pt-3">
+                <div className="p-4 flex flex-col gap-3">
                     {entries.map((e, i) => (
                         <div key={i} className="flex gap-2 items-center">
                             <input
-                                className="w-40 bg-background-dark border border-border-muted text-[11px] text-white p-2 outline-none font-mono uppercase tracking-wider"
+                                className="w-1/3 bg-black border border-border-muted/50 focus:border-v-accent/50 focus:shadow-[0_0_10px_rgba(205,255,0,0.1)] transition-all text-[11px] text-v-accent p-2 outline-none font-mono uppercase tracking-wider placeholder:text-slate-700"
                                 value={e.key}
                                 onChange={(ev) => {
                                     const u = [...entries]; u[i] = { ...e, key: ev.target.value, masked: false }; setEntries(u);
                                 }}
-                                placeholder="KEY"
+                                placeholder="ENV_KEY"
                                 spellCheck="false"
                             />
-                            <input
-                                className="flex-1 bg-background-dark border border-border-muted text-[11px] text-white p-2 outline-none font-mono"
-                                type="password"
-                                value={e.value}
-                                onChange={(ev) => {
-                                    const u = [...entries]; u[i] = { ...e, value: ev.target.value, masked: false }; setEntries(u);
-                                }}
-                                placeholder={e.masked ? '••••••' : 'value'}
-                                spellCheck="false"
-                            />
+                            <div className="flex-1 relative">
+                                <input
+                                    className="w-full bg-black border border-border-muted/50 focus:border-white/30 transition-all text-[11px] text-white p-2 pr-8 outline-none font-mono placeholder:text-slate-700"
+                                    type={e.masked ? "password" : "text"}
+                                    value={e.value}
+                                    onChange={(ev) => {
+                                        const u = [...entries]; u[i] = { ...e, value: ev.target.value, masked: false }; setEntries(u);
+                                    }}
+                                    placeholder={e.masked ? '••••••••••••••••' : 'Secret Value'}
+                                    spellCheck="false"
+                                />
+                            </div>
                             <button
-                                className="text-red-400 hover:text-red-300 shrink-0 p-1"
+                                className="text-red-500/50 hover:text-red-500 shrink-0 p-2 border border-transparent hover:border-red-500/20 bg-transparent hover:bg-red-500/10 transition-all"
                                 onClick={() => setEntries(entries.filter((_, j) => j !== i))}
+                                title="Remove Secret"
                             >
-                                <span className="material-symbols-outlined text-[16px]">close</span>
+                                <span className="material-symbols-outlined text-[14px]">close</span>
                             </button>
                         </div>
                     ))}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 mt-2">
                         <button
-                            className="flex-1 text-[10px] text-slate-500 hover:text-white border border-dashed border-border-muted hover:border-white py-1.5 transition-colors uppercase tracking-widest"
+                            className="flex-1 bg-black text-[10px] text-slate-400 hover:text-white border border-dashed border-border-muted/50 hover:border-white/30 py-2 transition-colors uppercase tracking-widest font-bold"
                             onClick={() => setEntries([...entries, { key: '', value: '', masked: false }])}
                         >
-                            + ADD_SECRET
+                            + ADD_KEY
                         </button>
                         {entries.some(e => !e.masked) && (
                             <button
-                                className="px-4 text-[10px] text-v-accent border border-v-accent/50 bg-v-accent/10 hover:bg-v-accent/20 py-1.5 transition-colors uppercase tracking-widest font-bold"
+                                className="px-6 text-[10px] bg-v-accent text-black hover:bg-[#b0d900] shadow-[0_0_15px_rgba(205,255,0,0.2)] py-2 transition-all uppercase tracking-widest font-black"
                                 onClick={handleSave}
                                 disabled={saving}
                             >
-                                {saving ? 'SAVING...' : '💾 SAVE'}
+                                {saving ? 'SYNCING...' : 'SAVE_VAULT'}
                             </button>
                         )}
                     </div>
-                    <p className="text-[9px] text-slate-600 leading-tight">
-                        Injected into .env — never sent to AI
-                    </p>
                 </div>
             )}
         </div>
@@ -120,6 +120,9 @@ function SecretsPanel({ pipelineId }: { pipelineId: string }) {
 }
 
 export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailProps) {
+    const [activeTab, setActiveTab] = useState<'console' | 'topology'>('console');
+    const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
     const handleKill = async () => {
         if (confirm(`FORCE_STOP sequence initiated for Node [${p.name}]. Confirm termination?`)) {
             await killPipeline(p.id);
@@ -162,144 +165,249 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
     const totalTokens = (p.tokenUsage?.inputTokens || 0) + (p.tokenUsage?.outputTokens || 0);
     const isCompleted = p.phase === 'COMPLETED';
     const isFailed = p.phase === 'FAILED';
-    const isRunning = !isCompleted && !isFailed;
-    const progressColorClass = isCompleted ? 'bg-accent' : (isFailed ? 'bg-red-500' : 'bg-primary');
-    const badgeColorClass = isCompleted ? 'bg-accent text-black' : (isFailed ? 'bg-red-500 text-white' : 'bg-primary text-white');
+    const progressColorClass = isCompleted ? 'bg-v-accent' : (isFailed ? 'bg-red-500' : 'bg-v-accent');
 
-    const getTypeIcon = () => {
-        if (p.projectType === 'spa' || p.projectType === 'static') return 'language';
-        if (p.projectType?.includes('worker')) return 'memory';
-        return 'database';
-    };
+    // Filter agents to show in the NodeDetailedInspection (when in topology)
+    const selectedAgent = p.agents?.find(a => p.topology?.find(t => t.id === selectedNodeId)?.role === a.role);
 
     return (
         <motion.div
-            className="flex flex-col gap-6"
+            className="flex flex-col h-full gap-4 relative"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
         >
-            {/* Header Area */}
-            <div className="bg-panel border border-border-muted p-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-                
-                <div className="flex items-start gap-4 mb-6">
+            {/* Header Bar */}
+            <header className="flex flex-wrap items-center justify-between bg-v-bg border-b-2 border-border-muted/50 pb-4 shrink-0 gap-4">
+                <div className="flex items-center gap-4">
                     <button 
                         onClick={onBack}
-                        className="text-slate-400 hover:text-white hover:bg-white/5 p-2 rounded transition-colors mt-1"
+                        className="text-slate-500 hover:text-white transition-colors"
+                        title="Back to Projects"
                     >
-                        <span className="material-symbols-outlined">arrow_back_ios_new</span>
+                        <span className="material-symbols-outlined text-[20px]">arrow_back</span>
                     </button>
-                    
-                    <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                            <span className="material-symbols-outlined text-accent text-3xl">
-                                {getTypeIcon()}
-                            </span>
-                            <h2 className="text-3xl font-black text-white tracking-widest uppercase">
-                                {(p.name || 'unnamed').replace(/\s+/g, '_').toLowerCase()}
-                            </h2>
-                            <span className={`${badgeColorClass} text-[10px] font-black px-3 py-1 tracking-widest uppercase ml-4`}>
-                                {p.phase}
-                            </span>
-                        </div>
-                        <p className="text-slate-400 text-sm max-w-3xl leading-relaxed">
-                            {p.description}
-                        </p>
-                    </div>
-
-                    <div className="flex items-center gap-3 relative z-10">
-                        {isFailed && (
-                            <button
-                                onClick={handleRetry}
-                                className="border border-v-accent/50 bg-v-accent/10 text-v-accent font-bold text-[10px] px-4 py-2 hover:bg-v-accent/20 uppercase flex items-center gap-2 transition-colors"
-                                title="Retry Pipeline"
-                            >
-                                <span className="material-symbols-outlined text-[16px]">replay</span> RETRY
-                            </button>
-                        )}
-                        {!['COMPLETED', 'FAILED'].includes(p.phase) && (
-                            <button
-                                onClick={handleKill}
-                                className="border border-red-500/50 bg-red-500/10 text-red-500 font-bold text-[10px] px-4 py-2 hover:bg-red-500/20 uppercase flex items-center gap-2"
-                                title="Force Stop Pipeline"
-                            >
-                                <span className="material-symbols-outlined text-[16px]">cancel</span> STOP
-                            </button>
-                        )}
-                        <button 
-                            onClick={handleDelete}
-                            className="border border-red-500/50 bg-red-500/10 text-red-400 hover:bg-red-500/30 hover:text-red-300 font-bold text-[10px] px-4 py-2 uppercase flex items-center gap-2 transition-colors"
-                            title="Purge Node"
-                        >
-                            <span className="material-symbols-outlined text-[16px]">delete_forever</span> DELETE
-                        </button>
+                    <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-v-accent">hexagon</span>
+                        <h2 className="text-xl md:text-2xl font-black text-white tracking-widest uppercase">
+                            VEIST <span className="text-slate-500 font-normal mx-1">//</span> {p.name.replace(/\s+/g, '_').toLowerCase()}
+                        </h2>
                     </div>
                 </div>
 
-                {/* Progress Bar */}
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="flex-1 h-1.5 bg-background-dark overflow-hidden">
-                        <div className={`h-full ${progressColorClass} transition-all duration-1000 shadow-[0_0_10px_currentcolor]`} style={{ width: `${p.progress}%` }}></div>
-                    </div>
-                    <span className={`text-xs font-bold monospaced ${isCompleted ? 'text-accent' : 'text-primary'}`}>
-                        {p.progress}%
-                    </span>
-                </div>
-
-                {/* Meta Bar */}
-                <div className="flex flex-wrap items-center gap-6 text-[11px] font-bold tracking-widest uppercase text-slate-500 monospaced bg-background-dark/50 p-3 border border-border-muted">
+                <div className="flex items-center gap-6 text-[10px] md:text-[11px] font-bold tracking-widest uppercase">
                     {p.github && (
-                        <div className="flex items-center gap-2 hover:text-white transition-colors">
-                            <span className="material-symbols-outlined text-[14px]">code_blocks</span>
-                            <a href={p.github.url} target="_blank" rel="noopener noreferrer">
+                        <div className="flex items-center gap-2 text-slate-400">
+                            GIT REPOSITORY: 
+                            <a href={p.github.url} target="_blank" rel="noopener noreferrer" className="text-white hover:text-v-accent transition-colors flex items-center gap-1">
                                 {p.github.owner}/{p.github.repo}
                             </a>
                         </div>
                     )}
-                    {p.dokploy?.url && (
-                        <div className="flex items-center gap-2 hover:text-white transition-colors">
-                            <span className="material-symbols-outlined text-[14px]">open_in_new</span>
-                            <a href={p.dokploy.url} target="_blank" rel="noopener noreferrer">
-                                {p.dokploy.url}
-                            </a>
-                        </div>
-                    )}
-                    {p.dokploy && !p.dokploy.url && (
-                        <div className="flex items-center gap-2" style={{ color: p.projectType?.includes('worker') ? 'var(--color-primary)' : 'inherit' }}>
-                            <span className="material-symbols-outlined text-[14px]">{p.projectType?.includes('worker') ? 'memory' : 'rocket_launch'}</span>
-                            <span>{p.projectType?.includes('worker') ? 'BACKGROUND_DAEMON (NO_URL)' : `DOKPLOY: ${p.dokploy.applicationId?.slice(0, 8)}...`}</span>
-                        </div>
-                    )}
-                    {totalTokens > 0 && (
-                        <div className="flex items-center gap-2 ml-auto text-accent">
-                            <span className="material-symbols-outlined text-[14px]">toll</span>
-                            {formatTokenCount(p.tokenUsage?.inputTokens || 0)} IN // {formatTokenCount(p.tokenUsage?.outputTokens || 0)} OUT
-                            <span className="opacity-50">[{formatTokenCount(totalTokens)} TOT]</span>
-                        </div>
-                    )}
-                </div>
-            </div>
+                    
+                    {/* Repository Branch Mock UI (Static for aesthetic) */}
+                    <div className="hidden lg:flex items-center gap-2 bg-black border border-border-muted px-2 py-1">
+                        <span className="material-symbols-outlined text-[14px] text-v-accent">merge</span>
+                        <span className="text-v-accent">MAIN</span>
+                        <span className="text-slate-500 ml-2">2 COMMITS AHEAD</span>
+                    </div>
 
-            {/* 🔐 Secrets Vault */}
-            <SecretsPanel pipelineId={p.id} />
-
-            {/* Main Content Layout */}
-            <div className="flex flex-col gap-6">
-                <div className="flex items-center gap-2 mb-2">
-                    <span className="w-1.5 h-1.5 bg-slate-500 mr-2 rounded-none"></span>
-                    <h3 className="text-sm font-black text-slate-400 tracking-widest uppercase">System_Console</h3>
+                    <div className="flex items-center gap-2 border border-border-muted px-3 py-1 bg-black">
+                        <div className={`w-2 h-2 rounded-full ${isCompleted ? 'bg-v-accent' : isFailed ? 'bg-red-500' : 'bg-v-accent animate-pulse'}`}></div>
+                        <span className={isCompleted || !isFailed ? 'text-v-accent' : 'text-red-500'}>
+                            {p.phase}
+                        </span>
+                    </div>
                 </div>
-                <div className="bg-black border border-border-muted border-l-4 border-l-slate-700 min-h-[250px] max-h-[350px] overflow-hidden">
-                    <Terminal events={p.events || []} />
+            </header>
+
+            {/* Main Content Layout (Split View) */}
+            <div className="flex flex-col xl:flex-row gap-4 flex-1 min-h-0">
+                
+                {/* Left Area (Main content) */}
+                <div className="flex-1 flex flex-col min-h-0 bg-[#0B0F14] border border-border-muted/50 relative overflow-hidden">
+                    {/* Tabs */}
+                    <div className="flex items-center border-b border-border-muted/50 bg-[#06080A] shrink-0">
+                        <button
+                            onClick={() => setActiveTab('console')}
+                            className={`px-6 py-3 text-[11px] font-bold tracking-widest uppercase transition-colors relative ${activeTab === 'console' ? 'text-v-accent bg-black' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                        >
+                            SYSTEM CONSOLE
+                            {activeTab === 'console' && <div className="absolute top-0 left-0 w-full h-[2px] bg-v-accent shadow-[0_0_10px_currentcolor]"></div>}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('topology')}
+                            className={`px-6 py-3 text-[11px] font-bold tracking-widest uppercase transition-colors relative ${activeTab === 'topology' ? 'text-v-accent bg-black' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                        >
+                            NODE TOPOLOGY
+                            {activeTab === 'topology' && <div className="absolute top-0 left-0 w-full h-[2px] bg-v-accent shadow-[0_0_10px_currentcolor]"></div>}
+                        </button>
+                    </div>
+
+                    {/* Tab Content Area */}
+                    <div className="flex-1 min-h-0 overflow-hidden relative">
+                        {activeTab === 'console' ? (
+                            <div className="h-full w-full overflow-hidden absolute inset-0">
+                                <Terminal events={p.events || []} />
+                            </div>
+                        ) : (
+                            <div className="h-full w-full overflow-hidden absolute inset-0">
+                                <ProjectNodeMap 
+                                    topology={p.topology} 
+                                    agents={p.agents || []} 
+                                    selectedNodeId={selectedNodeId}
+                                    onSelectNode={setSelectedNodeId}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Progress Bar Area Container (Bottom of Left Column) */}
+                    <div className="shrink-0 border-t border-border-muted bg-[#06080A] px-6 py-4 flex flex-col gap-3">
+                        <div className="flex justify-between items-center text-[10px] uppercase font-bold tracking-widest text-slate-400">
+                            <div className="flex gap-4">
+                                {totalTokens > 0 ? (
+                                    <>
+                                        <span>{formatTokenCount(p.tokenUsage?.inputTokens || 0)} IN</span>
+                                        <span className="text-slate-600">//</span>
+                                        <span>{formatTokenCount(p.tokenUsage?.outputTokens || 0)} OUT</span>
+                                        <span className="text-slate-600">[{formatTokenCount(totalTokens)} TOTAL]</span>
+                                    </>
+                                ) : (
+                                    <span>AWAITING TELEMETRY...</span>
+                                )}
+                            </div>
+                            <span className={isCompleted ? 'text-v-accent' : 'text-slate-500'}>{p.progress}%</span>
+                        </div>
+                        <div className="h-[6px] bg-black border border-border-muted overflow-hidden relative">
+                            <div className={`h-full ${progressColorClass} transition-all duration-1000 w-full rounded-r`} style={{ width: `${p.progress}%` }}></div>
+                        </div>
+                    </div>
                 </div>
 
-                <div className="w-full mt-4">
-                    <ProjectNodeMap 
-                        topology={p.topology} 
-                        agents={p.agents || []} 
-                        events={p.events || []} 
-                    />
+                {/* Right Area (Side Panel) */}
+                <div className="w-full xl:w-[380px] flex flex-col gap-4 shrink-0 min-h-[400px]">
+                    
+                    {/* Action Center */}
+                    <div className="bg-[#0B0F14] border border-border-muted/50 p-4 shrink-0">
+                        <div className="text-[10px] font-bold text-slate-500 mb-3 tracking-widest uppercase">NODE COMMANDS</div>
+                        <div className="grid grid-cols-2 gap-2">
+                             {isFailed && (
+                                <button
+                                    onClick={handleRetry}
+                                    className="border border-v-accent/50 bg-v-accent/10 text-v-accent hover:bg-v-accent hover:text-black font-bold text-[10px] py-2 uppercase transition-colors col-span-2"
+                                >
+                                    RETRY LIFECYCLE
+                                </button>
+                            )}
+                            {!['COMPLETED', 'FAILED'].includes(p.phase) && (
+                                <button
+                                    onClick={handleKill}
+                                    className="border border-red-500/50 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white font-bold text-[10px] py-2 uppercase transition-colors"
+                                >
+                                    FORCE STOP
+                                </button>
+                            )}
+                            <button 
+                                onClick={handleDelete}
+                                className={`border border-red-500/30 text-red-400/80 hover:bg-red-500 hover:text-white font-bold text-[10px] py-2 uppercase transition-colors ${!['COMPLETED', 'FAILED'].includes(p.phase) ? '' : 'col-span-2'}`}
+                            >
+                                PURGE
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Contextual Side Panel */}
+                    <div className="flex-1 bg-[#0B0F14] border border-border-muted/50 flex flex-col min-h-0 overflow-hidden relative">
+                        {activeTab === 'console' ? (
+                            // Console side-panel: Live Activity
+                            <div className="flex flex-col h-full">
+                                <div className="p-4 border-b border-border-muted/50 shrink-0">
+                                    <h3 className="text-[11px] font-bold text-slate-300 tracking-widest uppercase mb-1">LIVE ACTIVITY</h3>
+                                    <p className="text-[10px] text-slate-500">REAL-TIME SYSTEM EVENTS</p>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-4 relative">
+                                    <div className="scanline absolute inset-0 pointer-events-none opacity-20 z-0"></div>
+                                    {p.events && p.events.length > 0 ? (
+                                        p.events.slice().reverse().slice(0, 50).map((ev, i) => (
+                                            <div key={ev.id} className="text-[10px] font-mono leading-relaxed pb-3 border-b border-border-muted/30 relative z-10 flex flex-col">
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className={`font-bold ${ev.type === 'error' ? 'text-red-400' : 'text-white'}`}>{ev.agentEmoji} {ev.agentRole}</span>
+                                                    <span className="text-v-accent">
+                                                        <span className="material-symbols-outlined text-[12px]">check_circle</span>
+                                                    </span>
+                                                </div>
+                                                <span className={`${ev.type === 'error' ? 'text-red-400/80' : 'text-slate-400'} break-words whitespace-pre-wrap`}>
+                                                    {ev.action}
+                                                </span>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-[10px] text-slate-600 italic z-10">No recent activity</div>
+                                    )}
+                                </div>
+                                <div className="shrink-0 p-4 border-t border-border-muted/50 text-[10px] uppercase text-slate-500 flex justify-between">
+                                    <span>NETWORK TRAFFIC</span>
+                                    <span className="text-white">1.2 GB/S</span>
+                                </div>
+                            </div>
+                        ) : (
+                            // Topology side-panel: Node Detailed Inspection
+                            <div className="flex flex-col h-full bg-[#0d1218]">
+                                <div className="p-4 border-b border-border-muted/50 shrink-0 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-24 h-24 bg-v-accent/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
+                                    <h3 className="text-[11px] font-bold text-slate-300 tracking-widest uppercase mb-1 relative z-10">NODE DETAILED INSPECTION</h3>
+                                    <p className="text-[10px] text-slate-500 relative z-10">SELECT A NODE TO VIEW DATA</p>
+                                </div>
+                                
+                                {selectedNodeId ? (
+                                    <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 relative z-10">
+                                        <div>
+                                            <h2 className="text-xl font-black text-white uppercase tracking-widest break-all">
+                                                {selectedNodeId}
+                                            </h2>
+                                            <div className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-widest">
+                                                NODE_ID: {selectedNodeId.toUpperCase()}_{Math.floor(Math.random()*1000).toString(16).toUpperCase()}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4 border-y border-border-muted/30 py-4">
+                                            <div>
+                                                <div className="text-[10px] text-slate-500 mb-1 font-bold">STATUS</div>
+                                                <div className={`text-xs font-black uppercase flex items-center gap-2 ${selectedAgent?.status === 'active' ? 'text-v-accent' : selectedAgent?.status === 'done' ? 'text-white' : selectedAgent?.status === 'error' ? 'text-red-500' : 'text-slate-400'}`}>
+                                                    [{selectedAgent?.status || 'IDLE'}]
+                                                    <span className={`w-2 h-2 rounded-full ${selectedAgent?.status === 'active' ? 'bg-v-accent animate-pulse' : selectedAgent?.status === 'done' ? 'bg-white' : selectedAgent?.status === 'error' ? 'bg-red-500 animate-pulse' : 'bg-slate-600'}`}></span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div className="text-[10px] text-slate-500 mb-1 font-bold">TYPE</div>
+                                                <div className="text-xs font-black uppercase text-white">
+                                                    {selectedAgent?.role || 'UNKNOWN_PROCESS'}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <div className="text-[10px] text-slate-500 mb-2 font-bold uppercase tracking-widest">Current Process:</div>
+                                            <div className="text-xs font-mono text-slate-300 bg-black border border-border-muted/50 p-3 break-words whitespace-pre-wrap">
+                                                {selectedAgent?.currentAction || 'Awaiting task assignment...'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex-1 flex items-center justify-center p-6 opacity-30">
+                                        <div className="flex flex-col items-center gap-4 text-center">
+                                            <span className="material-symbols-outlined text-[48px] text-slate-400">account_tree</span>
+                                            <span className="text-xs font-mono uppercase tracking-widest text-slate-400">Target Node on Map</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Secrets Vault */}
+                    <SecretsPanel pipelineId={p.id} />
                 </div>
             </div>
         </motion.div>
