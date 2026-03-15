@@ -699,46 +699,49 @@ RÈGLES ABSOLUES:
                 // Fresh run: use planner to generate dynamic topology
                 addPipelineEvent(this, this.pipelines, id, "Planner", "🛸", "Analyse de la demande: Création de l'essaim d'agents...", "info");
             
-                const liveModels = await fetchOpenRouterModels();
-                const modelsListStr = liveModels.map(m => `- ${m.id} (Prompt: $${m.pricing.prompt*1000}/1k tokens, Comp: $${m.pricing.completion*1000}/1k tokens) - ${m.name}`).join("\n");
-                const cheapestModel = liveModels[0]?.id || "google/gemini-2.5-flash";
+                const userModel = p.model || "claude-sonnet-4-6";
 
-                const plannerPrompt = `Analyze the project idea: "${p.description}"
-            
-We already have standard agents for Research, Analysis, Architecture, and Scaffold.
-Your task is to generate the specific DEVELOPMENT sub-agents needed to implement the project.
-For example, a web app might need a 'frontend' and a 'backend_api'. A mobile app might just need one 'flutter_dev'.
+                const plannerPrompt = `Analyze the project: "${p.description}"
 
-Output MUST be a strict JSON array of objects:
+We have standard pipeline agents for Research, Analysis, Architecture, and Scaffold.
+Your goal: generate the DEVELOPMENT sub-agents that will actually BUILD the project after the scaffold.
+
+RULES:
+- Create 2-6 specialized agents depending on project complexity
+- Each agent should handle a clear domain (frontend, backend, API, styling, etc.)
+- Assign the right model per agent complexity:
+  - "claude-sonnet-4-6" → complex tasks (fullstack dev, architecture, API design, business logic)
+  - "claude-haiku-4-5" → simpler tasks (formatting, docs, basic config, tests, CSS-only)
+- ALWAYS use provider "anthropic"
+- Dependencies: use [] if the agent can work in parallel, or specify other agent ids for sequential work
+- Each agent MUST have a detailed systemPrompt in French explaining its exact role and responsibilities
+
+EXAMPLES:
+
+For a portfolio website:
 [
-  {
-    "id": "unique_snake_case_id",
-    "role": "Display Name",
-    "emoji": "🎨",
-    "description": "What this agent does",
-    "systemPrompt": "You are a ... specialized in ...",
-    "provider": "anthropic",
-    "model": "claude-sonnet-4-6",
-    "dependencies": []
-  }
+  {"id": "frontend_dev", "role": "Frontend Developer", "emoji": "🎨", "description": "React components + animations + responsive design", "systemPrompt": "Tu es un expert React/TypeScript. Tu crées tous les composants, pages et animations. Tu utilises Framer Motion pour les animations fluides. Tu assures le responsive design et l'accessibilité.", "provider": "anthropic", "model": "claude-sonnet-4-6", "dependencies": []},
+  {"id": "styling_dev", "role": "UI Designer", "emoji": "🎭", "description": "CSS design system + Tailwind config + visual polish", "systemPrompt": "Tu es un expert en design UI/UX. Tu crées le design system complet: couleurs, typographie, spacing, composants Tailwind, dark mode. Tu assures une identité visuelle cohérente et premium.", "provider": "anthropic", "model": "claude-haiku-4-5", "dependencies": ["frontend_dev"]}
 ]
 
-### MODEL ROUTING STRATEGY
-- Default provider: "anthropic" with model "claude-sonnet-4-6" for all agents.
-- For simple tasks (formatting, basic scripts), you may use "claude-haiku-4-5" to save costs.
-- Keep the number of sub-agents minimal (1-3 max). Each agent should handle a full domain, not micro-tasks.
+For a fullstack app with DB:
+[
+  {"id": "backend_api", "role": "Backend Developer", "emoji": "⚙️", "description": "API REST + DB schema + authentification", "systemPrompt": "Tu es un expert backend Node.js/Express. Tu crées l'API REST, le schéma de base de données, les migrations, et l'authentification JWT.", "provider": "anthropic", "model": "claude-sonnet-4-6", "dependencies": []},
+  {"id": "frontend_app", "role": "Frontend Developer", "emoji": "🎨", "description": "Interface React + routing + state management", "systemPrompt": "Tu es un expert frontend React/TypeScript. Tu crées l'interface utilisateur complète avec routing, state management, et intégration API.", "provider": "anthropic", "model": "claude-sonnet-4-6", "dependencies": []},
+  {"id": "integration", "role": "Integration Engineer", "emoji": "🔗", "description": "Connexion frontend-backend + Docker config", "systemPrompt": "Tu es un intégrateur. Tu connectes le frontend au backend, configures les variables d'environnement, et assures que tout fonctionne ensemble en Docker.", "provider": "anthropic", "model": "claude-haiku-4-5", "dependencies": ["backend_api", "frontend_app"]}
+]
 
-IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\`\`json.`;
+Output ONLY a valid JSON array. No text before or after. No markdown code blocks.`;
 
                 let dynamicTopology: import("./types.js").NodeTopology[] = [];
                 try {
                     const plannerResult = await runClaudeAgent({
-                        model: p.model,
+                        model: userModel,
                         prompt: plannerPrompt,
-                        systemPrompt: "You are the VEIST Master Orchestrator. Output ONLY valid JSON array. No markdown formatting. YOU MUST USE THE WEB_SEARCH TOOL TO FIND ELO SCORES BEFORE OUTPUTTING YOUR JSON.",
+                        systemPrompt: "You are the VEIST Planner. Output ONLY a valid JSON array of agent objects. No text, no markdown, no explanation. Just the JSON array.",
                         cwd: p.workspace,
-                        allowedTools: ["web_search", "fetch_url"],
-                        maxTurns: 5,
+                        allowedTools: [],
+                        maxTurns: 1,
                         abortSignal: abortController.signal
                     });
                     
@@ -763,13 +766,11 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
                         description: "Fullstack Development",
                         systemPrompt: "Tu es un Développeur Senior. Implémente le plan de l'Architecte.",
                         provider: "anthropic",
-                        model: p.model,
+                        model: userModel,
                         dependencies: []
                     }];
                 }
 
-                // Use the user-selected model for ALL agents
-                const userModel = p.model || "claude-sonnet-4-6";
                 const baseTopology: import("./types.js").NodeTopology[] = [
                     { id: "research", role: "Researcher", emoji: "🌐", description: "Veille technologique", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: [] },
                     { id: "analysis", role: "Analyst", emoji: "🔎", description: "Analyse des besoins", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: ["research"] },
@@ -779,6 +780,7 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
                     { id: "supervisor_for_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: ["scaffold"] },
                 ];
 
+                // Dynamic agents: keep Planner's model choice, fallback to userModel
                 dynamicNodes = dynamicTopology.map(t => ({
                     ...t,
                     provider: t.provider || "anthropic",
