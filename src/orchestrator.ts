@@ -743,7 +743,15 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
                     });
                     
                     let out = plannerResult.finalResult?.trim() || "[]";
-                    if (out.startsWith("```json")) out = out.replace(/^```json/, "").replace(/```$/, "").trim();
+                    // Strip markdown code fences
+                    out = out.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+                    // Try to extract JSON array from mixed text output
+                    if (!out.startsWith("[")) {
+                        const jsonMatch = out.match(/(\[\s*\{[\s\S]*\}\s*\])/);  
+                        if (jsonMatch) {
+                            out = jsonMatch[1];
+                        }
+                    }
                     dynamicTopology = JSON.parse(out);
                     addTokenUsage(this.pipelines, id, plannerResult);
                 } catch (err: any) {
@@ -754,28 +762,34 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
                         emoji: "💻",
                         description: "Fullstack Development",
                         systemPrompt: "Tu es un Développeur Senior. Implémente le plan de l'Architecte.",
+                        provider: "anthropic",
+                        model: p.model,
                         dependencies: []
                     }];
                 }
 
+                // Use the user-selected model for ALL agents
+                const userModel = p.model || "claude-sonnet-4-6";
                 const baseTopology: import("./types.js").NodeTopology[] = [
-                    { id: "research", role: "Researcher", emoji: "🌐", description: "Veille technologique", systemPrompt: "", provider: "anthropic", model: "claude-sonnet-4-6", dependencies: [] },
-                    { id: "analysis", role: "Analyst", emoji: "🔎", description: "Analyse des besoins", systemPrompt: "", provider: "anthropic", model: "claude-sonnet-4-6", dependencies: ["research"] },
-                    { id: "skills_enrichment", role: "Tech Lead", emoji: "📚", description: "Injection de best practices", systemPrompt: "", provider: "anthropic", model: "claude-sonnet-4-6", dependencies: ["analysis"] },
-                    { id: "architecture", role: "Architect", emoji: "🏗️", description: "Conception architecturale", systemPrompt: "", provider: "anthropic", model: "claude-sonnet-4-6", dependencies: ["skills_enrichment"] },
-                    { id: "scaffold", role: "DevOps", emoji: "🔨", description: "Génération de la base", systemPrompt: "", provider: "anthropic", model: "claude-sonnet-4-6", dependencies: ["architecture"] },
-                    { id: "supervisor_for_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", provider: "anthropic", model: "claude-sonnet-4-6", dependencies: ["scaffold"] },
+                    { id: "research", role: "Researcher", emoji: "🌐", description: "Veille technologique", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: [] },
+                    { id: "analysis", role: "Analyst", emoji: "🔎", description: "Analyse des besoins", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: ["research"] },
+                    { id: "skills_enrichment", role: "Tech Lead", emoji: "📚", description: "Injection de best practices", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: ["analysis"] },
+                    { id: "architecture", role: "Architect", emoji: "🏗️", description: "Conception architecturale", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: ["skills_enrichment"] },
+                    { id: "scaffold", role: "DevOps", emoji: "🔨", description: "Génération de la base", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: ["architecture"] },
+                    { id: "supervisor_for_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: ["scaffold"] },
                 ];
 
                 dynamicNodes = dynamicTopology.map(t => ({
                     ...t,
+                    provider: t.provider || "anthropic",
+                    model: t.model || userModel,
                     dependencies: t.dependencies.length > 0 ? t.dependencies : ["supervisor_for_scaffold"]
                 }));
 
                 dynamicIds = dynamicNodes.map(d => d.id);
                 const endTopology: import("./types.js").NodeTopology[] = [
-                    { id: "qa", role: "QA Engineer", emoji: "🧪", description: "Tests finaux", systemPrompt: "", provider: "anthropic", model: "claude-sonnet-4-6", dependencies: dynamicIds },
-                    { id: "deploy", role: "Release Manager", emoji: "🚀", description: "Déploiement", systemPrompt: "", provider: "anthropic", model: "claude-sonnet-4-6", dependencies: ["qa"] }
+                    { id: "qa", role: "QA Engineer", emoji: "🧪", description: "Tests finaux", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: dynamicIds },
+                    { id: "deploy", role: "Release Manager", emoji: "🚀", description: "Déploiement", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: ["qa"] }
                 ];
 
                 p.topology = [...baseTopology, ...dynamicNodes, ...endTopology];

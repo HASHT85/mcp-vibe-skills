@@ -5,7 +5,11 @@ import type { Pipeline } from "./types.js";
 // @ts-ignore
 export const STORE_PATH = process.env.PIPELINES_STORE || "/data/pipelines.json";
 
+let saveLock = false;
+
 export async function savePipelinesState(pipelines: Map<string, Pipeline>) {
+    if (saveLock) return; // Prevent concurrent saves
+    saveLock = true;
     try {
         const dir = path.dirname(STORE_PATH);
         await fs.mkdir(dir, { recursive: true });
@@ -14,9 +18,17 @@ export async function savePipelinesState(pipelines: Map<string, Pipeline>) {
         // Atomic write: write to tmp then rename (prevents corruption)
         const tmp = `${STORE_PATH}.tmp`;
         await fs.writeFile(tmp, json, "utf-8");
-        await fs.rename(tmp, STORE_PATH);
+        try {
+            await fs.rename(tmp, STORE_PATH);
+        } catch {
+            // Fallback: direct write if rename fails
+            await fs.writeFile(STORE_PATH, json, "utf-8");
+            try { await fs.unlink(tmp); } catch {}
+        }
     } catch (err) {
         console.warn("[Orchestrator] Failed to save state:", err);
+    } finally {
+        saveLock = false;
     }
 }
 
