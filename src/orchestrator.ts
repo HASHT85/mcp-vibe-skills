@@ -97,6 +97,8 @@ export class Orchestrator extends EventEmitter {
             workspace,
             artifacts: {},
             tokenUsage: { inputTokens: 0, outputTokens: 0 },
+            agentTokens: [],
+            tokenHistory: [],
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             templateId: resolvedTemplateId,
@@ -724,10 +726,14 @@ Output MUST be a strict JSON array of objects:
 ### LIVE LLM MARKET PRICING (Cost per 1000 tokens)
 ${modelsListStr}
 
-### MODEL ROUTING STRATEGY
-1. Analyze the complexity of each sub-agent's task.
-2. For high-complexity structural coding or deep logic, pick the best flagship model from the list above. Setting provider to "anthropic" and model to "claude-4-6-sonnet" is also an excellent default for peak performance.
-3. For low-complexity tasks (QA, research, data formatting, basic scripts), YOU MUST pick the absolute CHEAPEST model from the live list to save costs. Set provider to "openrouter" and the model to the exact ID from the list.
+### MODEL ROUTING STRATEGY (TRUE BENCHMARK)
+1. CRITICAL FIRST STEP: Use the \`web_search\` tool to find the most recent "LMSys Chatbot Arena Leaderboard" or "HuggingFace Open LLM Leaderboard" scores for coding/reasoning. Search specifically for the models listed in the Live Pricing above.
+2. Analyze the complexity of each sub-agent's task.
+3. For high-complexity structural coding or deep logic: 
+   - Calculate the True Benchmark Score: \`(Elo Performance Score) / (Cost per 1k tokens)\`.
+   - Pick the model from the Live Pricing list with the highest True Benchmark Score. (Default to "anthropic/claude-4-6-sonnet" if web search fails).
+4. For low-complexity tasks (QA, research, data formatting, basic scripts):
+   - You MUST pick the absolute CHEAPEST model from the live list to save costs, but ensure its Elo score is above 1150 if found. Set provider to "openrouter" and the model to the exact ID from the list.
 
 IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\`\`json.`;
 
@@ -736,10 +742,10 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
                     const plannerResult = await runClaudeAgent({
                         model: p.model,
                         prompt: plannerPrompt,
-                        systemPrompt: "You are the VEIST Master Orchestrator. Output ONLY valid JSON array. No markdown formatting.",
+                        systemPrompt: "You are the VEIST Master Orchestrator. Output ONLY valid JSON array. No markdown formatting. YOU MUST USE THE WEB_SEARCH TOOL TO FIND ELO SCORES BEFORE OUTPUTTING YOUR JSON.",
                         cwd: p.workspace,
-                        allowedTools: [],
-                        maxTurns: 3,
+                        allowedTools: ["web_search", "fetch_url"],
+                        maxTurns: 5,
                         abortSignal: abortController.signal
                     });
                     

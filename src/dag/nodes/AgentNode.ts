@@ -54,12 +54,57 @@ export abstract class AgentNode extends DagNode {
         context.updateAgentStatus(this.role, "done", "Terminé");
         context.addEvent(this.role, this.emoji, `✓ Terminé (Tokens: ${result.inputTokens} in / ${result.outputTokens} out)`, "success");
 
-        // Keep track of tokens
+        // Keep track of tokens (pipeline-level)
         if (!context.pipeline.tokenUsage) {
             context.pipeline.tokenUsage = { inputTokens: 0, outputTokens: 0 };
         }
         context.pipeline.tokenUsage.inputTokens += result.inputTokens;
         context.pipeline.tokenUsage.outputTokens += result.outputTokens;
+
+        // Per-agent token tracking
+        if (!context.pipeline.agentTokens) context.pipeline.agentTokens = [];
+        if (!context.pipeline.tokenHistory) context.pipeline.tokenHistory = [];
+
+        const modelName = this.model || context.pipeline.model || 'unknown';
+        const provider = modelName.startsWith('openrouter/') ? 'openrouter' : 'anthropic';
+
+        // Calculate cost
+        let cost = 0;
+        if (provider === 'anthropic') {
+            cost = (result.inputTokens / 1_000_000) * 3.0 + (result.outputTokens / 1_000_000) * 15.0;
+        } else {
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                const cachePath = path.join(process.cwd(), '.openrouter_cache.json');
+                if (fs.existsSync(cachePath)) {
+                    const models = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+                    const cleanModel = modelName.replace('openrouter/', '');
+                    const m = models.find((mod: any) => cleanModel.includes(mod.id) || mod.id.includes(cleanModel));
+                    if (m) {
+                        cost = result.inputTokens * m.pricing.prompt + result.outputTokens * m.pricing.completion;
+                    }
+                }
+            } catch { /* fallback */ }
+        }
+
+        context.pipeline.agentTokens.push({
+            agentId: this.id,
+            role: this.role,
+            emoji: this.emoji,
+            provider,
+            model: modelName.replace('openrouter/', ''),
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+            cost,
+            timestamp: new Date().toISOString()
+        });
+
+        context.pipeline.tokenHistory.push({
+            timestamp: new Date().toISOString(),
+            tokens: result.inputTokens + result.outputTokens,
+            agentRole: this.role
+        });
 
         return this.processResult(result.finalResult || "", context);
     }

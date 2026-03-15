@@ -73,3 +73,60 @@ export function addTokenUsage(
     p.tokenUsage.inputTokens += result.inputTokens || 0;
     p.tokenUsage.outputTokens += result.outputTokens || 0;
 }
+
+export function addAgentTokenUsage(
+    pipelines: Map<string, Pipeline>,
+    id: string,
+    agentId: string,
+    role: string,
+    emoji: string,
+    provider: string,
+    model: string,
+    inputTokens: number,
+    outputTokens: number
+) {
+    const p = pipelines.get(id);
+    if (!p) return;
+    if (!p.agentTokens) p.agentTokens = [];
+    if (!p.tokenHistory) p.tokenHistory = [];
+
+    // Calculate cost based on model pricing
+    // OpenRouter pricing is per-token, Anthropic Sonnet 4.6 ~ $3/$15 per 1M
+    let cost = 0;
+    if (provider === "anthropic") {
+        cost = (inputTokens / 1_000_000) * 3.0 + (outputTokens / 1_000_000) * 15.0;
+    } else {
+        // Try to load from cache
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const cachePath = path.join(process.cwd(), '.openrouter_cache.json');
+            if (fs.existsSync(cachePath)) {
+                const models = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+                const m = models.find((mod: any) => model.replace('openrouter/', '').includes(mod.id) || mod.id.includes(model.replace('openrouter/', '')));
+                if (m) {
+                    cost = inputTokens * m.pricing.prompt + outputTokens * m.pricing.completion;
+                }
+            }
+        } catch { /* fallback to 0 */ }
+    }
+
+    const record = {
+        agentId,
+        role,
+        emoji,
+        provider,
+        model: model.replace('openrouter/', ''),
+        inputTokens,
+        outputTokens,
+        cost,
+        timestamp: new Date().toISOString()
+    };
+
+    p.agentTokens.push(record);
+    p.tokenHistory.push({
+        timestamp: record.timestamp,
+        tokens: inputTokens + outputTokens,
+        agentRole: role
+    });
+}

@@ -1,116 +1,359 @@
 import { motion } from 'framer-motion';
-import type { Pipeline } from '../api/client';
+import { useMemo } from 'react';
+import type { Pipeline, AgentTokenRecord } from '../api/client';
 import { formatTokenCount } from '../utils';
+import {
+    AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+    PieChart, Pie, Cell, Legend
+} from 'recharts';
 
+// ─── Color palette for agents ───
+const AGENT_COLORS = [
+    '#d4ff00', '#00e5ff', '#ff6b6b', '#ffd93d', '#6bff8a',
+    '#c084fc', '#fb923c', '#38bdf8', '#f472b6', '#a3e635'
+];
+
+function getAgentColor(index: number) {
+    return AGENT_COLORS[index % AGENT_COLORS.length];
+}
+
+// ─── Main Component ───
 export function TokensView({ pipelines }: { pipelines: Pipeline[] }) {
+
+    // ── Aggregate all agent token records across all pipelines ──
+    const allAgentTokens: AgentTokenRecord[] = useMemo(() =>
+        pipelines.flatMap(p => p.agentTokens || []),
+    [pipelines]);
+
+    // ── Per-agent aggregation ──
+    const agentSummary = useMemo(() => {
+        const map = new Map<string, {
+            role: string; emoji: string; provider: string; model: string;
+            inputTokens: number; outputTokens: number; cost: number;
+            lastTimestamp: string; count: number;
+        }>();
+        for (const rec of allAgentTokens) {
+            const key = rec.role;
+            const existing = map.get(key);
+            if (existing) {
+                existing.inputTokens += rec.inputTokens;
+                existing.outputTokens += rec.outputTokens;
+                existing.cost += rec.cost;
+                existing.count++;
+                if (rec.timestamp > existing.lastTimestamp) {
+                    existing.lastTimestamp = rec.timestamp;
+                    existing.model = rec.model;
+                    existing.provider = rec.provider;
+                }
+            } else {
+                map.set(key, {
+                    role: rec.role, emoji: rec.emoji, provider: rec.provider, model: rec.model,
+                    inputTokens: rec.inputTokens, outputTokens: rec.outputTokens,
+                    cost: rec.cost, lastTimestamp: rec.timestamp, count: 1
+                });
+            }
+        }
+        return Array.from(map.values()).sort((a, b) => (b.inputTokens + b.outputTokens) - (a.inputTokens + a.outputTokens));
+    }, [allAgentTokens]);
+
+    // ── Global totals ──
     const totalInput = pipelines.reduce((s, p) => s + (p.tokenUsage?.inputTokens || 0), 0);
     const totalOutput = pipelines.reduce((s, p) => s + (p.tokenUsage?.outputTokens || 0), 0);
     const totalTokens = totalInput + totalOutput;
+    const totalCost = agentSummary.reduce((s, a) => s + a.cost, 0);
+    const activeAgents = new Set(pipelines.filter(p => p.phase !== 'COMPLETED' && p.phase !== 'FAILED').flatMap(p => (p.agentTokens || []).map(t => t.role))).size;
+    const totalAgents = agentSummary.length;
+    const activePipelines = pipelines.filter(p => p.phase !== 'COMPLETED' && p.phase !== 'FAILED').length;
 
-    // Claude Haiku 4.5 pricing (claude-haiku-4-5-20251001)
-    const costPerMInput = 1.00; // $1.00 per 1M input tokens
-    const costPerMOutput = 5.00; // $5.00 per 1M output tokens
-    const estimatedCost = (totalInput / 1_000_000) * costPerMInput + (totalOutput / 1_000_000) * costPerMOutput;
+    // ── Pie chart data ──
+    const pieData = agentSummary.map((a, i) => ({
+        name: a.role,
+        value: a.inputTokens + a.outputTokens,
+        color: getAgentColor(i)
+    }));
+
+    // ── Time series data (aggregate tokenHistory from all pipelines) ──
+    const timeSeriesData = useMemo(() => {
+        const allHistory = pipelines.flatMap(p => p.tokenHistory || []);
+        if (allHistory.length === 0) return [];
+
+        // Group by hour buckets
+        const buckets = new Map<string, Record<string, number>>();
+        for (const entry of allHistory) {
+            const d = new Date(entry.timestamp);
+            const hourKey = `${d.getHours().toString().padStart(2, '0')}:00`;
+            const bucket = buckets.get(hourKey) || {};
+            const role = entry.agentRole || 'Unknown';
+            bucket[role] = (bucket[role] || 0) + entry.tokens;
+            buckets.set(hourKey, bucket);
+        }
+
+        const roles = [...new Set(allHistory.map(h => h.agentRole || 'Unknown'))];
+        return Array.from(buckets.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([hour, data]) => ({ hour, ...data }));
+    }, [pipelines]);
+
+    const allRoles = useMemo(() =>
+        [...new Set(pipelines.flatMap(p => (p.tokenHistory || []).map(h => h.agentRole || 'Unknown')))],
+    [pipelines]);
+
+    // ── Recent activity feed ──
+    const recentEvents = useMemo(() =>
+        pipelines
+            .flatMap(p => p.events.map(e => ({ ...e, projectName: p.name })))
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+            .slice(0, 8),
+    [pipelines]);
 
     return (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="flex items-center gap-3 mb-8">
-                <span className="material-symbols-outlined text-accent text-xl">toll</span>
-                <h1 className="text-2xl font-black text-white tracking-widest uppercase">Token_Protocol_Usage</h1>
-            </div>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <div className="bg-panel border border-border-muted p-4 flex flex-col items-center justify-center relative overflow-hidden group">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    <span className="material-symbols-outlined text-slate-500 mb-2 text-3xl">data_usage</span>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Total Tokens</div>
-                    <div className="text-2xl font-black text-white monospaced">{formatTokenCount(totalTokens)}</div>
+            {/* ═══ HEADER ═══ */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-[#d4ff00] animate-pulse"></div>
+                    <h1 className="text-xl font-black text-white tracking-[0.3em] uppercase">
+                        MISSION CONTROL
+                    </h1>
+                    <span className="text-xs text-slate-500 tracking-widest">// TOKEN MANAGEMENT</span>
                 </div>
-                
-                <div className="bg-panel border border-border-muted p-4 flex flex-col items-center justify-center relative overflow-hidden group">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    <span className="material-symbols-outlined text-blue-500/50 mb-2 text-3xl">download</span>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Input Tokens</div>
-                    <div className="text-2xl font-black text-blue-400 monospaced">{formatTokenCount(totalInput)}</div>
-                </div>
-                
-                <div className="bg-panel border border-border-muted p-4 flex flex-col items-center justify-center relative overflow-hidden group">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-500/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    <span className="material-symbols-outlined text-purple-500/50 mb-2 text-3xl">upload</span>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Output Tokens</div>
-                    <div className="text-2xl font-black text-purple-400 monospaced">{formatTokenCount(totalOutput)}</div>
-                </div>
-                
-                <div className="bg-panel border border-accent/50 p-4 flex flex-col items-center justify-center relative overflow-hidden group shadow-[0_0_15px_rgba(212,255,0,0.1)]">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-accent to-transparent opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                    <div className="absolute top-0 right-0 w-16 h-16 bg-accent/10 rounded-full blur-xl -mr-6 -mt-6"></div>
-                    <span className="material-symbols-outlined text-accent mb-2 text-3xl">payments</span>
-                    <div className="text-[10px] text-accent font-bold uppercase tracking-widest mb-1">Est. Cost (Haiku)</div>
-                    <div className="text-2xl font-black text-white monospaced">${estimatedCost.toFixed(4)}</div>
-                </div>
-            </div>
-
-            {/* Per-project breakdown */}
-            <div className="flex items-center gap-2 mb-4 border-b border-border-muted pb-2">
-                <span className="material-symbols-outlined text-lg text-slate-400">schema</span>
-                <h3 className="text-sm font-black text-slate-300 tracking-widest uppercase">Project_Breakdown</h3>
-            </div>
-            
-            <div className="bg-black border border-border-muted p-4 scanline shadow-inner max-h-[500px] overflow-y-auto custom-scrollbar">
-                <div className="flex items-center gap-2 mb-4 text-xs font-bold text-slate-500 tracking-widest uppercase border-b border-white/5 pb-2">
-                    <div className="flex gap-1 mr-2">
-                        <span className="w-2 h-2 rounded-full bg-red-500/50"></span>
-                        <span className="w-2 h-2 rounded-full bg-yellow-500/50"></span>
-                        <span className="w-2 h-2 rounded-full bg-green-500/50"></span>
+                <div className="flex items-center gap-3">
+                    {agentSummary.slice(0, 5).map((a, i) => (
+                        <span key={a.role} className="text-[10px] font-bold tracking-wider" style={{ color: getAgentColor(i) }}>
+                            • {a.role}
+                        </span>
+                    ))}
+                    <div className="text-[10px] text-[#d4ff00] font-bold tracking-widest bg-[#d4ff00]/10 px-2 py-1 border border-[#d4ff00]/30">
+                        GATEWAY ONLINE
                     </div>
-                    <span>Data_Stream_Activity</span>
                 </div>
-                
-                <div className="flex flex-col gap-2">
-                    {pipelines.map(p => {
-                        const inp = p.tokenUsage?.inputTokens || 0;
-                        const out = p.tokenUsage?.outputTokens || 0;
-                        const total = inp + out;
-                        const pct = totalTokens > 0 ? ((total / totalTokens) * 100).toFixed(1) : '0';
-                        
-                        if (total === 0) return null; // Skip empty pipelines to reduce clutter
-                        
-                        return (
-                            <div key={p.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white/5 border border-white/10 hover:bg-white/10 transition-colors group">
-                                <div className="flex items-center gap-3 mb-2 sm:mb-0">
-                                    <span className="material-symbols-outlined text-slate-500 group-hover:text-accent transition-colors">folder_data</span>
-                                    <span className="text-sm font-bold text-white tracking-widest uppercase truncate max-w-[200px]" title={p.name}>
-                                        {(p.name || 'unnamed').replace(/\s+/g, '_').toLowerCase()}
-                                    </span>
+            </div>
+
+            {/* ═══ KPI CARDS ═══ */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <KPICard label="TOKENS AUJOURD'HUI" value={formatTokenCount(totalTokens)} accent="#d4ff00" icon="⚡" />
+                <KPICard label="COÛT TOTAL" value={`$${totalCost.toFixed(3)}`} accent="#00e5ff" icon="💰" />
+                <KPICard label="AGENTS ACTIFS" value={`${activeAgents} / ${totalAgents || '—'}`} accent="#6bff8a" icon="🤖" />
+                <KPICard label="PIPELINES EN COURS" value={String(activePipelines)} accent="#ffd93d" icon="🔄" />
+            </div>
+
+            {/* ═══ CHARTS ROW ═══ */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Time series chart */}
+                <div className="lg:col-span-2 bg-[#0d0d0d] border border-white/10 p-4">
+                    <div className="text-[10px] font-bold text-slate-400 tracking-[0.2em] uppercase mb-3">
+                        TOKENS / HEURE — TOUS AGENTS
+                    </div>
+                    {timeSeriesData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={200}>
+                            <AreaChart data={timeSeriesData}>
+                                <XAxis dataKey="hour" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#1e293b' }} />
+                                <YAxis tick={{ fill: '#64748b', fontSize: 10 }} axisLine={{ stroke: '#1e293b' }} />
+                                <Tooltip
+                                    contentStyle={{ background: '#111', border: '1px solid #333', fontSize: 11 }}
+                                    labelStyle={{ color: '#d4ff00' }}
+                                />
+                                {allRoles.map((role, i) => (
+                                    <Area
+                                        key={role}
+                                        type="monotone"
+                                        dataKey={role}
+                                        stackId="1"
+                                        stroke={getAgentColor(i)}
+                                        fill={getAgentColor(i)}
+                                        fillOpacity={0.3}
+                                    />
+                                ))}
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="flex items-center justify-center h-[200px] text-slate-600 text-xs tracking-widest">
+                            EN ATTENTE DE DONNÉES...
+                        </div>
+                    )}
+                </div>
+
+                {/* Pie chart */}
+                <div className="bg-[#0d0d0d] border border-white/10 p-4">
+                    <div className="text-[10px] font-bold text-slate-400 tracking-[0.2em] uppercase mb-3">
+                        RÉPARTITION TOKENS
+                    </div>
+                    {pieData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={200}>
+                            <PieChart>
+                                <Pie
+                                    data={pieData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={45}
+                                    outerRadius={70}
+                                    paddingAngle={2}
+                                    dataKey="value"
+                                >
+                                    {pieData.map((entry, i) => (
+                                        <Cell key={entry.name} fill={entry.color} stroke="transparent" />
+                                    ))}
+                                </Pie>
+                                <Legend
+                                    layout="vertical"
+                                    align="right"
+                                    verticalAlign="middle"
+                                    iconSize={8}
+                                    formatter={(value: string) => (
+                                        <span className="text-[10px] text-slate-300 tracking-wider">{value}</span>
+                                    )}
+                                />
+                                <Tooltip
+                                    contentStyle={{ background: '#111', border: '1px solid #333', fontSize: 11 }}
+                                    formatter={(value: any) => [formatTokenCount(Number(value)), 'Tokens']}
+                                />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="flex items-center justify-center h-[200px] text-slate-600 text-xs tracking-widest">
+                            AUCUNE DONNÉE
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* ═══ AGENT CARDS GRID ═══ */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+                {agentSummary.map((agent, i) => {
+                    const total = agent.inputTokens + agent.outputTokens;
+                    const isOpenRouter = agent.provider === 'openrouter';
+                    const statusColor = agent.count > 0 ? '#d4ff00' : '#64748b';
+                    const timeDiff = agent.lastTimestamp ? getTimeDiff(agent.lastTimestamp) : '';
+
+                    return (
+                        <motion.div
+                            key={agent.role}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.05 }}
+                            className="bg-[#0d0d0d] border border-white/10 p-4 hover:border-white/20 transition-all group"
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-base">{agent.emoji}</span>
+                                    <span className="text-xs font-black text-white tracking-wider uppercase truncate max-w-[100px]">{agent.role}</span>
                                 </div>
-                                <div className="flex items-center gap-4 text-xs monospaced">
-                                    <div className="flex items-center gap-1 text-blue-400" title="Input Tokens">
-                                        <span className="material-symbols-outlined text-[14px]">arrow_downward</span> {formatTokenCount(inp)}
-                                    </div>
-                                    <div className="text-slate-600">/</div>
-                                    <div className="flex items-center gap-1 text-purple-400" title="Output Tokens">
-                                        <span className="material-symbols-outlined text-[14px]">arrow_upward</span> {formatTokenCount(out)}
-                                    </div>
-                                    <div className="text-slate-600">=</div>
-                                    <div className="font-bold text-white min-w-[60px] text-right">
+                                <span
+                                    className="text-[8px] font-bold tracking-widest px-2 py-0.5 border"
+                                    style={{
+                                        color: statusColor,
+                                        borderColor: statusColor + '50',
+                                        backgroundColor: statusColor + '10'
+                                    }}
+                                >
+                                    {agent.count > 0 ? 'ACTIF' : 'IDLE'}
+                                </span>
+                            </div>
+
+                            {/* Category */}
+                            <div className="text-[9px] text-slate-500 font-bold tracking-widest uppercase mb-3">
+                                {isOpenRouter ? 'OPENROUTER' : 'ANTHROPIC'}
+                            </div>
+
+                            {/* Metrics */}
+                            <div className="flex items-end justify-between mb-3">
+                                <div>
+                                    <div className="text-[9px] text-slate-500 tracking-wider">TOKENS</div>
+                                    <div className="text-lg font-black text-white" style={{ color: getAgentColor(i) }}>
                                         {formatTokenCount(total)}
                                     </div>
-                                    <div className="bg-white/10 text-slate-300 px-2 py-0.5 min-w-[50px] text-right text-[10px] font-black tracking-widest">
-                                        {pct}%
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-[9px] text-slate-500 tracking-wider">COÛT</div>
+                                    <div className="text-lg font-black text-white">
+                                        ${agent.cost.toFixed(3)}
                                     </div>
                                 </div>
                             </div>
-                        );
-                    })}
-                    
-                    {pipelines.length === 0 || pipelines.every(p => (p.tokenUsage?.inputTokens || 0) + (p.tokenUsage?.outputTokens || 0) === 0) ? (
-                        <div className="flex items-center gap-2 text-slate-500 text-xs monospaced py-4">
-                            <span className="text-accent">&gt;</span> No token usage data detected in current matrix.
+
+                            {/* Footer */}
+                            <div className="border-t border-white/5 pt-2 space-y-1">
+                                {timeDiff && (
+                                    <div className="text-[9px] text-slate-500 truncate">
+                                        {timeDiff}
+                                    </div>
+                                )}
+                                <div className="text-[9px] text-slate-600 truncate">
+                                    via <span className="text-slate-400">{agent.model || 'N/A'}</span>
+                                </div>
+                            </div>
+                        </motion.div>
+                    );
+                })}
+
+                {agentSummary.length === 0 && (
+                    <div className="col-span-full flex items-center justify-center py-12 text-slate-600 text-xs tracking-widest">
+                        <span className="text-[#d4ff00] mr-2">&gt;</span> AUCUN AGENT DÉTECTÉ — LANCEZ UN PROJET
+                    </div>
+                )}
+            </div>
+
+            {/* ═══ ACTIVITY FEED ═══ */}
+            <div className="bg-[#0d0d0d] border border-white/10 p-4">
+                <div className="text-[10px] font-bold text-slate-400 tracking-[0.2em] uppercase mb-3">
+                    ACTIVITÉ RÉCENTE
+                </div>
+                <div className="space-y-1 max-h-[200px] overflow-y-auto custom-scrollbar">
+                    {recentEvents.map((evt, i) => (
+                        <div key={evt.id || i} className="flex items-center gap-3 py-1.5 border-b border-white/5 last:border-0 text-xs">
+                            <span className="text-slate-600 w-12 shrink-0 text-[10px] font-mono">
+                                {new Date(evt.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            <span className="font-bold text-[#d4ff00] tracking-wider text-[10px] w-24 shrink-0 truncate">
+                                {evt.agentRole}
+                            </span>
+                            <span className="text-slate-400 truncate text-[10px]">
+                                {evt.action}
+                            </span>
                         </div>
-                    ) : null}
+                    ))}
+                    {recentEvents.length === 0 && (
+                        <div className="text-slate-600 text-[10px] tracking-widest py-4">
+                            <span className="text-[#d4ff00]">&gt;</span> Aucune activité récente
+                        </div>
+                    )}
                 </div>
             </div>
         </motion.div>
     );
+}
+
+// ─── Sub-components ───
+
+function KPICard({ label, value, accent, icon }: { label: string; value: string; accent: string; icon: string }) {
+    return (
+        <div
+            className="bg-[#0d0d0d] border p-4 relative overflow-hidden group hover:border-opacity-100 transition-all"
+            style={{ borderColor: accent + '30' }}
+        >
+            <div
+                className="absolute top-0 left-0 w-full h-0.5 opacity-60 group-hover:opacity-100 transition-opacity"
+                style={{ background: `linear-gradient(to right, transparent, ${accent}, transparent)` }}
+            />
+            <div className="text-[10px] text-slate-500 font-bold tracking-[0.2em] uppercase mb-1">{label}</div>
+            <div className="text-2xl font-black" style={{ color: accent }}>
+                {value}
+            </div>
+            <div className="absolute bottom-2 right-3 text-xl opacity-20 group-hover:opacity-40 transition-opacity">
+                {icon}
+            </div>
+        </div>
+    );
+}
+
+function getTimeDiff(timestamp: string): string {
+    const diff = Date.now() - new Date(timestamp).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'à l\'instant';
+    if (mins < 60) return `il y a ${mins} min`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `il y a ${hours}h`;
+    return `il y a ${Math.floor(hours / 24)}j`;
 }

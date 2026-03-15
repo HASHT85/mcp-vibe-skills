@@ -186,6 +186,18 @@ export type NodeTopology = {
     systemPrompt: string;
 };
 
+export type AgentTokenRecord = {
+    agentId: string;
+    role: string;
+    emoji: string;
+    provider: string;
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    cost: number;
+    timestamp: string;
+};
+
 export type Pipeline = {
     id: string;
     name: string;
@@ -208,6 +220,8 @@ export type Pipeline = {
     topology?: NodeTopology[];
     artifacts: Record<string, unknown>;
     tokenUsage?: { inputTokens: number; outputTokens: number };
+    agentTokens?: AgentTokenRecord[];
+    tokenHistory?: { timestamp: string; tokens: number; agentRole?: string }[];
     createdAt: string;
     updatedAt?: string;
     error?: string;

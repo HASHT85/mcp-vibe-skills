@@ -231,49 +231,40 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
             }
             case "web_search": {
                 try {
-                    const encodedQuery = encodeURIComponent(input.query);
-                    const controller = new AbortController();
-                    const searchTimeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
-                    
-                    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodedQuery}`, {
-                        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
-                        signal: controller.signal
-                    });
-                    clearTimeout(searchTimeout);
-                    const html = await res.text();
-
-                    const $ = cheerio.load(html);
-                    const results: string[] = [];
-
-                    // Try primary selectors, then fallback alternatives
-                    const selectors = [
-                        { container: '.result', title: '.result__title a', url: '.result__a', snippet: '.result__snippet' },
-                        { container: '.web-result', title: '.result__a', url: '.result__url', snippet: '.result__snippet' },
-                        { container: '[data-testid="result"]', title: 'a[data-testid="result-title-a"]', url: 'a', snippet: '[data-testid="result-snippet"]' },
-                    ];
-
-                    for (const sel of selectors) {
-                        $(sel.container).each((i, el) => {
-                            if (i >= 5) return false;
-                            const title = $(el).find(sel.title).text().trim();
-                            const url = $(el).find(sel.url).attr('href') || '';
-                            const snippet = $(el).find(sel.snippet).text().trim();
-
-                            if (title && url) {
-                                let realUrl = url;
-                                if (url.startsWith('//duckduckgo.com/l/?uddg=')) {
-                                    realUrl = decodeURIComponent(url.split('uddg=')[1].split('&')[0]);
-                                }
-                                results.push(`[${title}] URL: ${realUrl}\nSnippet: ${snippet}`);
-                            }
-                        });
-                        if (results.length > 0) break; // Found results with this selector
+                    const query = input.query;
+                    const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
+                    if (!TAVILY_API_KEY) {
+                        return "Error: TAVILY_API_KEY is not set in environment or .env. Web search is disabled.";
                     }
-
-                    if (results.length === 0) return `No search results found for "${input.query}". Try alternative keywords.`;
-                    return `Search Results for "${input.query}":\n\n${results.join('\n\n')}`;
+                    const res = await fetch("https://api.tavily.com/search", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            api_key: TAVILY_API_KEY,
+                            query: query,
+                            search_depth: "basic",
+                            include_answer: true,
+                            max_results: 5
+                        })
+                    });
+                    if (!res.ok) {
+                        return `Error: Web search failed with API status ${res.status}`;
+                    }
+                    const data = await res.json();
+                    
+                    if (!data.results || data.results.length === 0) {
+                        return `No search results found for "${query}". Try alternative keywords.`;
+                    }
+                    
+                    const resultsStr = data.results.map((r: any) => `[${r.title}] URL: ${r.url}\nSnippet: ${r.content}`).join('\n\n');
+                    let finalOutput = `Search Results for "${query}":\n\n`;
+                    if (data.answer) {
+                        finalOutput += `AI Summary Answer: ${data.answer}\n\n`;
+                    }
+                    finalOutput += resultsStr;
+                    return finalOutput;
                 } catch (e: any) {
-                    return `Search failed: ${e.message}. The agent can continue without web search results.`;
+                    return `Search failed: ${e.message}.`;
                 }
             }
             case "fetch_url": {

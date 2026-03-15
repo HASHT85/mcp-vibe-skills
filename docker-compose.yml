@@ -18,6 +18,7 @@ services:
       - WORKSPACE_ROOT=/workspace
       - PIPELINES_STORE=/data/pipelines.json
       - HOST_WORKSPACE_PATH=${HOST_WORKSPACE_PATH:-/opt/veistcraft/workspace}
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
     volumes:
       - /opt/veistcraft/data:/data
       - ${HOST_WORKSPACE_PATH:-/opt/veistcraft/workspace}:/workspace
