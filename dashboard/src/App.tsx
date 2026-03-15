@@ -8,7 +8,6 @@ import { TopBar } from './components/TopBar';
 import { Sidebar } from './components/Sidebar';
 import { ProjectList } from './components/ProjectList';
 import { ProjectDetail } from './components/ProjectDetail';
-import { AgentsView } from './components/AgentsView';
 import { TokensView } from './components/TokensView';
 import { DeployView } from './components/DeployView';
 import { ContainersView } from './components/ContainersView';
@@ -227,8 +226,6 @@ function Dashboard() {
         return <ContainersView key="containers" pipelines={pipelines} />;
       case 'chat':
         return <ChatView key="chat" pipelines={pipelines} onPipelineLaunched={() => { setActiveNav('projects'); load(); }} onRefresh={load} />;
-      case 'agents':
-        return <AgentsView key="agents" pipelines={pipelines} />;
       case 'tokens':
         return <TokensView key="tokens" pipelines={pipelines} />;
       case 'deploy':

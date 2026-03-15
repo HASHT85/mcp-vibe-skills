@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Pipeline, AgentTokenRecord } from '../api/client';
 import { formatTokenCount } from '../utils';
 import {
@@ -19,11 +19,16 @@ function getAgentColor(index: number) {
 
 // ─── Main Component ───
 export function TokensView({ pipelines }: { pipelines: Pipeline[] }) {
+    const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
+
+    const filteredPipelines = useMemo(() => 
+        selectedProjectId === 'all' ? pipelines : pipelines.filter(p => p.id === selectedProjectId),
+    [pipelines, selectedProjectId]);
 
     // ── Aggregate all agent token records across all pipelines ──
     const allAgentTokens: AgentTokenRecord[] = useMemo(() =>
-        pipelines.flatMap(p => p.agentTokens || []),
-    [pipelines]);
+        filteredPipelines.flatMap(p => p.agentTokens || []),
+    [filteredPipelines]);
 
     // ── Per-agent aggregation ──
     const agentSummary = useMemo(() => {
@@ -57,13 +62,13 @@ export function TokensView({ pipelines }: { pipelines: Pipeline[] }) {
     }, [allAgentTokens]);
 
     // ── Global totals ──
-    const totalInput = pipelines.reduce((s, p) => s + (p.tokenUsage?.inputTokens || 0), 0);
-    const totalOutput = pipelines.reduce((s, p) => s + (p.tokenUsage?.outputTokens || 0), 0);
+    const totalInput = filteredPipelines.reduce((s, p) => s + (p.tokenUsage?.inputTokens || 0), 0);
+    const totalOutput = filteredPipelines.reduce((s, p) => s + (p.tokenUsage?.outputTokens || 0), 0);
     const totalTokens = totalInput + totalOutput;
     const totalCost = agentSummary.reduce((s, a) => s + a.cost, 0);
-    const activeAgents = new Set(pipelines.filter(p => p.phase !== 'COMPLETED' && p.phase !== 'FAILED').flatMap(p => (p.agentTokens || []).map(t => t.role))).size;
+    const activeAgents = new Set(filteredPipelines.filter(p => p.phase !== 'COMPLETED' && p.phase !== 'FAILED').flatMap(p => (p.agentTokens || []).map(t => t.role))).size;
     const totalAgents = agentSummary.length;
-    const activePipelines = pipelines.filter(p => p.phase !== 'COMPLETED' && p.phase !== 'FAILED').length;
+    const activePipelines = filteredPipelines.filter(p => p.phase !== 'COMPLETED' && p.phase !== 'FAILED').length;
 
     // ── Pie chart data ──
     const pieData = agentSummary.map((a, i) => ({
@@ -74,7 +79,7 @@ export function TokensView({ pipelines }: { pipelines: Pipeline[] }) {
 
     // ── Time series data (aggregate tokenHistory from all pipelines) ──
     const timeSeriesData = useMemo(() => {
-        const allHistory = pipelines.flatMap(p => p.tokenHistory || []);
+        const allHistory = filteredPipelines.flatMap(p => p.tokenHistory || []);
         if (allHistory.length === 0) return [];
 
         // Group by hour buckets
@@ -92,19 +97,19 @@ export function TokensView({ pipelines }: { pipelines: Pipeline[] }) {
         return Array.from(buckets.entries())
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([hour, data]) => ({ hour, ...data }));
-    }, [pipelines]);
+    }, [filteredPipelines]);
 
     const allRoles = useMemo(() =>
-        [...new Set(pipelines.flatMap(p => (p.tokenHistory || []).map(h => h.agentRole || 'Unknown')))],
-    [pipelines]);
+        [...new Set(filteredPipelines.flatMap(p => (p.tokenHistory || []).map(h => h.agentRole || 'Unknown')))],
+    [filteredPipelines]);
 
     // ── Recent activity feed ──
     const recentEvents = useMemo(() =>
-        pipelines
+        filteredPipelines
             .flatMap(p => p.events.map(e => ({ ...e, projectName: p.name })))
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
             .slice(0, 8),
-    [pipelines]);
+    [filteredPipelines]);
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
@@ -119,11 +124,17 @@ export function TokensView({ pipelines }: { pipelines: Pipeline[] }) {
                     <span className="text-xs text-slate-500 tracking-widest">// TOKEN MANAGEMENT</span>
                 </div>
                 <div className="flex items-center gap-3">
-                    {agentSummary.slice(0, 5).map((a, i) => (
-                        <span key={a.role} className="text-[10px] font-bold tracking-wider" style={{ color: getAgentColor(i) }}>
-                            • {a.role}
-                        </span>
-                    ))}
+                    {/* Project Filter Dropdown */}
+                    <select
+                        value={selectedProjectId}
+                        onChange={(e) => setSelectedProjectId(e.target.value)}
+                        className="bg-black border border-white/20 text-white text-[10px] font-mono uppercase tracking-wider px-3 py-1.5 outline-none focus:border-v-accent transition-colors cursor-pointer"
+                    >
+                        <option value="all">ALL PROJECTS</option>
+                        {pipelines.map(p => (
+                            <option key={p.id} value={p.id}>{p.name.toUpperCase()}</option>
+                        ))}
+                    </select>
                     <div className="text-[10px] text-[#d4ff00] font-bold tracking-widest bg-[#d4ff00]/10 px-2 py-1 border border-[#d4ff00]/30">
                         GATEWAY ONLINE
                     </div>

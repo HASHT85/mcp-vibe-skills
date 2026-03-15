@@ -184,6 +184,8 @@ export type NodeTopology = {
     description: string;
     dependencies: string[];
     systemPrompt: string;
+    provider?: 'anthropic' | 'openrouter';
+    model?: string;
 };
 
 export type AgentTokenRecord = {
@@ -204,6 +206,7 @@ export type Pipeline = {
     description: string;
     phase: string;
     progress: number;
+    model?: string;
     agents: PipelineAgent[];
     events: PipelineEvent[];
     projectType?: string;
@@ -218,6 +221,7 @@ export type Pipeline = {
         url?: string;
     };
     topology?: NodeTopology[];
+    nodeStatuses?: Record<string, 'COMPLETED' | 'FAILED' | 'PENDING'>;
     artifacts: Record<string, unknown>;
     tokenUsage?: { inputTokens: number; outputTokens: number };
     agentTokens?: AgentTokenRecord[];

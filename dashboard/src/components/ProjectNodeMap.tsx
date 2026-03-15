@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import type { PipelineEvent } from '../api/client';
 
 export interface NodeTopology {
@@ -8,33 +8,31 @@ export interface NodeTopology {
     emoji: string;
     description: string;
     dependencies: string[];
+    provider?: 'anthropic' | 'openrouter';
+    model?: string;
 }
 
 export interface ProjectNodeMapProps {
     topology?: NodeTopology[];
-    agents: { role: string; emoji: string; status: string }[];
+    agents: { role: string; emoji: string; status: string; currentAction?: string }[];
     events?: PipelineEvent[];
     selectedNodeId?: string | null;
     onSelectNode?: (id: string | null) => void;
+    nodeStatuses?: Record<string, 'COMPLETED' | 'FAILED' | 'PENDING'>;
+    pipelinePhase?: string;
 }
 
 function calculateDepths(nodes: NodeTopology[]): Map<string, number> {
     const depths = new Map<string, number>();
     let changed = true;
-    
-    // Initialize
     nodes.forEach(n => depths.set(n.id, 0));
-
-    // Iteratively resolve depths
     while (changed) {
         changed = false;
         for (const node of nodes) {
             let maxDepDepth = -1;
             for (const depId of node.dependencies) {
                 const d = depths.get(depId);
-                if (d !== undefined && d > maxDepDepth) {
-                    maxDepDepth = d;
-                }
+                if (d !== undefined && d > maxDepDepth) maxDepDepth = d;
             }
             const newDepth = maxDepDepth + 1;
             if (depths.get(node.id) !== newDepth) {
@@ -46,11 +44,12 @@ function calculateDepths(nodes: NodeTopology[]): Map<string, number> {
     return depths;
 }
 
-export function ProjectNodeMap({ topology, agents, events, selectedNodeId, onSelectNode }: ProjectNodeMapProps) {
+type NodeStatus = 'waiting' | 'active' | 'done' | 'error';
+
+export function ProjectNodeMap({ topology, agents, events, selectedNodeId, onSelectNode, nodeStatuses, pipelinePhase }: ProjectNodeMapProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [nodeRects, setNodeRects] = useState<Record<string, { x: number, y: number, w: number, h: number }>>({});
     
-    // Default fallback if topology is old/missing
     const safeTopology = useMemo(() => {
         if (topology && topology.length > 0) return topology;
         const safeAgents = agents.filter(Boolean);
@@ -67,7 +66,6 @@ export function ProjectNodeMap({ topology, agents, events, selectedNodeId, onSel
         const depths = calculateDepths(safeTopology);
         const maxDepth = Math.max(0, ...Array.from(depths.values()));
         const result: NodeTopology[][] = Array.from({ length: maxDepth + 1 }, () => []);
-        
         safeTopology.forEach(node => {
             const d = depths.get(node.id) || 0;
             if (result[d]) result[d].push(node);
@@ -79,7 +77,6 @@ export function ProjectNodeMap({ topology, agents, events, selectedNodeId, onSel
         if (!containerRef.current) return;
         const containerRect = containerRef.current.getBoundingClientRect();
         const newRects: Record<string, {x: number, y: number, w: number, h: number}> = {};
-        
         const elements = containerRef.current.querySelectorAll('[data-node-id]');
         elements.forEach(el => {
             const id = el.getAttribute('data-node-id')!;
@@ -98,34 +95,47 @@ export function ProjectNodeMap({ topology, agents, events, selectedNodeId, onSel
         updateRects();
         const handleResize = () => requestAnimationFrame(updateRects);
         window.addEventListener('resize', handleResize);
-        const timeout = setTimeout(updateRects, 100);
+        const timeout = setTimeout(updateRects, 150);
         return () => {
             window.removeEventListener('resize', handleResize);
             clearTimeout(timeout);
         };
     }, [updateRects]);
 
-    const getAgentStatus = (role: string) => {
-        return agents.find(a => a.role === role)?.status || 'waiting';
+    // Accurate status resolution
+    const getNodeStatus = (nodeId: string, role: string): NodeStatus => {
+        // Pipeline completed → all nodes done
+        if (pipelinePhase === 'COMPLETED') return 'done';
+        if (pipelinePhase === 'FAILED') {
+            // Check if this specific node failed
+            if (nodeStatuses?.[nodeId] === 'FAILED') return 'error';
+            if (nodeStatuses?.[nodeId] === 'COMPLETED') return 'done';
+        }
+        
+        // Use nodeStatuses from backend if available
+        if (nodeStatuses) {
+            const ns = nodeStatuses[nodeId];
+            if (ns === 'COMPLETED') return 'done';
+            if (ns === 'FAILED') return 'error';
+        }
+        
+        // Fallback to agent status
+        const agent = agents.find(a => a.role === role);
+        if (agent) return agent.status as NodeStatus;
+        
+        return 'waiting';
     };
 
-    const StatusColor = {
-        'waiting': 'bg-[#0B0F14] border-border-muted/50 text-slate-400',
-        'active': 'bg-v-accent/10 border-v-accent text-v-accent shadow-[0_0_15px_rgba(205,255,0,0.2)]',
-        'done': 'bg-[#0B0F14] border-slate-500/50 text-white',
-        'error': 'bg-v-alert/10 border-v-alert text-v-alert shadow-[0_0_15px_rgba(255,51,102,0.2)]'
-    };
-
-    const StatusDot = {
-        'waiting': 'bg-slate-700',
-        'active': 'bg-v-accent animate-pulse',
-        'done': 'bg-slate-400',
-        'error': 'bg-v-alert animate-pulse'
+    const statusConfig: Record<NodeStatus, { bg: string; border: string; dot: string; label: string; labelColor: string }> = {
+        waiting: { bg: 'bg-[#0B0F14]', border: 'border-slate-700/60', dot: 'bg-slate-600', label: 'WAITING', labelColor: 'text-slate-500' },
+        active:  { bg: 'bg-[#0d1a0f]', border: 'border-v-accent/60', dot: 'bg-v-accent animate-pulse', label: 'ACTIVE', labelColor: 'text-v-accent' },
+        done:    { bg: 'bg-[#0B0F14]', border: 'border-emerald-500/40', dot: 'bg-emerald-400', label: 'DONE', labelColor: 'text-emerald-400' },
+        error:   { bg: 'bg-[#1a0d0d]', border: 'border-red-500/50', dot: 'bg-red-500 animate-pulse', label: 'ERROR', labelColor: 'text-red-400' }
     };
 
     return (
-        <div className="w-full h-full p-6 relative" ref={containerRef}>
-            {/* SVG Connections Layer */}
+        <div className="w-full h-full p-6 relative overflow-auto custom-scrollbar" ref={containerRef}>
+            {/* SVG Connections */}
             <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
                 {safeTopology.map(node => 
                     node.dependencies.map(depId => {
@@ -138,65 +148,106 @@ export function ProjectNodeMap({ topology, agents, events, selectedNodeId, onSel
                         const endX = target.x;
                         const endY = target.y + (target.h / 2);
                         
-                        const sActive = getAgentStatus(safeTopology.find(n => n.id === depId)?.role || '') === 'active';
-                        const tActive = getAgentStatus(node.role) === 'active';
-                        const strokeColor = (sActive || tActive) ? '#CDFF00' : 'rgba(255,255,255,0.1)';
-                        const strokeWidth = (sActive || tActive) ? 2 : 1;
+                        const sourceStatus = getNodeStatus(depId, safeTopology.find(n => n.id === depId)?.role || '');
+                        const targetStatus = getNodeStatus(node.id, node.role);
+                        const isLive = sourceStatus === 'active' || targetStatus === 'active';
+                        const isDone = sourceStatus === 'done' && targetStatus === 'done';
                         
-                        const controlPointX = startX + (endX - startX) / 2;
+                        const strokeColor = isLive ? '#CDFF00' : isDone ? '#34d399' : 'rgba(255,255,255,0.08)';
+                        const strokeWidth = isLive ? 2.5 : isDone ? 1.5 : 1;
+                        const controlX = startX + (endX - startX) / 2;
 
                         return (
-                            <path
-                                key={`${depId}->${node.id}`}
-                                d={`M ${startX} ${startY} C ${controlPointX} ${startY}, ${controlPointX} ${endY}, ${endX} ${endY}`}
-                                fill="none"
-                                stroke={strokeColor}
-                                strokeWidth={strokeWidth}
-                                strokeDasharray={(sActive || tActive) ? "4 4" : "none"}
-                                className={(sActive || tActive) ? 'animate-[dash_1s_linear_infinite]' : ''}
-                            />
+                            <g key={`${depId}->${node.id}`}>
+                                <path
+                                    d={`M ${startX} ${startY} C ${controlX} ${startY}, ${controlX} ${endY}, ${endX} ${endY}`}
+                                    fill="none"
+                                    stroke={strokeColor}
+                                    strokeWidth={strokeWidth}
+                                    strokeDasharray={isLive ? "6 4" : "none"}
+                                    className={isLive ? 'animate-[dash_1s_linear_infinite]' : ''}
+                                />
+                                {/* Arrow head */}
+                                <circle cx={endX} cy={endY} r={3} fill={strokeColor} />
+                            </g>
                         );
                     })
                 )}
             </svg>
 
-            {/* Nodes Layout */}
-            <div className="relative z-10 w-full h-full flex justify-start items-center gap-16 overflow-x-auto overflow-y-hidden custom-scrollbar">
+            {/* Node Layers (left → right) */}
+            <div className="relative z-10 w-full h-full flex justify-start items-center gap-12 overflow-x-auto overflow-y-hidden">
                 {layers.map((layer, colIndex) => (
-                    <div key={colIndex} className="flex flex-col justify-center gap-8 min-w-[220px]">
+                    <div key={colIndex} className="flex flex-col justify-center gap-6 min-w-[240px] shrink-0">
+                        {/* Column label */}
+                        <div className="text-[9px] text-slate-600 font-bold tracking-[0.3em] uppercase text-center mb-1">
+                            {colIndex === 0 ? 'INIT' : colIndex === layers.length - 1 ? 'FINAL' : `STAGE_${colIndex}`}
+                        </div>
                         {layer.map(node => {
-                            const status = getAgentStatus(node.role);
+                            const status = getNodeStatus(node.id, node.role);
+                            const cfg = statusConfig[status];
                             const isSelected = selectedNodeId === node.id;
+                            const agent = agents.find(a => a.role === node.role);
+                            
                             return (
                                 <motion.button
                                     key={node.id}
                                     data-node-id={node.id}
-                                    onClick={() => onSelectNode?.(node.id)}
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    className={`group relative text-left p-4 border transition-all duration-300 ${
+                                    onClick={() => onSelectNode?.(isSelected ? null : node.id)}
+                                    whileHover={{ scale: 1.03 }}
+                                    whileTap={{ scale: 0.97 }}
+                                    className={`group relative text-left p-4 border-2 transition-all duration-300 rounded-sm ${
                                         isSelected 
-                                            ? 'bg-v-bg border-v-accent shadow-[0_0_20px_rgba(205,255,0,0.15)] z-20' 
-                                            : StatusColor[status as keyof typeof StatusColor]
+                                            ? 'bg-[#0d1a0f] border-v-accent shadow-[0_0_25px_rgba(205,255,0,0.15)] z-20' 
+                                            : `${cfg.bg} ${cfg.border} hover:border-white/30`
                                     }`}
                                 >
-                                    <div className="flex items-center gap-3 mb-2">
+                                    {/* Status dot */}
+                                    <div className="absolute top-3 right-3 flex items-center gap-2">
+                                        <span className={`text-[8px] font-bold tracking-widest ${cfg.labelColor}`}>{cfg.label}</span>
+                                        <div className={`w-2.5 h-2.5 rounded-full ${cfg.dot}`}></div>
+                                    </div>
+
+                                    {/* Node header */}
+                                    <div className="flex items-center gap-3 mb-2 pr-20">
                                         <span className="text-2xl">{node.emoji}</span>
-                                        <div>
-                                            <div className="text-[10px] font-bold tracking-widest uppercase truncate max-w-[140px] text-white/40">
+                                        <div className="min-w-0">
+                                            <div className="text-[10px] font-bold tracking-widest uppercase truncate text-white/30">
                                                 {node.id}
                                             </div>
-                                            <div className={`text-xs font-black uppercase truncate max-w-[140px] ${isSelected ? 'text-v-accent' : ''}`}>
+                                            <div className={`text-xs font-black uppercase truncate ${isSelected ? 'text-v-accent' : 'text-white'}`}>
                                                 {node.role}
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="absolute top-0 right-0 p-2">
-                                        <div className={`w-2 h-2 rounded-full ${StatusDot[status as keyof typeof StatusDot]}`}></div>
+
+                                    {/* Description */}
+                                    <div className="text-[9px] text-slate-500 mt-1 truncate">
+                                        {node.description}
                                     </div>
-                                    <div className="text-[9px] uppercase font-bold tracking-widest mt-2 border-t border-border-muted/30 pt-2 opacity-60">
-                                        STATUS: {status}
-                                    </div>
+
+                                    {/* Model/Provider tag */}
+                                    {node.model && (
+                                        <div className="mt-3 flex items-center gap-2 border-t border-white/5 pt-2">
+                                            <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-wider ${
+                                                node.provider === 'openrouter' 
+                                                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' 
+                                                    : 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                                            }`}>
+                                                {node.provider || 'anthropic'}
+                                            </span>
+                                            <span className="text-[9px] text-slate-400 font-mono truncate">
+                                                {node.model}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {/* Current action (if active) */}
+                                    {status === 'active' && agent?.currentAction && (
+                                        <div className="mt-2 text-[9px] text-v-accent/70 font-mono truncate animate-pulse">
+                                            ▶ {agent.currentAction}
+                                        </div>
+                                    )}
                                 </motion.button>
                             );
                         })}

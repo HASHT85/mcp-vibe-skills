@@ -7,7 +7,6 @@ const NAV_ITEMS = [
     { id: 'projects', icon: 'grid_view', label: 'Overview' },
     { id: 'containers', icon: 'inventory_2', label: 'Containers' },
     { id: 'chat', icon: 'forum', label: 'Chat' },
-    { id: 'agents', icon: 'account_tree', label: 'Agents' },
     { id: 'tokens', icon: 'memory', label: 'Tokens' },
     { id: 'deploy', icon: 'cloud_upload', label: 'Deploy' },
 ];

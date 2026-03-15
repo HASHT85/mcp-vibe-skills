@@ -167,9 +167,6 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
     const isFailed = p.phase === 'FAILED';
     const progressColorClass = isCompleted ? 'bg-v-accent' : (isFailed ? 'bg-red-500' : 'bg-v-accent');
 
-    // Filter agents to show in the NodeDetailedInspection (when in topology)
-    const selectedAgent = p.agents?.find(a => p.topology?.find(t => t.id === selectedNodeId)?.role === a.role);
-
     return (
         <motion.div
             className="flex flex-col h-full gap-4 relative"
@@ -257,6 +254,8 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
                                     agents={p.agents || []} 
                                     selectedNodeId={selectedNodeId}
                                     onSelectNode={setSelectedNodeId}
+                                    nodeStatuses={p.nodeStatuses}
+                                    pipelinePhase={p.phase}
                                 />
                             </div>
                         )}
@@ -356,49 +355,148 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
                             <div className="flex flex-col h-full bg-[#0d1218]">
                                 <div className="p-4 border-b border-border-muted/50 shrink-0 relative overflow-hidden">
                                     <div className="absolute top-0 right-0 w-24 h-24 bg-v-accent/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
-                                    <h3 className="text-[11px] font-bold text-slate-300 tracking-widest uppercase mb-1 relative z-10">NODE DETAILED INSPECTION</h3>
+                                    <h3 className="text-[11px] font-bold text-slate-300 tracking-widest uppercase mb-1 relative z-10">NODE INSPECTION</h3>
                                     <p className="text-[10px] text-slate-500 relative z-10">SELECT A NODE TO VIEW DATA</p>
                                 </div>
                                 
-                                {selectedNodeId ? (
-                                    <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 relative z-10">
-                                        <div>
-                                            <h2 className="text-xl font-black text-white uppercase tracking-widest break-all">
-                                                {selectedNodeId}
-                                            </h2>
-                                            <div className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-widest">
-                                                NODE_ID: {selectedNodeId.toUpperCase()}_{Math.floor(Math.random()*1000).toString(16).toUpperCase()}
-                                            </div>
-                                        </div>
+                                {selectedNodeId ? (() => {
+                                    const selectedTopo = p.topology?.find(t => t.id === selectedNodeId);
+                                    const selectedAgentData = p.agents?.find(a => selectedTopo?.role === a.role);
+                                    const agentTokenData = p.agentTokens?.filter(t => t.role === selectedTopo?.role) || [];
+                                    const agentEvents = p.events?.filter(e => e.agentRole === selectedTopo?.role).slice(-20) || [];
+                                    const totalIn = agentTokenData.reduce((s, t) => s + t.inputTokens, 0);
+                                    const totalOut = agentTokenData.reduce((s, t) => s + t.outputTokens, 0);
+                                    const totalCost = agentTokenData.reduce((s, t) => s + t.cost, 0);
+                                    
+                                    // Accurate status
+                                    let nodeStatus = selectedAgentData?.status || 'waiting';
+                                    if (p.phase === 'COMPLETED') nodeStatus = 'done';
+                                    else if (p.nodeStatuses?.[selectedNodeId] === 'COMPLETED') nodeStatus = 'done';
+                                    else if (p.nodeStatuses?.[selectedNodeId] === 'FAILED') nodeStatus = 'error';
 
-                                        <div className="grid grid-cols-2 gap-4 border-y border-border-muted/30 py-4">
-                                            <div>
-                                                <div className="text-[10px] text-slate-500 mb-1 font-bold">STATUS</div>
-                                                <div className={`text-xs font-black uppercase flex items-center gap-2 ${selectedAgent?.status === 'active' ? 'text-v-accent' : selectedAgent?.status === 'done' ? 'text-white' : selectedAgent?.status === 'error' ? 'text-red-500' : 'text-slate-400'}`}>
-                                                    [{selectedAgent?.status || 'IDLE'}]
-                                                    <span className={`w-2 h-2 rounded-full ${selectedAgent?.status === 'active' ? 'bg-v-accent animate-pulse' : selectedAgent?.status === 'done' ? 'bg-white' : selectedAgent?.status === 'error' ? 'bg-red-500 animate-pulse' : 'bg-slate-600'}`}></span>
+                                    return (
+                                        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar">
+                                            {/* Header */}
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-3xl">{selectedTopo?.emoji || '🔧'}</span>
+                                                <div>
+                                                    <div className="text-sm font-black text-white uppercase tracking-wider">{selectedTopo?.role || selectedNodeId}</div>
+                                                    <div className="text-[9px] text-slate-500 font-mono">{selectedNodeId}</div>
                                                 </div>
                                             </div>
-                                            <div>
-                                                <div className="text-[10px] text-slate-500 mb-1 font-bold">TYPE</div>
-                                                <div className="text-xs font-black uppercase text-white">
-                                                    {selectedAgent?.role || 'UNKNOWN_PROCESS'}
+
+                                            {/* Status + Model */}
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="bg-black/50 border border-white/10 p-3">
+                                                    <div className="text-[9px] text-slate-500 font-bold mb-1">STATUS</div>
+                                                    <div className={`text-xs font-black uppercase flex items-center gap-2 ${
+                                                        nodeStatus === 'active' ? 'text-v-accent' : 
+                                                        nodeStatus === 'done' ? 'text-emerald-400' : 
+                                                        nodeStatus === 'error' ? 'text-red-400' : 'text-slate-400'
+                                                    }`}>
+                                                        <span className={`w-2 h-2 rounded-full ${
+                                                            nodeStatus === 'active' ? 'bg-v-accent animate-pulse' : 
+                                                            nodeStatus === 'done' ? 'bg-emerald-400' : 
+                                                            nodeStatus === 'error' ? 'bg-red-500 animate-pulse' : 'bg-slate-600'
+                                                        }`}></span>
+                                                        {nodeStatus}
+                                                    </div>
+                                                </div>
+                                                <div className="bg-black/50 border border-white/10 p-3">
+                                                    <div className="text-[9px] text-slate-500 font-bold mb-1">PROVIDER</div>
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase ${
+                                                        selectedTopo?.provider === 'openrouter' 
+                                                            ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' 
+                                                            : 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                                                    }`}>
+                                                        {selectedTopo?.provider || 'anthropic'}
+                                                    </span>
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        <div>
-                                            <div className="text-[10px] text-slate-500 mb-2 font-bold uppercase tracking-widest">Current Process:</div>
-                                            <div className="text-xs font-mono text-slate-300 bg-black border border-border-muted/50 p-3 break-words whitespace-pre-wrap">
-                                                {selectedAgent?.currentAction || 'Awaiting task assignment...'}
-                                            </div>
+                                            {/* Model */}
+                                            {selectedTopo?.model && (
+                                                <div className="bg-black/50 border border-white/10 p-3">
+                                                    <div className="text-[9px] text-slate-500 font-bold mb-1">MODEL</div>
+                                                    <div className="text-[11px] font-mono text-white truncate">{selectedTopo.model}</div>
+                                                </div>
+                                            )}
+
+                                            {/* Description */}
+                                            {selectedTopo?.description && (
+                                                <div className="bg-black/50 border border-white/10 p-3">
+                                                    <div className="text-[9px] text-slate-500 font-bold mb-1">DESCRIPTION</div>
+                                                    <div className="text-[11px] text-slate-300">{selectedTopo.description}</div>
+                                                </div>
+                                            )}
+
+                                            {/* Token Usage */}
+                                            {(totalIn > 0 || totalOut > 0) && (
+                                                <div className="bg-black/50 border border-white/10 p-3">
+                                                    <div className="text-[9px] text-slate-500 font-bold mb-2">TOKEN USAGE</div>
+                                                    <div className="grid grid-cols-3 gap-2 text-center">
+                                                        <div>
+                                                            <div className="text-[10px] text-v-accent font-black">{formatTokenCount(totalIn)}</div>
+                                                            <div className="text-[8px] text-slate-600">INPUT</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-[10px] text-white font-black">{formatTokenCount(totalOut)}</div>
+                                                            <div className="text-[8px] text-slate-600">OUTPUT</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-[10px] text-amber-400 font-black">${totalCost.toFixed(4)}</div>
+                                                            <div className="text-[8px] text-slate-600">COST</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Current Process */}
+                                            {selectedAgentData?.currentAction && (
+                                                <div className="bg-black/50 border border-white/10 p-3">
+                                                    <div className="text-[9px] text-slate-500 font-bold mb-1">CURRENT PROCESS</div>
+                                                    <div className="text-[10px] font-mono text-v-accent break-words whitespace-pre-wrap">
+                                                        {selectedAgentData.currentAction}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Agent Logs */}
+                                            {agentEvents.length > 0 && (
+                                                <div className="bg-black/50 border border-white/10 p-3">
+                                                    <div className="text-[9px] text-slate-500 font-bold mb-2">AGENT LOGS ({agentEvents.length})</div>
+                                                    <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+                                                        {agentEvents.slice().reverse().map((ev) => (
+                                                            <div key={ev.id} className="text-[9px] font-mono border-l-2 pl-2 py-1 break-words" style={{
+                                                                borderColor: ev.type === 'error' ? '#ef4444' : ev.type === 'success' ? '#34d399' : '#334155'
+                                                            }}>
+                                                                <span className={ev.type === 'error' ? 'text-red-400' : ev.type === 'success' ? 'text-emerald-400' : 'text-slate-400'}>
+                                                                    {ev.action}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* System Prompt (collapsible) */}
+                                            {selectedTopo?.systemPrompt && (
+                                                <details className="bg-black/50 border border-white/10">
+                                                    <summary className="p-3 text-[9px] text-slate-500 font-bold cursor-pointer hover:text-white transition-colors uppercase tracking-widest">
+                                                        SYSTEM PROMPT
+                                                    </summary>
+                                                    <div className="px-3 pb-3 text-[10px] font-mono text-slate-400 break-words whitespace-pre-wrap border-t border-white/5 pt-2">
+                                                        {selectedTopo.systemPrompt}
+                                                    </div>
+                                                </details>
+                                            )}
                                         </div>
-                                    </div>
-                                ) : (
+                                    );
+                                })() : (
                                     <div className="flex-1 flex items-center justify-center p-6 opacity-30">
                                         <div className="flex flex-col items-center gap-4 text-center">
                                             <span className="material-symbols-outlined text-[48px] text-slate-400">account_tree</span>
-                                            <span className="text-xs font-mono uppercase tracking-widest text-slate-400">Target Node on Map</span>
+                                            <span className="text-xs font-mono uppercase tracking-widest text-slate-400">Select a node to inspect</span>
                                         </div>
                                     </div>
                                 )}
