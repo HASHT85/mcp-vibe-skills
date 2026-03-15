@@ -34,6 +34,8 @@ git add -A; git commit -m "deploy: <description>"; git push
 
 > ⚠️ **NEVER use `deleteProjectV1`** — it destroys Docker volumes (`orchestrator-data`) and loses ALL pipeline/chat/store data permanently!
 
+> ⚠️ **NEVER use `updateProjectV1`** — it recreates volumes from scratch and loses ALL data (pipelines.json, store.json, chat_sessions.json). Confirmed 2026-03-15.
+
 If `createNewProjectV1` reuses old cached Docker images (same container IDs, old uptime):
 
 1. Make sure you bumped `CACHE_BUSTER` in `docker-compose.yml` → both `orchestrator` and `dashboard` build args (step 1)
@@ -42,7 +44,7 @@ If `createNewProjectV1` reuses old cached Docker images (same container IDs, old
 
 ## Environment Variables
 
-Always read from `c:\Projet\veist\veist\.env` and pass ALL variables:
+Always read from `c:\Projet\mcp-vibe-skills\mcp-vibe-skills\.env` and pass ALL variables:
 - `ANTHROPIC_API_KEY`
 - `OPENAI_API_KEY`  
 - `GOOGLE_API_KEY`
@@ -50,6 +52,8 @@ Always read from `c:\Projet\veist\veist\.env` and pass ALL variables:
 - `GITHUB_OWNER`
 - `ADMIN_USER`
 - `ADMIN_PASS`
+- `OPENROUTER_API_KEY`
+- `TAVILY_API_KEY`
 - `HOST_WORKSPACE_PATH=/opt/veistcraft/workspace`
 
 ## Key Facts
