@@ -701,6 +701,30 @@ RÈGLES ABSOLUES:
             
                 const userModel = p.model || "claude-sonnet-4-6";
 
+                // Fetch live model pricing from OpenRouter
+                let modelsSection = "";
+                try {
+                    const liveModels = await fetchOpenRouterModels();
+                    const modelsList = liveModels
+                        .slice(0, 20)
+                        .map(m => `- ${m.id} | $${(m.pricing.prompt*1000000).toFixed(2)}/M input, $${(m.pricing.completion*1000000).toFixed(2)}/M output | ctx: ${m.context_length}`)
+                        .join("\n");
+                    modelsSection = `
+AVAILABLE OPENROUTER MODELS (with pricing per million tokens):
+${modelsList}
+
+AVAILABLE ANTHROPIC MODELS (direct API):
+- claude-sonnet-4-6 | Premium quality, best for complex code | provider: "anthropic"
+- claude-haiku-4-5 | Fast, cheap, good for simple tasks | provider: "anthropic"
+`;
+                } catch {
+                    modelsSection = `
+AVAILABLE MODELS:
+- claude-sonnet-4-6 | provider: "anthropic" — complex tasks
+- claude-haiku-4-5 | provider: "anthropic" — simple tasks
+`;
+                }
+
                 const plannerPrompt = `Analyze the project: "${p.description}"
 
 We have standard pipeline agents for Research, Analysis, Architecture, and Scaffold.
@@ -709,26 +733,28 @@ Your goal: generate the DEVELOPMENT sub-agents that will actually BUILD the proj
 RULES:
 - Create 2-6 specialized agents depending on project complexity
 - Each agent should handle a clear domain (frontend, backend, API, styling, etc.)
-- Assign the right model per agent complexity:
-  - "claude-sonnet-4-6" → complex tasks (fullstack dev, architecture, API design, business logic)
-  - "claude-haiku-4-5" → simpler tasks (formatting, docs, basic config, tests, CSS-only)
-- ALWAYS use provider "anthropic"
+- Pick the BEST model per agent based on task complexity and cost:
+  - For complex coding (fullstack, API design, architecture) → use "claude-sonnet-4-6" with provider "anthropic" or a powerful OpenRouter model
+  - For simple tasks (CSS, docs, config, tests, formatting) → use a CHEAP model like "google/gemini-2.5-flash" or "claude-haiku-4-5"
+  - For code-heavy tasks → prefer coding-optimized models (DeepSeek, Claude)
+- For Anthropic models → set provider: "anthropic"
+- For OpenRouter models → set provider: "openrouter"
 - Dependencies: use [] if the agent can work in parallel, or specify other agent ids for sequential work
 - Each agent MUST have a detailed systemPrompt in French explaining its exact role and responsibilities
-
+${modelsSection}
 EXAMPLES:
 
 For a portfolio website:
 [
   {"id": "frontend_dev", "role": "Frontend Developer", "emoji": "🎨", "description": "React components + animations + responsive design", "systemPrompt": "Tu es un expert React/TypeScript. Tu crées tous les composants, pages et animations. Tu utilises Framer Motion pour les animations fluides. Tu assures le responsive design et l'accessibilité.", "provider": "anthropic", "model": "claude-sonnet-4-6", "dependencies": []},
-  {"id": "styling_dev", "role": "UI Designer", "emoji": "🎭", "description": "CSS design system + Tailwind config + visual polish", "systemPrompt": "Tu es un expert en design UI/UX. Tu crées le design system complet: couleurs, typographie, spacing, composants Tailwind, dark mode. Tu assures une identité visuelle cohérente et premium.", "provider": "anthropic", "model": "claude-haiku-4-5", "dependencies": ["frontend_dev"]}
+  {"id": "styling_dev", "role": "UI Designer", "emoji": "🎭", "description": "CSS design system + Tailwind config + visual polish", "systemPrompt": "Tu es un expert en design UI/UX. Tu crées le design system complet: couleurs, typographie, spacing, composants Tailwind, dark mode. Tu assures une identité visuelle cohérente et premium.", "provider": "openrouter", "model": "google/gemini-2.5-flash", "dependencies": ["frontend_dev"]}
 ]
 
 For a fullstack app with DB:
 [
-  {"id": "backend_api", "role": "Backend Developer", "emoji": "⚙️", "description": "API REST + DB schema + authentification", "systemPrompt": "Tu es un expert backend Node.js/Express. Tu crées l'API REST, le schéma de base de données, les migrations, et l'authentification JWT.", "provider": "anthropic", "model": "claude-sonnet-4-6", "dependencies": []},
-  {"id": "frontend_app", "role": "Frontend Developer", "emoji": "🎨", "description": "Interface React + routing + state management", "systemPrompt": "Tu es un expert frontend React/TypeScript. Tu crées l'interface utilisateur complète avec routing, state management, et intégration API.", "provider": "anthropic", "model": "claude-sonnet-4-6", "dependencies": []},
-  {"id": "integration", "role": "Integration Engineer", "emoji": "🔗", "description": "Connexion frontend-backend + Docker config", "systemPrompt": "Tu es un intégrateur. Tu connectes le frontend au backend, configures les variables d'environnement, et assures que tout fonctionne ensemble en Docker.", "provider": "anthropic", "model": "claude-haiku-4-5", "dependencies": ["backend_api", "frontend_app"]}
+  {"id": "backend_api", "role": "Backend Developer", "emoji": "⚙️", "description": "API REST + DB schema + auth", "systemPrompt": "Tu es un expert backend. Tu crées l'API REST, le schéma DB, les migrations, et l'auth JWT.", "provider": "anthropic", "model": "claude-sonnet-4-6", "dependencies": []},
+  {"id": "frontend_app", "role": "Frontend Developer", "emoji": "🎨", "description": "Interface React + routing + state", "systemPrompt": "Tu es un expert frontend React/TypeScript. Tu crées l'interface complète avec routing et intégration API.", "provider": "anthropic", "model": "claude-sonnet-4-6", "dependencies": []},
+  {"id": "integration", "role": "Integration Engineer", "emoji": "🔗", "description": "Connexion frontend-backend + Docker", "systemPrompt": "Tu connectes le frontend au backend, configures les env vars, et assures le fonctionnement en Docker.", "provider": "openrouter", "model": "google/gemini-2.5-flash", "dependencies": ["backend_api", "frontend_app"]}
 ]
 
 Output ONLY a valid JSON array. No text before or after. No markdown code blocks.`;
