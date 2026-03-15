@@ -45,11 +45,11 @@ export async function fetchOpenRouterModels(): Promise<ModelPricing[]> {
         // Filter for notable, high-value or cost-effective models
         const notableKeywords = [
             // Anthropic
-            "claude-3-5", "claude-3-7", "claude-3.5", "claude-sonnet", "claude-haiku",
+            "claude-3-5", "claude-3-7", "claude-3.5", "claude-sonnet", "claude-haiku", "claude-opus",
             // OpenAI
-            "gpt-4o", "gpt-4.1", "o3", "o4-mini",
+            "gpt-4o", "gpt-4.1", "gpt-5", "o3", "o4-mini",
             // Google
-            "gemini-2.5", "gemini-2.0", "gemini-flash", "gemini-pro",
+            "gemini-2.5", "gemini-2.0", "gemini-3", "gemini-flash", "gemini-pro",
             // Meta Llama
             "llama-3.3", "llama-3.1", "llama-4",
             // DeepSeek
@@ -58,11 +58,17 @@ export async function fetchOpenRouterModels(): Promise<ModelPricing[]> {
             "qwen-2.5", "qwen-3", "qwen/qwen-2.5-coder",
             // Mistral
             "mistral-large", "mistral-small", "mistral-medium", "codestral", "mistral/ministral",
+            // xAI
+            "grok-4", "grok-3",
+            // NVIDIA
+            "nemotron",
+            // Zhipu
+            "glm-4", "glm-4.5",
             // Cohere
             "command-r", "command-a",
             // Microsoft
             "phi-3", "phi-4",
-            // Others good & cheap
+            // Others
             "nous-hermes", "yi-", "wizardlm",
         ];
         
