@@ -42,20 +42,39 @@ export async function fetchOpenRouterModels(): Promise<ModelPricing[]> {
             context_length: m.context_length
         }));
 
-        // Filter for notable, high-value or highly-used models to avoid overwhelming the LLM context
+        // Filter for notable, high-value or cost-effective models
         const notableKeywords = [
-            "claude-3-5", "claude-3-7",
-            "gpt-4o",
-            "gemini-2.5", "gemini-flash",
-            "llama-3.3", "llama-3.1",
-            "deepseek-coder", "deepseek/deepseek-chat", "deepseek-r1",
-            "qwen-2.5"
+            // Anthropic
+            "claude-3-5", "claude-3-7", "claude-3.5", "claude-sonnet", "claude-haiku",
+            // OpenAI
+            "gpt-4o", "gpt-4.1", "o3", "o4-mini",
+            // Google
+            "gemini-2.5", "gemini-2.0", "gemini-flash", "gemini-pro",
+            // Meta Llama
+            "llama-3.3", "llama-3.1", "llama-4",
+            // DeepSeek
+            "deepseek-coder", "deepseek/deepseek-chat", "deepseek-r1", "deepseek-v3",
+            // Qwen (Alibaba)
+            "qwen-2.5", "qwen-3", "qwen/qwen-2.5-coder",
+            // Mistral
+            "mistral-large", "mistral-small", "mistral-medium", "codestral", "mistral/ministral",
+            // Cohere
+            "command-r", "command-a",
+            // Microsoft
+            "phi-3", "phi-4",
+            // Others good & cheap
+            "nous-hermes", "yi-", "wizardlm",
         ];
         
         const filtered = parsedModels
-            .filter(m => notableKeywords.some(k => m.id.toLowerCase().includes(k)))
-            // Ignore variations that are just self-hosted or duplicates if possible, but keeping it simple for now
-            .sort((a, b) => a.pricing.prompt - b.pricing.prompt); // Sort by prompt price ascending
+            .filter(m => {
+                const id = m.id.toLowerCase();
+                // Include notable models + any free models
+                return notableKeywords.some(k => id.includes(k)) || 
+                       (m.pricing.prompt === 0 && m.pricing.completion === 0);
+            })
+            .filter(m => m.context_length >= 8000) // Minimum useful context
+            .sort((a, b) => a.pricing.prompt - b.pricing.prompt); // Sort by price ascending
 
         // Save to cache
         fs.writeFileSync(CACHE_FILE, JSON.stringify(filtered, null, 2));
