@@ -5,12 +5,13 @@ import { tryParseJson } from "../../utils/project_helpers.js";
 export class SupervisorNode extends AgentNode {
     private targetNodeId: string;
 
-    constructor(targetNodeId: string, dependencies: string[] = []) {
+    constructor(targetNodeId: string, dependencies: string[] = [], model?: string, provider?: string) {
         super({
             id: `supervisor_for_${targetNodeId}`,
             name: `Revue de code (${targetNodeId})`,
             role: "Supervisor",
             emoji: "👁️",
+            model: provider === "openrouter" && model ? `openrouter/${model}` : model,
             dependencies,
             allowedTools: ["bash", "read_file", "list_dir", "read_memory", "write_memory"],
             maxTurns: 10

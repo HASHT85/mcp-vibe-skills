@@ -826,13 +826,14 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
                 savePipelinesState(this.pipelines).catch(() => {});
             });
 
-            // Add all base nodes
-            manager.addNode(new ResearchNode());
-            manager.addNode(new AnalysisNode());
+            // Add all base nodes — pass model/provider from topology for multi-model routing
+            const topo = (nodeId: string) => p.topology?.find(t => t.id === nodeId);
+            manager.addNode(new ResearchNode(topo("research")?.model, topo("research")?.provider));
+            manager.addNode(new AnalysisNode(topo("analysis")?.model, topo("analysis")?.provider));
             manager.addNode(new SkillsEnrichmentNode());
-            manager.addNode(new ArchitectureNode());
-            manager.addNode(new ScaffoldNode());
-            manager.addNode(new SupervisorNode("scaffold", ["scaffold"]));
+            manager.addNode(new ArchitectureNode(topo("architecture")?.model, topo("architecture")?.provider));
+            manager.addNode(new ScaffoldNode(topo("scaffold")?.model, topo("scaffold")?.provider));
+            manager.addNode(new SupervisorNode("scaffold", ["scaffold"], topo("supervisor_for_scaffold")?.model, topo("supervisor_for_scaffold")?.provider));
             
             // Add dynamic agents
             const { DynamicAgentNode } = await import("./dag/nodes/DynamicAgentNode.js");
@@ -841,8 +842,8 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
             }
 
             // End nodes
-            manager.addNode(new QANode(dynamicIds)); 
-            manager.addNode(new DeployNode());
+            manager.addNode(new QANode(dynamicIds, topo("qa")?.model, topo("qa")?.provider)); 
+            manager.addNode(new DeployNode(topo("deploy")?.model, topo("deploy")?.provider));
 
             // ─── Smart Resume: skip already-completed nodes ───
             if (p.nodeStatuses) {

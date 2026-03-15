@@ -12,12 +12,13 @@ function getTemplate(ctx: NodeContext): ProjectTemplate | undefined {
 
 // --- ANALYSIS NODE ---
 export class AnalysisNode extends AgentNode {
-    constructor() {
+    constructor(model?: string, provider?: string) {
         super({
             id: "analysis",
             name: "Analyse des besoins",
             role: "Analyst",
             emoji: "🔎",
+            model: provider === "openrouter" && model ? `openrouter/${model}` : model,
             dependencies: ["research"],
             maxTurns: 8,
             allowedTools: ["web_search", "fetch_url", "read_memory", "write_memory", "bash", "list_dir", "read_file"]
@@ -71,12 +72,13 @@ export class AnalysisNode extends AgentNode {
 
 // --- ARCHITECTURE NODE ---
 export class ArchitectureNode extends AgentNode {
-    constructor() {
+    constructor(model?: string, provider?: string) {
         super({
             id: "architecture",
             name: "Conception de l'architecture",
             role: "Architect",
             emoji: "🏗️",
+            model: provider === "openrouter" && model ? `openrouter/${model}` : model,
             dependencies: ["skills_enrichment"],
             maxTurns: 10,
             allowedTools: ["web_search", "fetch_url", "read_memory", "write_memory"]
@@ -115,12 +117,13 @@ export class ArchitectureNode extends AgentNode {
 
 // --- SCAFFOLD NODE ---
 export class ScaffoldNode extends AgentNode {
-    constructor() {
+    constructor(model?: string, provider?: string) {
         super({
             id: "scaffold",
             name: "Génération de la base",
             role: "Developer",
             emoji: "💻",
+            model: provider === "openrouter" && model ? `openrouter/${model}` : model,
             dependencies: ["architecture"],
             maxTurns: 30,
             allowedTools: ["bash", "write_file", "list_dir", "read_memory", "write_memory"]
@@ -260,12 +263,13 @@ RÈGLES:
 
 // --- QA NODE ---
 export class QANode extends AgentNode {
-    constructor(dynamicDependencies: string[] = ["supervisor_for_development"]) {
+    constructor(dynamicDependencies: string[] = ["supervisor_for_development"], model?: string, provider?: string) {
         super({
             id: "qa",
             name: "Vérification QA",
             role: "QA",
             emoji: "🧪",
+            model: provider === "openrouter" && model ? `openrouter/${model}` : model,
             dependencies: dynamicDependencies,
             maxTurns: 30,
             allowedTools: ["bash", "read_file", "read_memory", "write_memory"]
@@ -289,12 +293,13 @@ export class QANode extends AgentNode {
 
 // --- DEPLOY NODE ---
 export class DeployNode extends AgentNode {
-    constructor() {
+    constructor(model?: string, provider?: string) {
         super({
             id: "deploy",
             name: "Déploiement Hostinger (Traefik)",
             role: "DevOps",
             emoji: "🚀",
+            model: provider === "openrouter" && model ? `openrouter/${model}` : model,
             dependencies: ["qa"],
             maxTurns: 15,
             allowedTools: ["bash", "read_file", "write_file", "replace_in_file", "read_memory", "write_memory"]

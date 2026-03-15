@@ -9,12 +9,13 @@ import { tryParseJson } from "../../utils/project_helpers.js";
  * Stores findings in pipeline.artifacts.research for downstream nodes.
  */
 export class ResearchNode extends AgentNode {
-    constructor() {
+    constructor(model?: string, provider?: string) {
         super({
             id: "research",
             name: "Recherche & Exploration Web",
             role: "Analyst",
             emoji: "🌐",
+            model: provider === "openrouter" && model ? `openrouter/${model}` : model,
             maxTurns: 15,
             allowedTools: ["web_search", "fetch_url", "write_memory"]
         });
