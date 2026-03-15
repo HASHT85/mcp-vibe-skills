@@ -15,7 +15,7 @@ git add -A; git commit -m "deploy: <description>"; git push
 ```
 
 3. **Deploy via Hostinger MCP** — use `createNewProjectV1` with:
-   - `content`: `https://github.com/HASHT85/veist`
+   - `content`: `https://github.com/HASHT85/mcp-vibe-skills`
    - `project_name`: `veist`
    - `virtualMachineId`: `1287719`
    - `environment`: Read from the local `.env` file at `c:\Projet\veist\veist\.env`
