@@ -680,7 +680,8 @@ app.post("/chat/sessions", async (req: Request, res: Response) => {
 app.post("/chat/sessions/:id/message", async (req: Request, res: Response) => {
     try {
         const content = String(req.body?.content ?? "").trim();
-        if (!content) return res.status(400).json({ error: "missing_content" });
+        const files = req.body?.files as { base64: string; type: string }[] | undefined;
+        if (!content && (!files || files.length === 0)) return res.status(400).json({ error: "missing_content" });
 
         // Build pipeline context if a project is linked
         const session = chatService.getSession(req.params.id);
@@ -698,7 +699,7 @@ app.post("/chat/sessions/:id/message", async (req: Request, res: Response) => {
             }
         }
 
-        const result = await chatService.sendMessage(req.params.id, content, pipelineContext);
+        const result = await chatService.sendMessage(req.params.id, content || '[Attached files]', pipelineContext, files);
         res.json(result);
     } catch (err: any) {
         console.error(`[Chat] Error in session ${req.params.id}:`, err.message || err);

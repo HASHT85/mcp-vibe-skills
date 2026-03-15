@@ -197,14 +197,15 @@ export class ChatService {
         return result;
     }
 
-    async sendMessage(sessionId: string, content: string, pipelineContext?: { name: string; phase: string; error?: string; events: string[]; workspace?: string }): Promise<{ reply: string; session: ChatSession }> {
+    async sendMessage(sessionId: string, content: string, pipelineContext?: { name: string; phase: string; error?: string; events: string[]; workspace?: string }, files?: { base64: string; type: string }[]): Promise<{ reply: string; session: ChatSession }> {
         const session = this.sessions.get(sessionId);
         if (!session) throw new Error("session_not_found");
 
-        // Add user message
+        // Store a display-friendly version for session history
+        const fileLabel = files && files.length > 0 ? `\n[📎 ${files.length} FILE(S) ATTACHED]` : '';
         session.messages.push({
             role: "user",
-            content,
+            content: content + fileLabel,
             timestamp: new Date().toISOString(),
         });
 
@@ -230,11 +231,52 @@ INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
 - Quand EXECUTE_MODIFY est cliqué, un agent a accès au workspace et peut exécuter des commandes (npm, build, etc.) directement`;
         }
 
-        // Build messages for Claude API
-        const apiMessages = session.messages.map(m => ({
-            role: m.role as "user" | "assistant",
-            content: m.content,
-        }));
+        // Build messages for Claude API — with multi-block content for files
+        const apiMessages = session.messages.map((m, idx) => {
+            // Only the LAST user message gets file attachments
+            if (idx === session.messages.length - 1 && m.role === 'user' && files && files.length > 0) {
+                const contentBlocks: any[] = [];
+                
+                // Add image blocks first
+                for (const file of files) {
+                    if (file.type.startsWith('image/')) {
+                        contentBlocks.push({
+                            type: 'image',
+                            source: {
+                                type: 'base64',
+                                media_type: file.type,
+                                data: file.base64,
+                            }
+                        });
+                    }
+                }
+                
+                // Add text content
+                contentBlocks.push({
+                    type: 'text',
+                    text: content,
+                });
+                
+                // Add non-image files as text descriptions
+                const nonImageFiles = files.filter(f => !f.type.startsWith('image/'));
+                if (nonImageFiles.length > 0) {
+                    contentBlocks.push({
+                        type: 'text',
+                        text: `[Attached non-image files: ${nonImageFiles.map(f => f.type).join(', ')}]`,
+                    });
+                }
+                
+                return {
+                    role: m.role as "user" | "assistant",
+                    content: contentBlocks,
+                };
+            }
+            
+            return {
+                role: m.role as "user" | "assistant",
+                content: m.content,
+            };
+        });
 
         try {
             const response = await this.client.messages.create({
