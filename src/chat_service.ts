@@ -237,7 +237,7 @@ INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
             if (idx === session.messages.length - 1 && m.role === 'user' && files && files.length > 0) {
                 const contentBlocks: any[] = [];
                 
-                // Add image blocks first
+                // Add file blocks (images and PDFs)
                 for (const file of files) {
                     if (file.type.startsWith('image/')) {
                         contentBlocks.push({
@@ -245,6 +245,15 @@ INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
                             source: {
                                 type: 'base64',
                                 media_type: file.type,
+                                data: file.base64,
+                            }
+                        });
+                    } else if (file.type === 'application/pdf') {
+                        contentBlocks.push({
+                            type: 'document',
+                            source: {
+                                type: 'base64',
+                                media_type: 'application/pdf',
                                 data: file.base64,
                             }
                         });
@@ -256,15 +265,6 @@ INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
                     type: 'text',
                     text: content,
                 });
-                
-                // Add non-image files as text descriptions
-                const nonImageFiles = files.filter(f => !f.type.startsWith('image/'));
-                if (nonImageFiles.length > 0) {
-                    contentBlocks.push({
-                        type: 'text',
-                        text: `[Attached non-image files: ${nonImageFiles.map(f => f.type).join(', ')}]`,
-                    });
-                }
                 
                 return {
                     role: m.role as "user" | "assistant",
