@@ -717,23 +717,16 @@ Output MUST be a strict JSON array of objects:
     "emoji": "🎨",
     "description": "What this agent does",
     "systemPrompt": "You are a ... specialized in ...",
-    "provider": "openrouter",
-    "model": "meta-llama/llama-3.3-70b-instruct",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6",
     "dependencies": []
   }
 ]
 
-### LIVE LLM MARKET PRICING (Cost per 1000 tokens)
-${modelsListStr}
-
-### MODEL ROUTING STRATEGY (TRUE BENCHMARK)
-1. CRITICAL FIRST STEP: Use the \`web_search\` tool to find the most recent "LMSys Chatbot Arena Leaderboard" or "HuggingFace Open LLM Leaderboard" scores for coding/reasoning. Search specifically for the models listed in the Live Pricing above.
-2. Analyze the complexity of each sub-agent's task.
-3. For high-complexity structural coding or deep logic: 
-   - Calculate the True Benchmark Score: \`(Elo Performance Score) / (Cost per 1k tokens)\`.
-   - Pick the model from the Live Pricing list with the highest True Benchmark Score. (Default to "anthropic/claude-4-6-sonnet" if web search fails).
-4. For low-complexity tasks (QA, research, data formatting, basic scripts):
-   - You MUST pick the absolute CHEAPEST model from the live list to save costs, but ensure its Elo score is above 1150 if found. Set provider to "openrouter" and the model to the exact ID from the list.
+### MODEL ROUTING STRATEGY
+- Default provider: "anthropic" with model "claude-sonnet-4-6" for all agents.
+- For simple tasks (formatting, basic scripts), you may use "claude-haiku-4-5" to save costs.
+- Keep the number of sub-agents minimal (1-3 max). Each agent should handle a full domain, not micro-tasks.
 
 IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\`\`json.`;
 
@@ -766,12 +759,12 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
                 }
 
                 const baseTopology: import("./types.js").NodeTopology[] = [
-                    { id: "research", role: "Researcher", emoji: "🌐", description: "Veille technologique", systemPrompt: "", provider: "openrouter", model: cheapestModel, dependencies: [] },
+                    { id: "research", role: "Researcher", emoji: "🌐", description: "Veille technologique", systemPrompt: "", provider: "anthropic", model: "claude-sonnet-4-6", dependencies: [] },
                     { id: "analysis", role: "Analyst", emoji: "🔎", description: "Analyse des besoins", systemPrompt: "", provider: "anthropic", model: "claude-4-6-sonnet", dependencies: ["research"] },
                     { id: "skills_enrichment", role: "Tech Lead", emoji: "📚", description: "Injection de best practices", systemPrompt: "", provider: "anthropic", model: "claude-4-6-sonnet", dependencies: ["analysis"] },
                     { id: "architecture", role: "Architect", emoji: "🏗️", description: "Conception architecturale", systemPrompt: "", provider: "anthropic", model: "claude-4-6-sonnet", dependencies: ["skills_enrichment"] },
                     { id: "scaffold", role: "DevOps", emoji: "🔨", description: "Génération de la base", systemPrompt: "", provider: "anthropic", model: "claude-4-6-sonnet", dependencies: ["architecture"] },
-                    { id: "supervisor_for_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", provider: "openrouter", model: cheapestModel, dependencies: ["scaffold"] },
+                    { id: "supervisor_for_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", provider: "anthropic", model: "claude-sonnet-4-6", dependencies: ["scaffold"] },
                 ];
 
                 dynamicNodes = dynamicTopology.map(t => ({
@@ -781,8 +774,8 @@ IMPORTANT: Output ONLY valid JSON array. Do not include markdown blocks like \`\
 
                 dynamicIds = dynamicNodes.map(d => d.id);
                 const endTopology: import("./types.js").NodeTopology[] = [
-                    { id: "qa", role: "QA Engineer", emoji: "🧪", description: "Tests finaux", systemPrompt: "", provider: "openrouter", model: cheapestModel, dependencies: dynamicIds },
-                    { id: "deploy", role: "Release Manager", emoji: "🚀", description: "Déploiement", systemPrompt: "", provider: "openrouter", model: cheapestModel, dependencies: ["qa"] }
+                    { id: "qa", role: "QA Engineer", emoji: "🧪", description: "Tests finaux", systemPrompt: "", provider: "anthropic", model: "claude-sonnet-4-6", dependencies: dynamicIds },
+                    { id: "deploy", role: "Release Manager", emoji: "🚀", description: "Déploiement", systemPrompt: "", provider: "anthropic", model: "claude-sonnet-4-6", dependencies: ["qa"] }
                 ];
 
                 p.topology = [...baseTopology, ...dynamicNodes, ...endTopology];
