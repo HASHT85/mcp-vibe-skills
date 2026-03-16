@@ -321,6 +321,9 @@ export class DeployNode extends AgentNode {
     protected getPrompt(context: NodeContext): string {
         const p = context.pipeline;
         const template = getTemplate(context);
+        // Derive subdomain from repo name (repo.hach.dev) instead of pipeline ID
+        const repoSlug = p.github?.repo ? p.github.repo.toLowerCase().replace(/[^a-z0-9-]/g, '-') : p.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+        const hostDomain = `${repoSlug}.hach.dev`;
 
         // If template says no Traefik, use simplified deploy
         if (template && !template.needsTraefik) {
@@ -347,10 +350,10 @@ Instructions:
 3. Dans ce \`docker-compose.prod.yml\`, n'expose AUCUN port via la directive "ports" vers l'extérieur pour les services web.
 4. Assure-toi qu'il possède un réseau externe Traefik : \`networks: web: external: true\` et assigne ce réseau aux services à exposer.
 5. Ajoute dynamiquement les labels Traefik à tous les services exposés (frontend/backend). 
-   Le host doit être \`${p.id}.hach.dev\` ou similaire.
+   Le host doit être \`${hostDomain}\` ou similaire.
 6. N'oublie pas les labels :
    - \`traefik.enable=true\`
-   - \`traefik.http.routers.NOM-SERVICE.rule=Host(\`${p.id}.hach.dev\`)\`
+   - \`traefik.http.routers.NOM-SERVICE.rule=Host(\`${hostDomain}\`)\`
    - \`traefik.http.routers.NOM-SERVICE.entrypoints=websecure\`
    - \`traefik.http.routers.NOM-SERVICE.tls.certresolver=letsencrypt\`
    - \`traefik.http.services.NOM-SERVICE.loadbalancer.server.port=PORT_INTERNE\`
@@ -388,7 +391,7 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.myapp.rule=Host(\`${p.id}.hach.dev\`)"
+      - "traefik.http.routers.myapp.rule=Host(\`${hostDomain}\`)"
       - "traefik.http.routers.myapp.entrypoints=websecure"
       - "traefik.http.routers.myapp.tls.certresolver=letsencrypt"
       - "traefik.http.services.myapp.loadbalancer.server.port=3000"

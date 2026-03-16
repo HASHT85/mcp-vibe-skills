@@ -532,9 +532,14 @@ app.get("/containers", async (_req: Request, res: Response) => {
                     url: (() => {
                         const pipelines = orchestrator.listPipelines();
                         const match = pipelines.find(p => p.name && `veist-${slugify(p.name)}-app` === c.Names);
-                        if (match) return match.artifacts?.deployedUrl || `https://${match.id}.hach.dev`;
-                        // Fallback: extract hash from old-style name
-                        const m = c.Names.match(/^veist-([a-f0-9]+)/);
+                        if (match) {
+                            if (match.artifacts?.deployedUrl) return match.artifacts.deployedUrl as string;
+                            // Use repo name as subdomain (repo.hach.dev)
+                            const repoSlug = match.github?.repo ? slugify(match.github.repo) : slugify(match.name);
+                            return `https://${repoSlug}.hach.dev`;
+                        }
+                        // Fallback: extract slug from container name (veist-NAME-app)
+                        const m = c.Names.match(/^veist-(.+?)(?:-app)?$/);
                         return m ? `https://${m[1]}.hach.dev` : null;
                     })(),
                 };

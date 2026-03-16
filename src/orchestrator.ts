@@ -1044,7 +1044,11 @@ Output ONLY the raw markdown content of the README, nothing else.`,
                     const { execSync } = await import("node:child_process");
                     const slug = slugify(p.name);
                     const projectName = `veist-${slug}`;
-                    const hostDomain = `${id}.hach.dev`;
+                    // Use repo name as subdomain (repo.hach.dev) instead of pipeline ID hash
+                    const repoSlug = p.github?.repo ? slugify(p.github.repo) : slug;
+                    const hostDomain = `${repoSlug}.hach.dev`;
+                    // Store deployed URL in artifacts for easy retrieval
+                    p.artifacts = { ...p.artifacts, deployedUrl: `https://${hostDomain}` };
 
                     // Ensure 'web' network exists (for Traefik)
                     try { execSync(`docker network create web`, { stdio: "pipe" }); } catch { /* already exists */ }
