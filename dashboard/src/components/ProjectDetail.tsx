@@ -88,6 +88,15 @@ function SecretsPanel({ pipelineId }: { pipelineId: string }) {
                                 />
                             </div>
                             <button
+                                className="text-slate-600 hover:text-v-accent shrink-0 p-2 border border-transparent hover:border-v-accent/20 bg-transparent hover:bg-v-accent/5 transition-all"
+                                onClick={() => {
+                                    const u = [...entries]; u[i] = { ...e, masked: !e.masked }; setEntries(u);
+                                }}
+                                title={e.masked ? "Show value" : "Hide value"}
+                            >
+                                <span className="material-symbols-outlined text-[14px]">{e.masked ? 'visibility' : 'visibility_off'}</span>
+                            </button>
+                            <button
                                 className="text-red-500/50 hover:text-red-500 shrink-0 p-2 border border-transparent hover:border-red-500/20 bg-transparent hover:bg-red-500/10 transition-all"
                                 onClick={() => setEntries(entries.filter((_, j) => j !== i))}
                                 title="Remove Secret"

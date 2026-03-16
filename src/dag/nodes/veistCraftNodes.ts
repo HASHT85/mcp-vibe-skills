@@ -43,9 +43,21 @@ export class AnalysisNode extends AgentNode {
             : `\n\nProduis un JSON strict contenant :\n1. "type": Le type de projet\n2. "stack": { "frontend": "...", "backend": "..." }\n3. "summary": Résumé des fonctionnalités`;
 
         const sourceGithubUrl = context.pipeline.sourceGithubUrl;
-        const gitSection = sourceGithubUrl
-            ? `\n\n📦 REPOSITORY EXISTANT CLONÉ (${sourceGithubUrl}):\nCe projet part d'un code existant qui a été cloné dans le répertoire courant. UTILISE ABSOLUMENT list_dir et read_file AVANT DE RÉPONDRE pour analyser le code existant (notamment le package.json ou équivalent, et le src/). Ton architecture proposée devra respecter ou faire évoluer intelligemment la base de code actuelle.`
-            : "";
+        const repoContext = context.pipeline.artifacts.repoContext as Record<string, string> | undefined;
+        let gitSection = "";
+        if (sourceGithubUrl) {
+            gitSection = `\n\n📦 REPOSITORY EXISTANT CLONÉ (${sourceGithubUrl}):\nCe projet part d'un code existant qui a été cloné dans le répertoire courant. UTILISE ABSOLUMENT list_dir et read_file AVANT DE RÉPONDRE pour analyser le code existant.`;
+            if (repoContext) {
+                const parts: string[] = [];
+                if (repoContext.readme) parts.push(`\n📄 README.md (extrait):\n${repoContext.readme.slice(0, 3000)}`);
+                if (repoContext.dockerfile) parts.push(`\n🐳 Dockerfile existant:\n${repoContext.dockerfile.slice(0, 1500)}`);
+                if (repoContext.dockerCompose) parts.push(`\n🐳 docker-compose.yml existant:\n${repoContext.dockerCompose.slice(0, 1500)}`);
+                if (repoContext.goMod) parts.push(`\n📦 go.mod:\n${repoContext.goMod}`);
+                if (repoContext.packageJson) parts.push(`\n📦 package.json:\n${repoContext.packageJson.slice(0, 1000)}`);
+                gitSection += parts.join("");
+                gitSection += `\n\n⚠️ CRITIQUE: Ce projet a DÉJÀ du code fonctionnel. Ne réécris PAS le code depuis zéro. Adapte et améliore l'existant. Si un Dockerfile et/ou une image Docker Hub existent déjà, UTILISE-LES.`;
+            }
+        }
 
         return `Analyse la demande suivante :\n\n"${context.pipeline.description}"${researchSection}${gitSection}${templateHint}\n\n⚠️ NE TE LIMITE PAS à ce que l'utilisateur a demandé. Propose des features innovantes dans "innovativeFeatures".`;
     }

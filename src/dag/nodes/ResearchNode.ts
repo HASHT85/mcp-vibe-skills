@@ -25,9 +25,22 @@ export class ResearchNode extends AgentNode {
         const desc = context.pipeline.description;
         const currentYear = new Date().getFullYear();
 
+        // Extract pre-read repo context (README, Dockerfile, etc.)
+        const repoContext = context.pipeline.artifacts.repoContext as Record<string, string> | undefined;
+        let repoSection = "";
+        if (repoContext) {
+            const parts: string[] = [];
+            if (repoContext.readme) parts.push(`📄 README.md:\n${repoContext.readme.slice(0, 4000)}`);
+            if (repoContext.dockerfile) parts.push(`🐳 Dockerfile:\n${repoContext.dockerfile.slice(0, 1500)}`);
+            if (repoContext.dockerCompose) parts.push(`🐳 docker-compose.yml:\n${repoContext.dockerCompose.slice(0, 1500)}`);
+            if (repoContext.goMod) parts.push(`📦 go.mod:\n${repoContext.goMod}`);
+            if (repoContext.packageJson) parts.push(`📦 package.json:\n${repoContext.packageJson.slice(0, 1000)}`);
+            repoSection = `\n\n📦 CONTEXTE DU REPO SOURCE (fichiers clés pré-lus) :\n${parts.join("\n\n")}\n\n⚠️ IMPORTANT: Ce projet existe DÉJÀ avec du code fonctionnel. Lis bien le README pour comprendre comment il fonctionne. S'il y a déjà un Dockerfile et/ou une image Docker Hub, UTILISE-LES au lieu de tout recréer.\n`;
+        }
+
         return `Tu es un expert en veille technologique. L'utilisateur veut créer ce projet :
 
-"${desc}"
+"${desc}"${repoSection}
 
 🎯 TON OBJECTIF : Explorer le web pour découvrir les MEILLEURES approches modernes (${currentYear}) pour ce type de projet. Ne te contente PAS de tes connaissances internes — fais de VRAIES recherches web.
 
@@ -58,7 +71,7 @@ Le JSON doit contenir :
   "similarProjects": [{"name": "...", "stack": "...", "url": "...", "inspiration": "..."}],
   "availableApis": [{"name": "...", "description": "...", "url": "...", "free": true/false}],
   "recommendations": "Résumé de tes recommandations techniques basées sur tes découvertes",
-  "trendingTech": ["tech1", "tech2", "..."]
+  "trendingTech": ["tech1", "tech2", "..."]${repoContext ? `,\n  "existingProjectAnalysis": "Résumé du README et de la stack existante du repo source"` : ""}
 }
 
 ⚠️ RÈGLES :
@@ -67,7 +80,7 @@ Le JSON doit contenir :
 - Si une page web est pertinente, lis-la avec fetch_url pour avoir les détails
 - Sois curieux et explore des pistes inattendues — le but est de DÉCOUVRIR, pas de confirmer des a priori
 - Tes recherches doivent être en ANGLAIS pour avoir plus de résultats
-- Concentre-toi sur des technologies stables et maintenues, pas des projets expérimentaux abandonnés`;
+- Concentre-toi sur des technologies stables et maintenues, pas des projets expérimentaux abandonnés${repoContext ? "\n- IMPORTANT: Le projet source a un README et possiblement un Dockerfile/docker-compose qui fonctionnent DÉJÀ. Ne les ignore PAS." : ""}`;
     }
 
     protected getSystemPrompt(context: NodeContext): string {

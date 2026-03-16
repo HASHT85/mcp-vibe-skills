@@ -44,6 +44,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     const [githubUrl, setGithubUrl] = useState('');
     const [secrets, setSecrets] = useState<{key: string; value: string}[]>([]);
     const [secretsExpanded, setSecretsExpanded] = useState(false);
+    const [secretsVisible, setSecretsVisible] = useState<Set<number>>(new Set());
     const bottomRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const modifyCleanupRef = useRef<(() => void) | null>(null);
@@ -460,7 +461,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                             />
                                             <input
                                                 className="flex-1 bg-v-bg border border-slate-700 text-[10px] text-v-accent p-1.5 outline-none rounded-none placeholder:text-slate-600 font-mono"
-                                                type="password"
+                                                type={secretsVisible.has(i) ? "text" : "password"}
                                                 value={s.value}
                                                 onChange={(e) => {
                                                     const updated = [...secrets];
@@ -470,6 +471,20 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                                 placeholder="value"
                                                 spellCheck="false"
                                             />
+                                            <button
+                                                className="text-slate-600 hover:text-v-accent shrink-0 transition-colors"
+                                                onClick={() => {
+                                                    setSecretsVisible(prev => {
+                                                        const next = new Set(prev);
+                                                        next.has(i) ? next.delete(i) : next.add(i);
+                                                        return next;
+                                                    });
+                                                }}
+                                                title={secretsVisible.has(i) ? "Hide" : "Show"}
+                                                type="button"
+                                            >
+                                                <span className="material-symbols-outlined text-[14px]">{secretsVisible.has(i) ? 'visibility_off' : 'visibility'}</span>
+                                            </button>
                                             <button
                                                 className="text-v-alert hover:text-red-400 shrink-0"
                                                 onClick={() => setSecrets(secrets.filter((_, j) => j !== i))}

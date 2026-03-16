@@ -657,6 +657,31 @@ RÈGLES ABSOLUES:
                     if (match) {
                         p.github = { owner: match[1], repo: match[2], url: p.sourceGithubUrl };
                     }
+
+                    // ─── Auto-read key repo files (README, Dockerfile, docker-compose) ───
+                    const readSafe = async (name: string): Promise<string | null> => {
+                        try { return await fs.readFile(path.join(p.workspace, name), "utf-8"); } catch { return null; }
+                    };
+                    const readme = await readSafe("README.md") ?? await readSafe("readme.md") ?? await readSafe("README") ?? await readSafe("README.rst");
+                    const dockerfile = await readSafe("Dockerfile") ?? await readSafe("server/Dockerfile");
+                    const composeDev = await readSafe("docker-compose.yml") ?? await readSafe("docker-compose.yaml");
+                    const goMod = await readSafe("go.mod") ?? await readSafe("server/go.mod");
+                    const packageJson = await readSafe("package.json") ?? await readSafe("server/package.json");
+
+                    const repoContext: Record<string, string> = {};
+                    if (readme) repoContext.readme = readme.slice(0, 8000); // cap at 8k chars
+                    if (dockerfile) repoContext.dockerfile = dockerfile.slice(0, 3000);
+                    if (composeDev) repoContext.dockerCompose = composeDev.slice(0, 3000);
+                    if (goMod) repoContext.goMod = goMod.slice(0, 1500);
+                    if (packageJson) repoContext.packageJson = packageJson.slice(0, 2000);
+
+                    p.artifacts.repoContext = repoContext;
+
+                    const fileList = Object.keys(repoContext).join(", ");
+                    if (fileList) {
+                        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "📖", `Fichiers clés lus: ${fileList}`, "info");
+                    }
+
                     await savePipelinesState(this.pipelines);
                 } else {
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `Échec du clonage de ${p.sourceGithubUrl} — on continue sans repo`, "warning");
