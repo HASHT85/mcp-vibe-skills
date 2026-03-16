@@ -361,3 +361,51 @@ export async function launchFromChat(sessionId: string, name?: string, templateI
 export async function deleteChatSession(sessionId: string) {
     return api('/chat/sessions/' + sessionId, { method: 'DELETE' });
 }
+
+// ─── Quick Deploy ───
+
+export interface RepoAnalysis {
+    readme: string | null;
+    dockerfile: string | null;
+    dockerCompose: string | null;
+    goMod: string | null;
+    packageJson: string | null;
+    dockerHubImage: string | null;
+    detectedEnvVars: string[];
+    detectedPorts: number[];
+    language: string;
+    hasDockerfile: boolean;
+    hasCompose: boolean;
+    deployMode: "hub_image" | "build_from_source" | "existing_compose";
+}
+
+export async function analyzeRepo(githubUrl: string) {
+    return api<RepoAnalysis>('/api/quick-deploy/analyze', {
+        method: 'POST',
+        body: JSON.stringify({ githubUrl }),
+    });
+}
+
+export async function launchQuickDeploy(config: {
+    githubUrl: string;
+    projectName: string;
+    subdomain: string;
+    secrets: Record<string, string>;
+    deployMode: string;
+    dockerHubImage?: string;
+    port?: number;
+    composeOverride?: string;
+}) {
+    return api<{ actionId: number; state: string; compose?: string }>('/api/quick-deploy/launch', {
+        method: 'POST',
+        body: JSON.stringify(config),
+    });
+}
+
+export async function getDeployStatus(actionId: number) {
+    return api<{ id: number; name: string; state: string }>(`/api/quick-deploy/status/${actionId}`);
+}
+
+export async function getDeployContainers(projectName: string) {
+    return api<{ id: string; name: string; status: string; state: string; health: string }[]>(`/api/quick-deploy/containers/${projectName}`);
+}

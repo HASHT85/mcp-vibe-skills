@@ -11,6 +11,7 @@ import { ProjectDetail } from './components/ProjectDetail';
 import { TokensView } from './components/TokensView';
 import { DeployView } from './components/DeployView';
 import { ContainersView } from './components/ContainersView';
+import { QuickDeployView } from './components/QuickDeployView';
 import { ChatView } from './components/ChatView';
 import { LiveActivityPanel } from './components/LiveActivityPanel';
 import { formatTime, formatTokenCount } from './utils';
@@ -228,6 +229,8 @@ function Dashboard() {
         return <ChatView key="chat" pipelines={pipelines} onPipelineLaunched={() => { setActiveNav('projects'); load(); }} onRefresh={load} />;
       case 'tokens':
         return <TokensView key="tokens" pipelines={pipelines} />;
+      case 'quick_deploy':
+        return <QuickDeployView key="quick_deploy" />;
       case 'deploy':
         return <DeployView key="deploy" pipelines={pipelines} />;
       default:

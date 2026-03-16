@@ -11,6 +11,7 @@ import { PROFILES, getProfile } from "./profiles.js";
 import { TEMPLATES } from "./templates.js";
 import { getOrchestrator, type PipelineEvent } from "./orchestrator.js";
 import { getCurrentModel } from "./claude_code.js";
+import { quickDeployRouter } from "./quickDeploy.js";
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -55,6 +56,7 @@ app.use('/pipeline', authMiddleware);
 app.use('/agents', authMiddleware);
 app.use('/containers', authMiddleware);
 app.use('/chat', authMiddleware);
+app.use('/api/quick-deploy', authMiddleware);
 // Initialize Stores
 const agentsStore = new AgentsStore(storePath);
 const projectsStore = new ProjectsStore(storePath);
@@ -777,6 +779,9 @@ app.get("/events", async (req: Request, res: Response) => {
     const events = await agentsStore.listEvents(limit);
     res.json({ events });
 });
+
+// Quick Deploy routes
+app.use('/api/quick-deploy', quickDeployRouter);
 
 // Start HTTP server (wait for orchestrator to finish loading state)
 const PORT = Number(process.env.PORT) || 3000;

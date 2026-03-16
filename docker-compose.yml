@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        CACHE_BUSTER: "20260316-0254"
+        CACHE_BUSTER: "20260316-0400"
     container_name: veist
     restart: unless-stopped
     environment:
@@ -19,6 +19,7 @@ services:
       - PIPELINES_STORE=/data/pipelines.json
       - HOST_WORKSPACE_PATH=${HOST_WORKSPACE_PATH:-/opt/veistcraft/workspace}
       - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - HOSTINGER_API_TOKEN=${HOSTINGER_API_TOKEN}
     volumes:
       - /opt/veistcraft/data:/data
       - ${HOST_WORKSPACE_PATH:-/opt/veistcraft/workspace}:/workspace
@@ -42,7 +43,7 @@ services:
     build:
       context: ./dashboard
       args:
-        CACHE_BUSTER: "20260316-0254"
+        CACHE_BUSTER: "20260316-0400"
     container_name: veist-dashboard
     restart: unless-stopped
     networks:

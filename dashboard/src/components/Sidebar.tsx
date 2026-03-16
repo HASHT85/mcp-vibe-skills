@@ -8,7 +8,8 @@ const NAV_ITEMS = [
     { id: 'containers', icon: 'inventory_2', label: 'Containers' },
     { id: 'chat', icon: 'forum', label: 'Chat' },
     { id: 'tokens', icon: 'memory', label: 'Tokens' },
-    { id: 'deploy', icon: 'cloud_upload', label: 'Deploy' },
+    { id: 'quick_deploy', icon: 'bolt', label: 'Quick Deploy' },
+    { id: 'deploy', icon: 'cloud_upload', label: 'Deploys' },
 ];
 
 export function Sidebar({ active, onChange }: SidebarProps) {
