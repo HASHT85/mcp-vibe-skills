@@ -11,6 +11,23 @@ function getPipelineForContainer(name: string, pipelines: Pipeline[]): Pipeline 
     return pipelines.find(p => p.id && p.id.startsWith(pipelineId));
 }
 
+// Extract deployed URL from pipeline events (looks for https://*.hach.dev URLs)
+function getDeployedUrl(pipeline: Pipeline | undefined): string | null {
+    if (!pipeline) return null;
+    // Check dokploy.url first
+    if (pipeline.dokploy?.url) return pipeline.dokploy.url;
+    // Search events for deployed URL
+    for (const ev of [...pipeline.events].reverse()) {
+        const msg = ev.action || '';
+        const urlMatch = msg.match(/https?:\/\/[a-z0-9-]+\.hach\.dev/i);
+        if (urlMatch) return urlMatch[0];
+    }
+    // Derive from pipeline name/id → subdomain pattern
+    const pipelineId = pipeline.id?.slice(0, 8);
+    if (pipelineId) return `https://${pipelineId}.hach.dev`;
+    return null;
+}
+
 export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
     const [containers, setContainers] = useState<Container[]>([]);
     const [loading, setLoading] = useState(true);
@@ -124,19 +141,23 @@ export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
                                     <div className="flex items-center gap-1 ml-2 shrink-0">
                                         {(() => {
                                             const linkedPipeline = getPipelineForContainer(c.name, pipelines);
-                                            if (linkedPipeline?.github?.url) return (
-                                                <a href={linkedPipeline.github.url} target="_blank" rel="noopener noreferrer" 
-                                                   className="text-slate-400 hover:text-white transition-colors" title={`GitHub: ${linkedPipeline.github.url}`}>
-                                                    <span className="material-symbols-outlined text-[16px]">code</span>
-                                                </a>
+                                            const siteUrl = c.url || getDeployedUrl(linkedPipeline);
+                                            return (
+                                                <>
+                                                    {linkedPipeline?.github?.url && (
+                                                        <a href={linkedPipeline.github.url} target="_blank" rel="noopener noreferrer" 
+                                                           className="text-slate-400 hover:text-white transition-colors" title={`GitHub: ${linkedPipeline.github.url}`}>
+                                                            <span className="material-symbols-outlined text-[16px]">code</span>
+                                                        </a>
+                                                    )}
+                                                    {siteUrl && (
+                                                        <a href={siteUrl} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-accent transition-colors" title={siteUrl}>
+                                                            <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+                                                        </a>
+                                                    )}
+                                                </>
                                             );
-                                            return null;
                                         })()}
-                                        {c.url && (
-                                            <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-accent transition-colors" title={c.url}>
-                                                <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                                            </a>
-                                        )}
                                     </div>
                                 </div>
 
