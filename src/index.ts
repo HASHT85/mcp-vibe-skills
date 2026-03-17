@@ -664,11 +664,12 @@ app.get("/vps/metrics", async (_req: Request, res: Response) => {
         // Fetch VPS details + metrics in parallel
         const now = new Date();
         const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
         const fmt = (d: Date) => d.toISOString().split('T')[0];
 
         const [detailsRes, metricsRes] = await Promise.all([
             fetch(`https://developers.hostinger.com/api/vps/v1/virtual-machines/${VPS_ID}`, { headers }),
-            fetch(`https://developers.hostinger.com/api/vps/v1/virtual-machines/${VPS_ID}/metrics?date_from=${fmt(yesterday)}&date_to=${fmt(now)}`, { headers }),
+            fetch(`https://developers.hostinger.com/api/vps/v1/virtual-machines/${VPS_ID}/metrics?date_from=${fmt(yesterday)}&date_to=${fmt(tomorrow)}`, { headers }),
         ]);
 
         if (!detailsRes.ok || !metricsRes.ok) {
