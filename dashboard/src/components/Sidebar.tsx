@@ -10,6 +10,7 @@ const NAV_ITEMS = [
     { id: 'tokens', icon: 'memory', label: 'Tokens' },
     { id: 'quick_deploy', icon: 'bolt', label: 'Quick Deploy' },
     { id: 'deploy', icon: 'cloud_upload', label: 'Deploys' },
+    { id: 'vps', icon: 'dns', label: 'VPS' },
 ];
 
 export function Sidebar({ active, onChange }: SidebarProps) {

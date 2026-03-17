@@ -57,6 +57,7 @@ app.use('/agents', authMiddleware);
 app.use('/containers', authMiddleware);
 app.use('/chat', authMiddleware);
 app.use('/api/quick-deploy', authMiddleware);
+app.use('/vps', authMiddleware);
 // Initialize Stores
 const agentsStore = new AgentsStore(storePath);
 const projectsStore = new ProjectsStore(storePath);
@@ -645,6 +646,92 @@ app.get("/pipeline/:id/secrets", async (req: Request, res: Response) => {
         const masked = secretsService.getMaskedSecrets(req.params.id);
         res.json({ secrets: masked });
     } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─── VPS Monitoring (Hostinger API) ───
+const HOSTINGER_TOKEN = process.env.HOSTINGER_API_TOKEN;
+const VPS_ID = 1287719; // Main VPS
+
+app.get("/vps/metrics", async (_req: Request, res: Response) => {
+    try {
+        if (!HOSTINGER_TOKEN) {
+            return res.status(500).json({ error: "HOSTINGER_API_TOKEN not configured" });
+        }
+        const headers = { Authorization: `Bearer ${HOSTINGER_TOKEN}`, 'Content-Type': 'application/json' };
+
+        // Fetch VPS details + metrics in parallel
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const fmt = (d: Date) => d.toISOString().split('T')[0];
+
+        const [detailsRes, metricsRes] = await Promise.all([
+            fetch(`https://developers.hostinger.com/api/vps/v1/virtual-machines/${VPS_ID}`, { headers }),
+            fetch(`https://developers.hostinger.com/api/vps/v1/virtual-machines/${VPS_ID}/metrics?date_from=${fmt(yesterday)}&date_to=${fmt(now)}`, { headers }),
+        ]);
+
+        if (!detailsRes.ok || !metricsRes.ok) {
+            return res.status(502).json({ error: "Hostinger API error", detailsStatus: detailsRes.status, metricsStatus: metricsRes.status });
+        }
+
+        const details: any = await detailsRes.json();
+        const metrics: any = await metricsRes.json();
+
+        // Get latest value from time-series data
+        const latest = (usage: Record<string, number>) => {
+            const keys = Object.keys(usage).sort((a, b) => Number(b) - Number(a));
+            return keys.length > 0 ? usage[keys[0]] : 0;
+        };
+
+        // Get last N values for mini-chart
+        const lastN = (usage: Record<string, number>, n = 20) => {
+            const entries = Object.entries(usage)
+                .sort((a, b) => Number(a[0]) - Number(b[0]))
+                .slice(-n);
+            return entries.map(([ts, val]) => ({ t: Number(ts), v: val }));
+        };
+
+        const totalRam = details.memory * 1024 * 1024; // memory is in MB
+        const totalDisk = details.disk * 1024 * 1024; // disk is in MB  
+        const totalBandwidth = details.bandwidth * 1024 * 1024; // bandwidth is in MB
+        const currentRam = latest(metrics.ram_usage?.usage || {});
+        const currentDisk = latest(metrics.disk_space?.usage || {});
+        const currentCpu = latest(metrics.cpu_usage?.usage || {});
+        const uptimeSeconds = latest(metrics.uptime?.usage || {});
+
+        // Sum all incoming + outgoing traffic
+        const sumValues = (usage: Record<string, number>) => Object.values(usage).reduce((a, b) => a + b, 0);
+        const totalIncoming = sumValues(metrics.incoming_traffic?.usage || {});
+        const totalOutgoing = sumValues(metrics.outgoing_traffic?.usage || {});
+
+        res.json({
+            vps: {
+                id: details.id,
+                hostname: details.hostname,
+                state: details.state,
+                plan: details.plan,
+                os: details.template?.name || 'Unknown',
+                ip: details.ipv4?.[0]?.address || '',
+                cpus: details.cpus,
+                createdAt: details.created_at,
+            },
+            current: {
+                cpu: Math.round(currentCpu * 100) / 100,
+                ram: { used: currentRam, total: totalRam, percent: Math.round((currentRam / totalRam) * 10000) / 100 },
+                disk: { used: currentDisk, total: totalDisk, percent: Math.round((currentDisk / totalDisk) * 10000) / 100 },
+                bandwidth: { used: totalIncoming + totalOutgoing, total: totalBandwidth, percent: Math.round(((totalIncoming + totalOutgoing) / totalBandwidth) * 10000) / 100 },
+                traffic: { incoming: totalIncoming, outgoing: totalOutgoing },
+                uptime: uptimeSeconds,
+            },
+            charts: {
+                cpu: lastN(metrics.cpu_usage?.usage || {}),
+                ram: lastN(metrics.ram_usage?.usage || {}),
+                disk: lastN(metrics.disk_space?.usage || {}),
+            },
+        });
+    } catch (err: any) {
+        console.error("[VPS Metrics] Error:", err);
         res.status(500).json({ error: err.message });
     }
 });

@@ -11,6 +11,7 @@ import { ProjectDetail } from './components/ProjectDetail';
 import { TokensView } from './components/TokensView';
 import { DeployView } from './components/DeployView';
 import { ContainersView } from './components/ContainersView';
+import { VpsMonitor } from './components/VpsMonitor';
 import { QuickDeployView } from './components/QuickDeployView';
 import { ChatView } from './components/ChatView';
 import { LiveActivityPanel } from './components/LiveActivityPanel';
@@ -233,6 +234,8 @@ function Dashboard() {
         return <QuickDeployView key="quick_deploy" />;
       case 'deploy':
         return <DeployView key="deploy" pipelines={pipelines} />;
+      case 'vps':
+        return <VpsMonitor key="vps" />;
       default:
         return null;
     }
