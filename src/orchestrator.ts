@@ -515,8 +515,10 @@ RÈGLES ABSOLUES:
                 try {
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", "Reconstruction du container avec les modifications...", "info");
                     const { execSync } = await import("node:child_process");
-                    const slug = slugify(p.name);
+                    const slug = slugify(p.github?.repo || p.name);
                     const projectName = `veist-${slug}`;
+                    const repoSlug = p.github?.repo ? slugify(p.github.repo) : slug;
+                    const hostDomain = `${repoSlug}.hach.dev`;
 
                     // Re-inject secrets into .env before rebuild (#10)
                     // Vault secrets OVERWRITE existing keys (fixes placeholder bug)
@@ -576,21 +578,63 @@ RÈGLES ABSOLUES:
                             cwd: p.workspace, timeout: 60000, stdio: "pipe",
                         });
                     } else {
-                        // Single-container rebuild (legacy)
+                        // Single-container rebuild
                         const imageName = `veist-${slug}:latest`;
+                        
+                        // Find Dockerfile — check root, then subdirectories
+                        let dockerfilePath = "";
+                        let buildContext = p.workspace;
                         const rootDockerfile = path.join(p.workspace, "Dockerfile");
                         const rootDockerfileProd = path.join(p.workspace, "Dockerfile.prod");
-                        let dockerfilePath = rootDockerfile;
                         if (await fs.access(rootDockerfileProd).then(() => true).catch(() => false)) {
                             dockerfilePath = rootDockerfileProd;
+                        } else if (await fs.access(rootDockerfile).then(() => true).catch(() => false)) {
+                            dockerfilePath = rootDockerfile;
+                        } else {
+                            // Check subdirectories for Dockerfile
+                            const entries = await fs.readdir(p.workspace, { withFileTypes: true });
+                            for (const entry of entries) {
+                                if (entry.isDirectory() && entry.name !== "node_modules" && entry.name !== ".git") {
+                                    const subDockerfile = path.join(p.workspace, entry.name, "Dockerfile");
+                                    if (await fs.access(subDockerfile).then(() => true).catch(() => false)) {
+                                        dockerfilePath = subDockerfile;
+                                        buildContext = path.join(p.workspace, entry.name);
+                                        break;
+                                    }
+                                }
+                            }
                         }
+                        
+                        if (!dockerfilePath) {
+                            addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", "Aucun Dockerfile trouvé pour le rebuild", "warning");
+                        } else {
+                            const buildCmd = `docker build --no-cache -f ${dockerfilePath} -t ${imageName} ${buildContext}`;
+                            console.log(`[Deploy-Modify] Rebuilding: ${buildCmd}`);
+                            execSync(buildCmd, { cwd: p.workspace, timeout: 10 * 60 * 1000, stdio: "pipe" });
 
-                        const buildCmd = `docker build --no-cache -f ${dockerfilePath} -t ${imageName} ${p.workspace}`;
-                        console.log(`[Deploy-Modify] Rebuilding: ${buildCmd}`);
-                        execSync(buildCmd, { cwd: p.workspace, timeout: 10 * 60 * 1000, stdio: "pipe" });
+                            // Generate docker-compose.deploy.yml if it doesn't exist (initial deploy may have failed)
+                            const deployComposePath = path.join(p.workspace, "docker-compose.deploy.yml");
+                            const hasDeployCompose = await fs.access(deployComposePath).then(() => true).catch(() => false);
+                            if (!hasDeployCompose) {
+                                const deployComposeContent = [
+                                    'version: "3.8"', '',
+                                    'services:', '  app:',
+                                    `    image: ${imageName}`,
+                                    `    container_name: ${projectName}-app`,
+                                    '    restart: unless-stopped',
+                                    '    networks:', '      - web',
+                                    '    labels:',
+                                    '      - "traefik.enable=true"',
+                                    `      - "traefik.http.routers.${projectName}.rule=Host(\`${hostDomain}\`)"`,
+                                    `      - "traefik.http.routers.${projectName}.entrypoints=websecure"`,
+                                    `      - "traefik.http.routers.${projectName}.tls.certresolver=letsencrypt"`,
+                                    `      - "traefik.http.services.${projectName}.loadbalancer.server.port=80"`,
+                                    '', 'networks:', '  web:', '    external: true',
+                                ].join('\n');
+                                await fs.writeFile(deployComposePath, deployComposeContent, "utf-8");
+                                console.log(`[Deploy-Modify] Generated missing ${deployComposePath}`);
+                            }
 
-                        const deployComposePath = path.join(p.workspace, "docker-compose.deploy.yml");
-                        if (await fs.access(deployComposePath).then(() => true).catch(() => false)) {
                             try {
                                 execSync(`docker compose -p ${projectName} -f ${deployComposePath} down`, {
                                     cwd: p.workspace, stdio: "pipe", timeout: 30000
@@ -599,6 +643,9 @@ RÈGLES ABSOLUES:
                             execSync(`docker compose -p ${projectName} -f ${deployComposePath} up -d`, {
                                 cwd: p.workspace, timeout: 60000, stdio: "pipe",
                             });
+                            
+                            p.artifacts.deployed = true;
+                            p.artifacts.deployedUrl = `https://${hostDomain}`;
                         }
                     }
 
@@ -1042,7 +1089,7 @@ Output ONLY the raw markdown content of the README, nothing else.`,
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", "Déploiement du container projet...", "info");
 
                     const { execSync } = await import("node:child_process");
-                    const slug = slugify(p.name);
+                    const slug = slugify(p.github?.repo || p.name);
                     const projectName = `veist-${slug}`;
                     // Use repo name as subdomain (repo.hach.dev) instead of pipeline ID hash
                     const repoSlug = p.github?.repo ? slugify(p.github.repo) : slug;
