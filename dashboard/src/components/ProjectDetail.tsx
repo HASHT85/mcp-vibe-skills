@@ -265,6 +265,7 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
                                     onSelectNode={setSelectedNodeId}
                                     nodeStatuses={p.nodeStatuses}
                                     pipelinePhase={p.phase}
+                                    modifyRuns={(p as any).modifyRuns}
                                 />
                             </div>
                         )}

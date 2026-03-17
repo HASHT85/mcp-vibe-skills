@@ -52,6 +52,16 @@ export type NodeTopology = {
     model?: string;
 };
 
+export type ModifyRun = {
+    id: string;              // "mod_1", "mod_2", etc.
+    instructions: string;    // Short summary of what was requested
+    startedAt: string;
+    topology: NodeTopology[];
+    agents: PipelineAgent[];
+    nodeStatuses: Record<string, 'COMPLETED' | 'FAILED' | 'PENDING'>;
+    phase: PipelinePhase;
+};
+
 export type AgentTokenRecord = {
     agentId: string;
     role: string;
@@ -82,6 +92,7 @@ export type Pipeline = {
     };
     sourceGithubUrl?: string;
     topology?: NodeTopology[];
+    modifyRuns?: ModifyRun[];
     nodeStatuses?: Record<string, "COMPLETED" | "FAILED" | "PENDING">;
     artifacts: Record<string, unknown>;
     tokenUsage: { inputTokens: number; outputTokens: number };

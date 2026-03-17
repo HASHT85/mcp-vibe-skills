@@ -11,6 +11,16 @@ export interface NodeTopology {
     model?: string;
 }
 
+export interface ModifyRunData {
+    id: string;
+    instructions: string;
+    startedAt: string;
+    topology: NodeTopology[];
+    agents: { role: string; emoji: string; status: string; currentAction?: string }[];
+    nodeStatuses: Record<string, 'COMPLETED' | 'FAILED' | 'PENDING'>;
+    phase: string;
+}
+
 export interface ProjectNodeMapProps {
     topology?: NodeTopology[];
     agents: { role: string; emoji: string; status: string; currentAction?: string }[];
@@ -19,6 +29,7 @@ export interface ProjectNodeMapProps {
     onSelectNode?: (id: string | null) => void;
     nodeStatuses?: Record<string, 'COMPLETED' | 'FAILED' | 'PENDING'>;
     pipelinePhase?: string;
+    modifyRuns?: ModifyRunData[];
 }
 
 type NodeStatus = 'waiting' | 'active' | 'done' | 'error';
@@ -58,7 +69,7 @@ const NODE_H = 52;
 const H_SPACING = 260;
 const V_SPACING = 90;
 
-export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode, nodeStatuses, pipelinePhase }: ProjectNodeMapProps) {
+export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode, nodeStatuses, pipelinePhase, modifyRuns }: ProjectNodeMapProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
     const [isPanning, setIsPanning] = useState(false);
@@ -180,8 +191,49 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
         error:   { dot: '#FF6A3D', border: '#FF6A3D', text: '#FF6A3D', label: 'CRITICAL' }
     };
 
-    const graphW = layout.length > 0 ? Math.max(...layout.map(n => n.x)) + NODE_W + 200 : 800;
-    const graphH = layout.length > 0 ? Math.max(...layout.map(n => n.y)) + NODE_H + 200 : 600;
+    // Modify runs layout
+    const MOD_Y_OFFSET = 100; // vertical offset below main graph for first mod run
+    const MOD_RUN_SPACING = 80; // vertical spacing between mod runs
+
+    const modRunLayouts = useMemo(() => {
+        if (!modifyRuns || modifyRuns.length === 0) return [];
+        // Find rightmost node X in main layout as connection point
+        const mainMaxX = layout.length > 0 ? Math.max(...layout.map(n => n.x)) : 60;
+        const mainMaxY = layout.length > 0 ? Math.max(...layout.map(n => n.y)) : 60;
+
+        return modifyRuns.map((run, runIdx) => {
+            const baseY = mainMaxY + NODE_H + MOD_Y_OFFSET + runIdx * (NODE_H + MOD_RUN_SPACING);
+            // Connect from the end of main pipeline, offset X to the right area
+            const startX = mainMaxX - (run.topology.length - 1) * H_SPACING;
+            const nodes: LayoutNode[] = run.topology.map((node, i) => ({
+                id: node.id,
+                node,
+                x: Math.max(60, startX + i * H_SPACING),
+                y: baseY,
+                depth: i,
+            }));
+            return { run, nodes };
+        });
+    }, [modifyRuns, layout]);
+
+    // Build layout map for modify runs
+    const modLayoutMaps = useMemo(() => {
+        return modRunLayouts.map(mrl => {
+            const m = new Map<string, LayoutNode>();
+            mrl.nodes.forEach(l => m.set(l.id, l));
+            return m;
+        });
+    }, [modRunLayouts]);
+
+    const allModNodes = modRunLayouts.flatMap(mrl => mrl.nodes);
+    const graphW = Math.max(
+        layout.length > 0 ? Math.max(...layout.map(n => n.x)) : 0,
+        allModNodes.length > 0 ? Math.max(...allModNodes.map(n => n.x)) : 0
+    ) + NODE_W + 200;
+    const graphH = Math.max(
+        layout.length > 0 ? Math.max(...layout.map(n => n.y)) : 0,
+        allModNodes.length > 0 ? Math.max(...allModNodes.map(n => n.y)) : 0
+    ) + NODE_H + 200;
 
     return (
         <div
@@ -255,6 +307,70 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
                             );
                         })
                     )}
+
+                    {/* Modify run connections */}
+                    {modRunLayouts.map((mrl, mrlIdx) => {
+                        const nodes = mrl.nodes;
+                        const runNodeStatuses = mrl.run.nodeStatuses;
+                        // Connection line from last main node to first mod node
+                        const lastMainNode = layout[layout.length - 1];
+                        const firstModNode = nodes[0];
+                        const connLines: React.ReactNode[] = [];
+
+                        if (lastMainNode && firstModNode) {
+                            const sx = lastMainNode.x + NODE_W / 2;
+                            const sy = lastMainNode.y + NODE_H;
+                            const tx = firstModNode.x;
+                            const ty = firstModNode.y + NODE_H / 2;
+                            connLines.push(
+                                <path
+                                    key={`mod-conn-${mrlIdx}`}
+                                    d={`M ${sx} ${sy} C ${sx} ${(sy + ty) / 2}, ${tx} ${(sy + ty) / 2}, ${tx} ${ty}`}
+                                    fill="none"
+                                    stroke="#F59E0B"
+                                    strokeWidth={1}
+                                    opacity={0.4}
+                                    strokeDasharray="6 4"
+                                />
+                            );
+                        }
+
+                        // Connections between mod nodes
+                        mrl.run.topology.forEach(node => {
+                            node.dependencies.forEach(depId => {
+                                const src = modLayoutMaps[mrlIdx]?.get(depId);
+                                const tgt = modLayoutMaps[mrlIdx]?.get(node.id);
+                                if (!src || !tgt) return;
+                                const sx = src.x + NODE_W;
+                                const sy = src.y + NODE_H / 2;
+                                const tx = tgt.x;
+                                const ty = tgt.y + NODE_H / 2;
+                                const cpx = (sx + tx) / 2;
+
+                                const srcSt = runNodeStatuses[depId];
+                                const tgtSt = runNodeStatuses[node.id];
+                                const isDone = srcSt === 'COMPLETED' && tgtSt === 'COMPLETED';
+                                const isFailed = srcSt === 'FAILED' || tgtSt === 'FAILED';
+                                const color = isFailed ? '#FF6A3D' : isDone ? '#F59E0B' : '#F59E0B';
+                                const opacity = isFailed ? 0.7 : isDone ? 0.5 : 0.2;
+
+                                connLines.push(
+                                    <g key={`mod-${mrlIdx}-${depId}->${node.id}`}>
+                                        <path
+                                            d={`M ${sx} ${sy} C ${cpx} ${sy}, ${cpx} ${ty}, ${tx} ${ty}`}
+                                            fill="none"
+                                            stroke={color}
+                                            strokeWidth={1}
+                                            opacity={opacity}
+                                        />
+                                        <rect x={tx - 2} y={ty - 2} width={4} height={4} fill={color} opacity={opacity} />
+                                    </g>
+                                );
+                            });
+                        });
+
+                        return connLines;
+                    })}
                 </svg>
 
                 {/* Nodes */}
@@ -338,6 +454,80 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
                         </div>
                     );
                 })}
+
+                {/* Modify run nodes */}
+                {modRunLayouts.map((mrl, mrlIdx) => (
+                    <div key={`mod-run-${mrlIdx}`}>
+                        {/* MOD label */}
+                        {mrl.nodes[0] && (
+                            <div
+                                className="absolute select-none"
+                                style={{
+                                    left: mrl.nodes[0].x - 70,
+                                    top: mrl.nodes[0].y + 10,
+                                    fontSize: '0.5rem',
+                                    color: '#F59E0B',
+                                    fontWeight: 700,
+                                    letterSpacing: '0.1em',
+                                    writingMode: 'vertical-lr' as const,
+                                    textOrientation: 'mixed' as const,
+                                    opacity: 0.7,
+                                }}
+                            >
+                                MOD #{mrlIdx + 1}
+                            </div>
+                        )}
+                        {mrl.nodes.map(ln => {
+                            const nodeStatus = mrl.run.nodeStatuses[ln.id];
+                            const isCompleted = nodeStatus === 'COMPLETED';
+                            const isFailed = nodeStatus === 'FAILED';
+                            const isPending = nodeStatus === 'PENDING';
+                            const modAgent = mrl.run.agents.find(a => a.role === ln.node.role);
+                            const isActive = modAgent?.status === 'active';
+
+                            const borderColor = isFailed ? '#FF6A3D' : isActive ? '#F59E0B' : isCompleted ? 'rgba(245,158,11,0.5)' : 'rgba(245,158,11,0.2)';
+                            const dotColor = isFailed ? '#FF6A3D' : isActive ? '#F59E0B' : isCompleted ? '#F59E0B' : 'rgba(245,158,11,0.3)';
+                            const textColor = isFailed ? '#FF6A3D' : isActive ? '#F59E0B' : isCompleted ? '#F59E0B' : 'rgba(245,158,11,0.4)';
+                            const statusLabel = isFailed ? 'FAILED' : isActive ? 'PROCESSING' : isCompleted ? 'DONE' : 'IDLE';
+
+                            return (
+                                <div
+                                    key={ln.id}
+                                    data-node="true"
+                                    className="absolute select-none"
+                                    style={{ left: ln.x, top: ln.y, width: NODE_W, cursor: 'default' }}
+                                >
+                                    <div
+                                        className="relative p-2.5 transition-all duration-200"
+                                        style={{
+                                            background: '#0B0F14',
+                                            border: `1px solid ${borderColor}`,
+                                            boxShadow: isActive ? '0 0 10px rgba(245,158,11,0.12)' : isFailed ? '0 0 10px rgba(255,106,61,0.12)' : 'none',
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                            <span
+                                                className="shrink-0"
+                                                style={{
+                                                    width: 6, height: 6,
+                                                    background: dotColor,
+                                                    display: 'block',
+                                                    animation: isActive ? 'pulse 2s infinite' : 'none',
+                                                }}
+                                            />
+                                            <span style={{ fontSize: '0.6rem', color: textColor, fontWeight: 700, letterSpacing: '0.05em' }}>
+                                                {ln.node.emoji} {ln.node.role.toUpperCase()}
+                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: '0.5rem', color: textColor, opacity: 0.6, marginLeft: 14, letterSpacing: '0.1em' }}>
+                                            STATUS: {statusLabel}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ))}
             </div>
 
             {/* Zoom HUD */}

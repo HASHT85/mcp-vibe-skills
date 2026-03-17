@@ -14,6 +14,7 @@ import * as crypto from "node:crypto";
 import { EventEmitter } from "node:events";
 
 import { runClaudeAgent, gitPush, gitClone, gitInit, agentEvents, type AgentAction } from "./claude_code.js";
+import type { ModifyRun } from "./types.js";
 import { GraphManager } from "./dag/Graph.js";
 import type { NodeContext } from "./dag/Node.js";
 import { AnalysisNode, ArchitectureNode, ScaffoldNode, DevelopmentNode, QANode, DeployNode } from "./dag/nodes/veistCraftNodes.js";
@@ -296,8 +297,48 @@ export class Orchestrator extends EventEmitter {
 
         const p = this.pipelines.get(id)!;
 
+        // ─── Create ModifyRun for topology tracking ───
+        if (!p.modifyRuns) p.modifyRuns = [];
+        const modRunIndex = p.modifyRuns.length + 1;
+        const modRunId = `mod_${modRunIndex}`;
+        const modRun: ModifyRun = {
+            id: modRunId,
+            instructions: instructions.slice(0, 120),
+            startedAt: new Date().toISOString(),
+            topology: [
+                { id: `${modRunId}_analyst`, role: 'Analyst', emoji: '🧠', description: 'Analyse de la modification', systemPrompt: '', dependencies: [] },
+                { id: `${modRunId}_developer`, role: 'Developer', emoji: '💻', description: 'Implémentation', systemPrompt: '', dependencies: [`${modRunId}_analyst`] },
+                { id: `${modRunId}_qa`, role: 'QA', emoji: '✅', description: 'Vérification', systemPrompt: '', dependencies: [`${modRunId}_developer`] },
+                { id: `${modRunId}_deploy`, role: 'Deploy', emoji: '🐳', description: 'Redéploiement', systemPrompt: '', dependencies: [`${modRunId}_qa`] },
+            ],
+            agents: [
+                { role: 'Analyst', emoji: '🧠', status: 'waiting' },
+                { role: 'Developer', emoji: '💻', status: 'waiting' },
+                { role: 'QA', emoji: '✅', status: 'waiting' },
+                { role: 'Deploy', emoji: '🐳', status: 'waiting' },
+            ],
+            nodeStatuses: {
+                [`${modRunId}_analyst`]: 'PENDING',
+                [`${modRunId}_developer`]: 'PENDING',
+                [`${modRunId}_qa`]: 'PENDING',
+                [`${modRunId}_deploy`]: 'PENDING',
+            },
+            phase: 'ANALYSIS',
+        };
+        p.modifyRuns.push(modRun);
+        this.emit('pipeline:updated', { pipelineId: id });
+
+        // Helper to update modRun node status
+        const setModNode = (nodeKey: string, status: 'COMPLETED' | 'FAILED' | 'PENDING', agentStatus: 'waiting' | 'active' | 'done' | 'error') => {
+            modRun.nodeStatuses[`${modRunId}_${nodeKey}`] = status;
+            const ag = modRun.agents.find(a => a.role.toLowerCase() === nodeKey);
+            if (ag) ag.status = agentStatus;
+            this.emit('pipeline:updated', { pipelineId: id });
+        };
+
         try {
             setPipelinePhase(this, this.pipelines, id, "ANALYSIS");
+            setModNode('analyst', 'PENDING', 'active');
             addPipelineEvent(this, this.pipelines, id, "Analyst", "🧠", "Analyse de la demande de modification...", "info");
             setAgentStatus(this, this.pipelines, id, "Analyst", "active", "Analyse de la modification...");
 
@@ -346,6 +387,7 @@ Analyse la demande et retourne UNIQUEMENT un objet JSON valide avec ce format :
                 addPipelineEvent(this, this.pipelines, id, "Analyst", "⚠️", "Impossible de parser l'analyse, mode bugfix par défaut.", "warning");
             }
             setAgentStatus(this, this.pipelines, id, "Analyst", "done");
+            setModNode('analyst', 'COMPLETED', 'done');
 
             if (modType === "structural") {
                 setPipelinePhase(this, this.pipelines, id, "ARCHITECTURE");
@@ -384,6 +426,8 @@ Ne boucle pas indéfiniment. Arrête-toi dès que le Scaffolding est prêt.`,
 
             setPipelinePhase(this, this.pipelines, id, "DEVELOPMENT");
             setAgentStatus(this, this.pipelines, id, "Developer", "active", "Modification en cours...");
+            modRun.phase = 'DEVELOPMENT';
+            setModNode('developer', 'PENDING', 'active');
 
             if (p.github) {
                 const workspaceExists = await fs.access(p.workspace).then(() => true).catch(() => false);
@@ -458,6 +502,9 @@ RÈGLES ABSOLUES:
                 setAgentStatus(this, this.pipelines, id, "Developer", "done");
                 setAgentStatus(this, this.pipelines, id, "Debugger", "done"); // Skipped in modify mode
                 setAgentStatus(this, this.pipelines, id, "QA", "active", "Vérification post-modification...");
+                setModNode('developer', 'COMPLETED', 'done');
+                modRun.phase = 'QA';
+                setModNode('qa', 'PENDING', 'active');
 
                 const qaResult = await runClaudeAgent({
                     model: p.model,
@@ -486,6 +533,7 @@ RÈGLES ABSOLUES:
                 }
                 addTokenUsage(this.pipelines, id, qaResult);
                 setAgentStatus(this, this.pipelines, id, "QA", "done");
+                setModNode('qa', 'COMPLETED', 'done');
 
                 if (p.github) {
                     let hasQhanges = false;
@@ -513,6 +561,8 @@ RÈGLES ABSOLUES:
             const hasComposeProdForDeploy = await fs.access(path.join(p.workspace, "docker-compose.prod.yml")).then(() => true).catch(() => false);
             if (p.artifacts.deployed || hasDockerfile || hasComposeProdForDeploy) {
                 try {
+                    modRun.phase = 'DEPLOYING';
+                    setModNode('deploy', 'PENDING', 'active');
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", "Reconstruction du container avec les modifications...", "info");
                     const { execSync } = await import("node:child_process");
                     const slug = slugify(p.github?.repo || p.name);
@@ -649,25 +699,34 @@ RÈGLES ABSOLUES:
                         }
                     }
 
+                    setModNode('deploy', 'COMPLETED', 'done');
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", `Container reconstruit et redéployé! ${p.artifacts.deployedUrl || ''}`, "success");
                 } catch (deployErr: any) {
                     const errMsg = deployErr.stderr ? deployErr.stderr.toString().slice(-300) : deployErr.message;
                     console.error(`[Deploy-Modify] ❌ Rebuild failed: ${errMsg}`);
                     addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `Rebuild container échoué: ${errMsg}`, "warning");
+                    setModNode('deploy', 'FAILED', 'error');
                     // Don't throw — code was pushed, just container rebuild failed
                 }
             }
 
             p.progress = 100;
+            modRun.phase = 'COMPLETED';
+            // Mark deploy as done if it wasn't explicitly handled (no docker files)
+            if (modRun.nodeStatuses[`${modRunId}_deploy`] === 'PENDING') {
+                setModNode('deploy', 'COMPLETED', 'done');
+            }
             setPipelinePhase(this, this.pipelines, id, "COMPLETED");
             addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🎉", "Modification terminée et déployée!", "success");
 
         } catch (err: any) {
             if (err.name === 'AbortError') {
                 addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🛑", "Modification annulée.", "error");
+                modRun.phase = 'FAILED';
             } else {
                 setPipelinePhase(this, this.pipelines, id, "FAILED", err.message);
                 addPipelineEvent(this, this.pipelines, id, "Orchestrator", "❌", `Erreur modification: ${err.message}`, "error");
+                modRun.phase = 'FAILED';
             }
         } finally {
             this.abortControllers.delete(id);
