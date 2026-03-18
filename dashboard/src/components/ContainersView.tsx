@@ -34,6 +34,22 @@ export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [logsModal, setLogsModal] = useState<{ name: string; logs: string } | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+    const [showHidden, setShowHidden] = useState(false);
+    const [hiddenNames, setHiddenNames] = useState<Set<string>>(() => {
+        try { return new Set(JSON.parse(localStorage.getItem('veist_hidden_containers') || '[]')); } catch { return new Set(); }
+    });
+
+    const toggleHidden = (name: string) => {
+        setHiddenNames(prev => {
+            const next = new Set(prev);
+            if (next.has(name)) next.delete(name); else next.add(name);
+            localStorage.setItem('veist_hidden_containers', JSON.stringify([...next]));
+            return next;
+        });
+    };
+
+    const visibleContainers = showHidden ? containers : containers.filter(c => !hiddenNames.has(c.name));
+    const hiddenCount = containers.filter(c => hiddenNames.has(c.name)).length;
 
     const load = useCallback(async () => {
         try {
@@ -91,17 +107,33 @@ export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
                     <h2 className="text-2xl font-black text-white tracking-widest uppercase">Docker_Nodes</h2>
                     {!loading && containers.length > 0 && (
                         <span className="bg-white/10 text-accent text-[10px] font-bold px-2 py-0.5 ml-2 mt-1 border border-white/5">
-                            {containers.length} ACTIVE
+                            {visibleContainers.filter(c => c.state === 'running').length} ACTIVE
                         </span>
                     )}
                 </div>
-                <button 
-                    className="text-slate-400 hover:text-white transition-colors bg-panel border border-border-muted p-2 flex items-center justify-center hover:border-slate-500" 
-                    onClick={load} 
-                    title="Refresh Node List"
-                >
-                    <span className={`material-symbols-outlined text-[18px] ${loading ? 'animate-spin text-accent' : ''}`}>sync</span>
-                </button>
+                <div className="flex items-center gap-2">
+                    {hiddenCount > 0 && (
+                        <button
+                            className={`text-[10px] font-bold tracking-widest uppercase px-3 py-2 flex items-center gap-1.5 transition-colors border ${
+                                showHidden
+                                    ? 'bg-accent/10 text-accent border-accent/30'
+                                    : 'bg-panel text-slate-400 border-border-muted hover:text-white hover:border-slate-500'
+                            }`}
+                            onClick={() => setShowHidden(!showHidden)}
+                            title={showHidden ? 'Hide masked containers' : 'Show masked containers'}
+                        >
+                            <span className="material-symbols-outlined text-[14px]">{showHidden ? 'visibility' : 'visibility_off'}</span>
+                            {hiddenCount} MASKED
+                        </button>
+                    )}
+                    <button 
+                        className="text-slate-400 hover:text-white transition-colors bg-panel border border-border-muted p-2 flex items-center justify-center hover:border-slate-500" 
+                        onClick={load} 
+                        title="Refresh Node List"
+                    >
+                        <span className={`material-symbols-outlined text-[18px] ${loading ? 'animate-spin text-accent' : ''}`}>sync</span>
+                    </button>
+                </div>
             </div>
 
             {loading && containers.length === 0 ? (
@@ -117,8 +149,9 @@ export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {containers.map((c, i) => {
+                    {visibleContainers.map((c, i) => {
                         const isRunning = c.state === 'running';
+                        const isHidden = hiddenNames.has(c.name);
                         const dotColor = isRunning ? 'bg-primary' : 'bg-red-500';
                         const borderColor = isRunning ? 'border-primary/30 hover:border-primary' : 'border-red-500/30 hover:border-red-500';
                         const bgClass = isRunning ? 'bg-panel/80' : 'bg-red-950/20';
@@ -126,7 +159,7 @@ export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
                         return (
                             <motion.div 
                                 key={c.id} 
-                                className={`border ${borderColor} ${bgClass} transition-colors p-4 flex flex-col relative overflow-hidden`}
+                                className={`border ${borderColor} ${bgClass} transition-colors p-4 flex flex-col relative overflow-hidden ${isHidden ? 'opacity-40' : ''}`}
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.05 }}
@@ -214,6 +247,17 @@ export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
                                         title="Purge Node"
                                     >
                                         <span className="material-symbols-outlined text-[12px]">delete</span>
+                                    </button>
+                                    <button
+                                        className={`text-[9px] font-bold px-2 py-1 uppercase tracking-widest flex items-center gap-1 transition-colors border ${
+                                            isHidden
+                                                ? 'bg-accent/10 text-accent border-accent/30 hover:bg-accent/20'
+                                                : 'bg-slate-700/30 text-slate-400 border-slate-600/50 hover:bg-slate-700/50 hover:text-white'
+                                        }`}
+                                        onClick={() => toggleHidden(c.name)}
+                                        title={isHidden ? 'Unmask container' : 'Mask container'}
+                                    >
+                                        <span className="material-symbols-outlined text-[12px]">{isHidden ? 'visibility' : 'visibility_off'}</span>
                                     </button>
                                 </div>
 

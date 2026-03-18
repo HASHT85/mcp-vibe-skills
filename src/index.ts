@@ -486,28 +486,19 @@ app.delete("/agents/:id/skills", async (req: Request, res: Response) => {
 app.get("/containers", async (_req: Request, res: Response) => {
     try {
         const { execSync } = await import("node:child_process");
-        // List containers by name OR by compose project label (veist- prefix)
-        const rawByName = execSync(
-            `docker ps -a --filter "name=veist-" --format "{{json .}}"`,
-            { encoding: "utf-8", timeout: 10000 }
-        ).trim();
-        const rawByLabel = execSync(
-            `docker ps -a --filter "label=com.docker.compose.project" --format "{{json .}}"`,
+        // List ALL containers (not just veist- ones)
+        const rawAll = execSync(
+            `docker ps -a --format "{{json .}}"`,
             { encoding: "utf-8", timeout: 10000 }
         ).trim();
 
-        // Merge and deduplicate by ID, only keep veist-related containers
+        // Deduplicate by ID
         const seen = new Set<string>();
         const allLines: string[] = [];
-        for (const line of [...rawByName.split("\n"), ...rawByLabel.split("\n")]) {
+        for (const line of rawAll.split("\n")) {
             if (!line) continue;
             try {
                 const parsed = JSON.parse(line);
-                // Only include veist- containers or veist- compose projects
-                const labels = parsed.Labels || "";
-                const isveistProject = labels.includes("com.docker.compose.project=veist-");
-                const isveistName = (parsed.Names || "").startsWith("veist-");
-                if (!isveistName && !isveistProject) continue;
                 if (!seen.has(parsed.ID)) {
                     seen.add(parsed.ID);
                     allLines.push(line);
