@@ -252,12 +252,13 @@ export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
                                         className={`text-[9px] font-bold px-2 py-1 uppercase tracking-widest flex items-center gap-1 transition-colors border ${
                                             isHidden
                                                 ? 'bg-accent/10 text-accent border-accent/30 hover:bg-accent/20'
-                                                : 'bg-slate-700/30 text-slate-400 border-slate-600/50 hover:bg-slate-700/50 hover:text-white'
+                                                : 'bg-white/5 text-slate-400 border-slate-600/50 hover:bg-white/10 hover:text-white'
                                         }`}
                                         onClick={() => toggleHidden(c.name)}
                                         title={isHidden ? 'Unmask container' : 'Mask container'}
                                     >
                                         <span className="material-symbols-outlined text-[12px]">{isHidden ? 'visibility' : 'visibility_off'}</span>
+                                        {isHidden ? 'SHOW' : 'MASK'}
                                     </button>
                                 </div>
 
