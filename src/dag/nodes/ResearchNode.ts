@@ -15,7 +15,7 @@ export class ResearchNode extends AgentNode {
             name: "Recherche & Exploration Web",
             role: "Analyst",
             emoji: "🌐",
-            model: provider === "openrouter" && model ? `openrouter/${model}` : model,
+            model: model,
             maxTurns: 15,
             allowedTools: ["web_search", "fetch_url", "write_memory"]
         });

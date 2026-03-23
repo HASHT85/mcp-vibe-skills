@@ -18,7 +18,7 @@ export class AnalysisNode extends AgentNode {
             name: "Analyse des besoins",
             role: "Analyst",
             emoji: "🔎",
-            model: provider === "openrouter" && model ? `openrouter/${model}` : model,
+            model: model,
             dependencies: ["research"],
             maxTurns: 8,
             allowedTools: ["web_search", "fetch_url", "read_memory", "write_memory", "bash", "list_dir", "read_file"]
@@ -90,7 +90,7 @@ export class ArchitectureNode extends AgentNode {
             name: "Conception de l'architecture",
             role: "Architect",
             emoji: "🏗️",
-            model: provider === "openrouter" && model ? `openrouter/${model}` : model,
+            model: model,
             dependencies: ["skills_enrichment"],
             maxTurns: 10,
             allowedTools: ["web_search", "fetch_url", "read_memory", "write_memory"]
@@ -135,7 +135,7 @@ export class ScaffoldNode extends AgentNode {
             name: "Génération de la base",
             role: "Developer",
             emoji: "💻",
-            model: provider === "openrouter" && model ? `openrouter/${model}` : model,
+            model: model,
             dependencies: ["architecture"],
             maxTurns: 30,
             allowedTools: ["bash", "write_file", "list_dir", "read_memory", "write_memory"]
@@ -281,7 +281,7 @@ export class QANode extends AgentNode {
             name: "Vérification QA",
             role: "QA",
             emoji: "🧪",
-            model: provider === "openrouter" && model ? `openrouter/${model}` : model,
+            model: model,
             dependencies: dynamicDependencies,
             maxTurns: 30,
             allowedTools: ["bash", "read_file", "read_memory", "write_memory"]
@@ -311,7 +311,7 @@ export class DeployNode extends AgentNode {
             name: "Déploiement Hostinger (Traefik)",
             role: "DevOps",
             emoji: "🚀",
-            model: provider === "openrouter" && model ? `openrouter/${model}` : model,
+            model: model,
             dependencies: ["qa"],
             maxTurns: 15,
             allowedTools: ["bash", "read_file", "write_file", "replace_in_file", "read_memory", "write_memory"]

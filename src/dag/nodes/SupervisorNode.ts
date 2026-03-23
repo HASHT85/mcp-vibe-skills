@@ -11,7 +11,7 @@ export class SupervisorNode extends AgentNode {
             name: `Revue de code (${targetNodeId})`,
             role: "Supervisor",
             emoji: "👁️",
-            model: provider === "openrouter" && model ? `openrouter/${model}` : model,
+            model: model,
             dependencies,
             allowedTools: ["bash", "read_file", "list_dir", "read_memory", "write_memory"],
             maxTurns: 10

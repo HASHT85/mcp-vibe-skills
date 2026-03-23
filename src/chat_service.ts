@@ -1,12 +1,14 @@
 // @ts-nocheck
 /**
  * Chat Service — Pre-Pipeline Conversational Mode
- * Manages chat sessions where users discuss project ideas with Claude
+ * Manages chat sessions where users discuss project ideas
  * before launching the pipeline with an enriched brief.
  * Sessions are persisted to disk so they survive container restarts.
+ * 
+ * Uses OpenRouter (OpenAI-compatible API) for all LLM calls.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { randomUUID } from "node:crypto";
 import { promises as fs, readFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
@@ -36,7 +38,7 @@ export interface EnrichedBrief {
 
 // ─── Service ───
 
-const DEFAULT_MODEL = process.env.AI_MODEL || "claude-sonnet-4-6";
+const DEFAULT_MODEL = process.env.AI_MODEL || "anthropic/claude-sonnet-4";
 
 const SYSTEM_PROMPT = `Tu es l'assistant IA intégré de VEIST — un orchestrateur capable de créer N'IMPORTE QUEL type de projet. Tu aides les utilisateurs à DÉFINIR et AFFINER leur projet avant de le faire construire par les agents du pipeline.
 
@@ -116,12 +118,15 @@ Réponds en français, sois concis et technique.`;
 
 export class ChatService {
     private sessions: Map<string, ChatSession> = new Map();
-    private client: Anthropic;
+    private client: OpenAI;
     private filePath: string;
     private saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
     constructor(storePath?: string) {
-        this.client = new Anthropic();
+        this.client = new OpenAI({
+            apiKey: process.env.OPENROUTER_API_KEY,
+            baseURL: "https://openrouter.ai/api/v1",
+        });
         // Store chat sessions next to the main store
         const baseDir = path.dirname(storePath || process.env.STORE_PATH || "/data/store.json");
         this.filePath = path.join(baseDir, "chat_sessions.json");
@@ -249,65 +254,56 @@ INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
 - Quand EXECUTE_MODIFY est cliqué, un agent a accès au workspace et peut exécuter des commandes (npm, build, etc.) directement`;
         }
 
-        // Build messages for Claude API — with multi-block content for files
-        const apiMessages = session.messages.map((m, idx) => {
+        // Build messages for OpenRouter (OpenAI-compatible format)
+        const apiMessages: any[] = [
+            { role: "system", content: systemPrompt },
+        ];
+
+        for (let idx = 0; idx < session.messages.length; idx++) {
+            const m = session.messages[idx];
             // Only the LAST user message gets file attachments
             if (idx === session.messages.length - 1 && m.role === 'user' && files && files.length > 0) {
-                const contentBlocks: any[] = [];
+                const contentParts: any[] = [];
                 
-                // Add file blocks (images and PDFs)
+                // Add image files as image_url parts
                 for (const file of files) {
                     if (file.type.startsWith('image/')) {
-                        contentBlocks.push({
-                            type: 'image',
-                            source: {
-                                type: 'base64',
-                                media_type: file.type,
-                                data: file.base64,
-                            }
-                        });
-                    } else if (file.type === 'application/pdf') {
-                        contentBlocks.push({
-                            type: 'document',
-                            source: {
-                                type: 'base64',
-                                media_type: 'application/pdf',
-                                data: file.base64,
+                        contentParts.push({
+                            type: 'image_url',
+                            image_url: {
+                                url: `data:${file.type};base64,${file.base64}`,
                             }
                         });
                     }
+                    // Note: PDFs not natively supported in OpenAI format — skip for now
                 }
                 
                 // Add text content
-                contentBlocks.push({
+                contentParts.push({
                     type: 'text',
                     text: content,
                 });
                 
-                return {
-                    role: m.role as "user" | "assistant",
-                    content: contentBlocks,
-                };
+                apiMessages.push({
+                    role: m.role,
+                    content: contentParts,
+                });
+            } else {
+                apiMessages.push({
+                    role: m.role,
+                    content: m.content,
+                });
             }
-            
-            return {
-                role: m.role as "user" | "assistant",
-                content: m.content,
-            };
-        });
+        }
 
         try {
-            const response = await this.client.messages.create({
+            const response = await this.client.chat.completions.create({
                 model: session.model,
                 max_tokens: 2048,
-                system: systemPrompt,
                 messages: apiMessages,
             });
 
-            const reply = response.content
-                .filter(b => b.type === "text")
-                .map(b => (b as any).text)
-                .join("\n");
+            const reply = response.choices[0]?.message?.content || "";
 
             // Add assistant message
             session.messages.push({

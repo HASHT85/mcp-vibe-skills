@@ -2,13 +2,13 @@ import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 
 const MODEL_OPTIONS = [
-    { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-    { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-    { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' },
-    { value: 'gemini-3.0-pro', label: 'Gemini 3.0 Pro' },
-    { value: 'gpt-4o', label: 'GPT-4o (OpenAI)' },
-    { value: 'o3-mini', label: 'o3-mini (OpenAI)' },
+    { value: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4' },
+    { value: 'anthropic/claude-opus-4.6', label: 'Claude Opus 4.6' },
+    { value: 'anthropic/claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+    { value: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
+    { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { value: 'openai/gpt-4o', label: 'GPT-4o' },
+    { value: 'deepseek/deepseek-chat', label: 'DeepSeek Chat' },
 ];
 
 const TEMPLATE_OPTIONS = [

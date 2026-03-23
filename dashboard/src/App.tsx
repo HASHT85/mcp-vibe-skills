@@ -18,15 +18,13 @@ import { LiveActivityPanel } from './components/LiveActivityPanel';
 import { formatTime, formatTokenCount } from './utils';
 
 const MODEL_OPTIONS = [
-  { value: 'claude-sonnet-4-6', label: 'Claude 4.6 Sonnet' },
-  { value: 'claude-opus-4-6', label: 'Claude 4.6 Opus' },
-  { value: 'claude-haiku-4-5', label: 'Claude 4.5 Haiku' },
-  { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet' },
-  { value: 'gpt-4o', label: 'GPT-4o (OpenAI)' },
-  { value: 'o1', label: 'o1 (OpenAI)' },
-  { value: 'o3-mini', label: 'o3-mini (OpenAI)' },
-  { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' },
-  { value: 'gemini-3.0-pro', label: 'Gemini 3.0 Pro' }
+  { value: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4' },
+  { value: 'anthropic/claude-opus-4.6', label: 'Claude Opus 4.6' },
+  { value: 'anthropic/claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+  { value: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
+  { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+  { value: 'openai/gpt-4o', label: 'GPT-4o' },
+  { value: 'deepseek/deepseek-chat', label: 'DeepSeek Chat' },
 ];
 
 // ─── App ───

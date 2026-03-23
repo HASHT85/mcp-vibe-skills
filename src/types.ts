@@ -48,7 +48,7 @@ export type NodeTopology = {
     description: string;
     systemPrompt: string;
     dependencies: string[];
-    provider?: "anthropic" | "openrouter";
+    provider?: string; // always "openrouter" — kept for backward compat
     model?: string;
 };
 

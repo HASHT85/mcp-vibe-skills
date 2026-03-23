@@ -12,7 +12,7 @@ export class DynamicAgentNode extends AgentNode {
             name: topology.description.slice(0, 30) + (topology.description.length > 30 ? "..." : ""),
             role: topology.role,
             emoji: topology.emoji,
-            model: topology.provider === "openrouter" && topology.model ? `openrouter/${topology.model}` : topology.model,
+            model: topology.model,
             dependencies: topology.dependencies.concat(["planner_setup_fake_dep"]), // We'll handle this in orchestrator
             maxTurns: 30, // Default dynamic turns
             allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir", "read_memory", "write_memory", "web_search", "fetch_url"]

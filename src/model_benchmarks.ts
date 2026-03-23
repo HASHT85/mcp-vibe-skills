@@ -7,8 +7,8 @@
  */
 
 export interface ModelBenchmark {
-    id: string;                // OpenRouter model ID or Anthropic model name
-    provider: "anthropic" | "openrouter";
+    id: string;                // OpenRouter model ID
+    provider: "openrouter";
     coding: number;            // Coding capability (0-100)
     agentic: number;           // Agentic/tool-use capability (0-100)
     intelligence: number;      // AA Intelligence Index (normalized 0-100)
@@ -40,18 +40,11 @@ export const MODEL_BENCHMARKS: ModelBenchmark[] = [
         bestFor: ["architectural coding", "complex debugging", "reliability", "long context"]
     },
     {
-        id: "claude-sonnet-4-6",
-        provider: "anthropic",
-        coding: 88, agentic: 86, intelligence: 87,
-        speed: "medium",
-        bestFor: ["fullstack dev", "agentic coding", "architecture", "debugging"]
-    },
-    {
         id: "anthropic/claude-sonnet-4",
         provider: "openrouter",
         coding: 88, agentic: 86, intelligence: 87,
         speed: "medium",
-        bestFor: ["fullstack dev", "agentic coding", "architecture"]
+        bestFor: ["fullstack dev", "agentic coding", "architecture", "debugging"]
     },
     {
         id: "x-ai/grok-4.20-beta",
@@ -163,8 +156,8 @@ export const MODEL_BENCHMARKS: ModelBenchmark[] = [
         bestFor: ["fast tasks", "coding", "cost-effective", "multimodal"]
     },
     {
-        id: "claude-haiku-4-5",
-        provider: "anthropic",
+        id: "anthropic/claude-haiku-4-5",
+        provider: "openrouter",
         coding: 65, agentic: 58, intelligence: 60,
         speed: "fast",
         bestFor: ["simple tasks", "formatting", "docs", "config", "tests"]

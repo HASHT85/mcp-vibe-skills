@@ -66,34 +66,29 @@ export abstract class AgentNode extends DagNode {
         if (!context.pipeline.tokenHistory) context.pipeline.tokenHistory = [];
 
         const modelName = this.model || context.pipeline.model || 'unknown';
-        const provider = modelName.startsWith('openrouter/') ? 'openrouter' : 'anthropic';
+        const provider = 'openrouter';
 
-        // Calculate cost
+        // Calculate cost from OpenRouter pricing cache
         let cost = 0;
-        if (provider === 'anthropic') {
-            cost = (result.inputTokens / 1_000_000) * 3.0 + (result.outputTokens / 1_000_000) * 15.0;
-        } else {
-            try {
-                const fs = require('fs');
-                const path = require('path');
-                const cachePath = path.join(process.cwd(), '.openrouter_cache.json');
-                if (fs.existsSync(cachePath)) {
-                    const models = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
-                    const cleanModel = modelName.replace('openrouter/', '');
-                    const m = models.find((mod: any) => cleanModel.includes(mod.id) || mod.id.includes(cleanModel));
-                    if (m) {
-                        cost = result.inputTokens * m.pricing.prompt + result.outputTokens * m.pricing.completion;
-                    }
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const cachePath = path.join(process.cwd(), '.openrouter_cache.json');
+            if (fs.existsSync(cachePath)) {
+                const models = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+                const m = models.find((mod: any) => modelName.includes(mod.id) || mod.id.includes(modelName));
+                if (m) {
+                    cost = result.inputTokens * m.pricing.prompt + result.outputTokens * m.pricing.completion;
                 }
-            } catch { /* fallback */ }
-        }
+            }
+        } catch { /* fallback: cost stays 0 */ }
 
         context.pipeline.agentTokens.push({
             agentId: this.id,
             role: this.role,
             emoji: this.emoji,
             provider,
-            model: modelName.replace('openrouter/', ''),
+            model: modelName,
             inputTokens: result.inputTokens,
             outputTokens: result.outputTokens,
             cost,

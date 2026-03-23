@@ -830,7 +830,7 @@ RÈGLES ABSOLUES:
                 // Fresh run: use planner to generate dynamic topology
                 addPipelineEvent(this, this.pipelines, id, "Planner", "🛸", "Analyse de la demande: Création de l'essaim d'agents...", "info");
             
-                const userModel = p.model || "claude-sonnet-4-6";
+                const userModel = p.model || "anthropic/claude-sonnet-4";
 
                 // Build model catalog: benchmarks + live pricing
                 const { formatBenchmarksForPrompt } = await import("./model_benchmarks.js");
@@ -858,8 +858,8 @@ RULES:
   - For agentic/multi-step tasks → pick high Agentic score models (GPT-4o, Claude Sonnet)
   - For simple tasks → pick fast, cheap models (Gemini Flash, Mistral Small, Phi-4)
   - OPTIMIZE: mix expensive+powerful models for critical agents with cheap+fast for simple agents
-- For Anthropic models → set provider: "anthropic"
-- For OpenRouter models → set provider: "openrouter"
+- ALL models use provider: "openrouter" (OpenRouter routes to all providers)
+- Use OpenRouter model IDs (e.g. anthropic/claude-sonnet-4, google/gemini-2.5-flash, deepseek/deepseek-chat)
 - Dependencies: use [] if the agent can work in parallel, or specify other agent ids for sequential work
 - Each agent MUST have a detailed systemPrompt in French explaining its exact role and responsibilities
 
@@ -871,14 +871,14 @@ EXAMPLES:
 
 For a portfolio website:
 [
-  {"id": "frontend_dev", "role": "Frontend Developer", "emoji": "🎨", "description": "React components + animations + responsive design", "systemPrompt": "Tu es un expert React/TypeScript. Tu crées tous les composants, pages et animations. Tu utilises Framer Motion pour les animations fluides. Tu assures le responsive design et l'accessibilité.", "provider": "anthropic", "model": "claude-sonnet-4-6", "dependencies": []},
+  {"id": "frontend_dev", "role": "Frontend Developer", "emoji": "🎨", "description": "React components + animations + responsive design", "systemPrompt": "Tu es un expert React/TypeScript. Tu crées tous les composants, pages et animations. Tu utilises Framer Motion pour les animations fluides. Tu assures le responsive design et l'accessibilité.", "provider": "openrouter", "model": "anthropic/claude-sonnet-4", "dependencies": []},
   {"id": "styling_dev", "role": "UI Designer", "emoji": "🎭", "description": "CSS design system + visual polish", "systemPrompt": "Tu es un expert en design UI/UX. Tu crées le design system complet: couleurs, typographie, spacing, dark mode. Tu assures une identité visuelle cohérente et premium.", "provider": "openrouter", "model": "google/gemini-2.5-flash", "dependencies": ["frontend_dev"]}
 ]
 
 For a fullstack app with DB:
 [
   {"id": "backend_api", "role": "Backend Developer", "emoji": "⚙️", "description": "API REST + DB schema + auth", "systemPrompt": "Tu es un expert backend. Tu crées l'API REST, le schéma DB, les migrations, et l'auth JWT.", "provider": "openrouter", "model": "deepseek/deepseek-chat", "dependencies": []},
-  {"id": "frontend_app", "role": "Frontend Developer", "emoji": "🎨", "description": "Interface React + routing + state", "systemPrompt": "Tu es un expert frontend React/TypeScript. Tu crées l'interface complète avec routing et intégration API.", "provider": "anthropic", "model": "claude-sonnet-4-6", "dependencies": []},
+  {"id": "frontend_app", "role": "Frontend Developer", "emoji": "🎨", "description": "Interface React + routing + state", "systemPrompt": "Tu es un expert frontend React/TypeScript. Tu crées l'interface complète avec routing et intégration API.", "provider": "openrouter", "model": "anthropic/claude-sonnet-4", "dependencies": []},
   {"id": "integration", "role": "Integration Engineer", "emoji": "🔗", "description": "Connexion frontend-backend + Docker config", "systemPrompt": "Tu connectes le frontend au backend, configures les env vars, et assures le fonctionnement en Docker.", "provider": "openrouter", "model": "google/gemini-2.5-flash", "dependencies": ["backend_api", "frontend_app"]}
 ]
 
@@ -916,19 +916,19 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
                         emoji: "💻",
                         description: "Fullstack Development",
                         systemPrompt: "Tu es un Développeur Senior. Implémente le plan de l'Architecte.",
-                        provider: "anthropic",
+                        provider: "openrouter",
                         model: userModel,
                         dependencies: []
                     }];
                 }
 
                 const baseTopology: import("./types.js").NodeTopology[] = [
-                    { id: "research", role: "Researcher", emoji: "🌐", description: "Veille technologique", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: [] },
-                    { id: "analysis", role: "Analyst", emoji: "🔎", description: "Analyse des besoins", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: ["research"] },
-                    { id: "skills_enrichment", role: "Tech Lead", emoji: "📚", description: "Injection de best practices", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: ["analysis"] },
-                    { id: "architecture", role: "Architect", emoji: "🏗️", description: "Conception architecturale", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: ["skills_enrichment"] },
-                    { id: "scaffold", role: "DevOps", emoji: "🔨", description: "Génération de la base", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: ["architecture"] },
-                    { id: "supervisor_for_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: ["scaffold"] },
+                    { id: "research", role: "Researcher", emoji: "🌐", description: "Veille technologique", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: [] },
+                    { id: "analysis", role: "Analyst", emoji: "🔎", description: "Analyse des besoins", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: ["research"] },
+                    { id: "skills_enrichment", role: "Tech Lead", emoji: "📚", description: "Injection de best practices", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: ["analysis"] },
+                    { id: "architecture", role: "Architect", emoji: "🏗️", description: "Conception architecturale", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: ["skills_enrichment"] },
+                    { id: "scaffold", role: "DevOps", emoji: "🔨", description: "Génération de la base", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: ["architecture"] },
+                    { id: "supervisor_for_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: ["scaffold"] },
                 ];
 
                 // Dynamic agents: keep Planner's model choice, fallback to userModel
@@ -941,8 +941,8 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
 
                 dynamicIds = dynamicNodes.map(d => d.id);
                 const endTopology: import("./types.js").NodeTopology[] = [
-                    { id: "qa", role: "QA Engineer", emoji: "🧪", description: "Tests finaux", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: dynamicIds },
-                    { id: "deploy", role: "Release Manager", emoji: "🚀", description: "Déploiement", systemPrompt: "", provider: "anthropic", model: userModel, dependencies: ["qa"] }
+                    { id: "qa", role: "QA Engineer", emoji: "🧪", description: "Tests finaux", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: dynamicIds },
+                    { id: "deploy", role: "Release Manager", emoji: "🚀", description: "Déploiement", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: ["qa"] }
                 ];
 
                 p.topology = [...baseTopology, ...dynamicNodes, ...endTopology];

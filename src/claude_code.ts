@@ -1,11 +1,11 @@
 // @ts-nocheck
 /**
- * Claude Agent — Direct Anthropic SDK
- * Uses @anthropic-ai/sdk Messages API with tool use for agentic coding.
- * Replaces the Claude Code CLI which hangs in Docker containers.
+ * VEIST Agent Engine — OpenRouter (OpenAI-compatible)
+ * Uses OpenAI SDK pointed at OpenRouter for multi-model agentic coding.
+ * Supports all models available on OpenRouter (Claude, GPT, Gemini, DeepSeek, etc.)
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -53,7 +53,7 @@ agentEvents.setMaxListeners(50);
 
 // ─── Tool Definitions ───
 
-const TOOLS: Anthropic.Messages.Tool[] = [
+const TOOLS: any[] = [
     {
         name: "read_file",
         description: "Read the contents of a file at the given path.",
@@ -359,7 +359,7 @@ function runBash(command: string, cwd: string): Promise<string> {
 // ─── Main Agent Runner ───
 
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
-export const DEFAULT_MODEL = process.env.AI_MODEL || "claude-sonnet-4-6";
+export const DEFAULT_MODEL = process.env.AI_MODEL || "anthropic/claude-sonnet-4";
 
 export function getCurrentModel(): string {
     return DEFAULT_MODEL;
@@ -373,12 +373,12 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
     const maxTokenBudget = options.maxTokenBudget || parseInt(process.env.MAX_TOKENS_PER_AGENT || "0") || 0;
 
     // Pre-flight check
-    if (!process.env.ANTHROPIC_API_KEY) {
-        console.error("[Agent] ❌ ANTHROPIC_API_KEY is not set!");
+    if (!process.env.OPENROUTER_API_KEY) {
+        console.error("[Agent] ❌ OPENROUTER_API_KEY is not set!");
         return {
             success: false,
             actions: [],
-            error: "ANTHROPIC_API_KEY is not set.",
+            error: "OPENROUTER_API_KEY is not set.",
             durationMs: Date.now() - startTime,
             inputTokens: 0,
             outputTokens: 0,
@@ -389,7 +389,10 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
     const finalModel = options.model || DEFAULT_MODEL;
     console.log(`[Agent] Model: ${finalModel}, Max turns: ${maxTurns}, Budget: ${maxTokenBudget || 'unlimited'}, Timeout: ${timeoutMs / 1000} s`);
 
-    const client = new Anthropic();
+    const client = new OpenAI({
+        apiKey: process.env.OPENROUTER_API_KEY,
+        baseURL: "https://openrouter.ai/api/v1",
+    });
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
 
@@ -401,7 +404,7 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
 
     const systemPrompt = options.systemPrompt || "You are a senior software engineer. Write clean, working code.";
 
-    const initialContent: Anthropic.Messages.ContentBlockParam[] = [
+    const initialContent: any[] = [
         { type: "text", text: fullPromptText }
     ];
 
@@ -432,8 +435,9 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
         }
     }
 
-    // Conversation loop
-    const messages: Anthropic.Messages.MessageParam[] = [
+    // Conversation loop — stored in Anthropic-like format internally,
+    // converted to OpenAI format in invokeModel()
+    const messages: any[] = [
         { role: "user", content: initialContent },
     ];
 
@@ -463,8 +467,8 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
             totalOutputTokens += response.usage.output_tokens;
 
             // Process response content
-            const assistantContent: Anthropic.Messages.ContentBlock[] = response.content;
-            const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
+            const assistantContent: any[] = response.content;
+            const toolResults: any[] = [];
 
             for (const block of assistantContent) {
                 if (block.type === "text") {
@@ -540,7 +544,7 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
                         }
                     } catch {}
 
-                    const summaryMsg: Anthropic.Messages.MessageParam = {
+                    const summaryMsg: any = {
                         role: "user",
                         content: `[SYSTEM: ${droppedCount} earlier message(s) were trimmed to save context. Do NOT re-read or re-create files you already processed. Focus on WRITING new code and making progress.${progressHint}]`
                     };
@@ -731,244 +735,117 @@ export async function gitInit(cwd: string, remoteUrl: string): Promise<boolean> 
     });
 }
 
-// ─── Multi-Model Adapter ───
+// ─── Unified OpenRouter Adapter ───
 
 export async function invokeModel(
     model: string,
     systemPrompt: string,
-    tools: Anthropic.Messages.Tool[],
-    messages: Anthropic.Messages.MessageParam[],
-    anthropicClient: Anthropic,
+    tools: any[],
+    messages: any[],
+    openRouterClient: OpenAI,
     abortSignal?: AbortSignal
 ): Promise<{
     stop_reason: string;
-    content: Anthropic.Messages.ContentBlock[];
+    content: any[];
     usage: { input_tokens: number; output_tokens: number };
 }> {
-    // Pass the exact model string from the UI directly to the underlying proxy/client
+    // Clean model name — remove any legacy prefix
+    const actualModel = model.replace(/^openrouter\//, "");
 
-    if (model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3") || model.startsWith("openrouter/")) {
-        // OpenAI / OpenRouter Adapter
-        const isOpenRouter = model.startsWith("openrouter/");
-        const actualModel = isOpenRouter ? model.replace("openrouter/", "") : model;
-
-        const OpenAI = (await import("openai")).default;
-        const client = new OpenAI({ 
-            apiKey: isOpenRouter ? process.env.OPENROUTER_API_KEY : process.env.OPENAI_API_KEY,
-            baseURL: isOpenRouter ? "https://openrouter.ai/api/v1" : undefined
-        });
-
-        // Convert tools
-        const openAiTools = tools.map((t: any) => ({
-            type: "function",
-            function: {
-                name: t.name,
-                description: t.description,
-                parameters: t.input_schema
-            }
-        }));
-
-        // Convert messages
-        const openAiMessages: any[] = [];
-        if (systemPrompt) {
-            openAiMessages.push({ role: "system", content: systemPrompt });
+    // Convert Anthropic-format tools to OpenAI function tools
+    const openAiTools = tools.map((t: any) => ({
+        type: "function",
+        function: {
+            name: t.name,
+            description: t.description,
+            parameters: t.input_schema
         }
+    }));
 
-        for (const m of messages) {
-            if (typeof m.content === "string") {
-                openAiMessages.push({ role: m.role, content: m.content });
-            } else if (Array.isArray(m.content)) {
-                // Anthropic content blocks to OpenAI
-                let textContent = "";
-                const toolCalls: any[] = [];
-                for (const block of m.content) {
-                    if (block.type === "text") textContent += block.text;
-                    if (block.type === "tool_use") {
-                        toolCalls.push({
-                            id: block.id,
-                            type: "function",
-                            function: {
-                                name: block.name,
-                                arguments: JSON.stringify(block.input)
-                            }
-                        });
-                    }
-                    if (block.type === "tool_result") {
-                        openAiMessages.push({
-                            role: "tool",
-                            tool_call_id: block.tool_use_id,
-                            content: String(block.content)
-                        });
-                    }
-                }
-
-                if (m.role === "assistant") {
-                    if (textContent || toolCalls.length > 0) {
-                        openAiMessages.push({
-                            role: "assistant",
-                            content: textContent || null,
-                            tool_calls: toolCalls.length > 0 ? toolCalls : undefined
-                        });
-                    }
-                } else {
-                    if (textContent && openAiMessages[openAiMessages.length - 1]?.role !== "tool") {
-                        openAiMessages.push({ role: "user", content: textContent });
-                    }
-                }
-            }
-        }
-
-        const requestOptions: any = {};
-        if (abortSignal) requestOptions.signal = abortSignal;
-
-        const response = await client.chat.completions.create({
-            model: actualModel,
-            messages: openAiMessages as any,
-            tools: openAiTools as any,
-        }, requestOptions);
-
-        const choice = response.choices[0];
-        const msg = choice.message;
-
-        const contentBlocks: Anthropic.Messages.ContentBlock[] = [];
-        if (msg.content) {
-            contentBlocks.push({ type: "text", text: msg.content } as any);
-        }
-
-        if (msg.tool_calls) {
-            for (const tc of msg.tool_calls) {
-                contentBlocks.push({
-                    type: "tool_use",
-                    id: tc.id,
-                    name: tc.function.name,
-                    input: JSON.parse(tc.function.arguments)
-                } as any);
-            }
-        }
-
-        return {
-            stop_reason: choice.finish_reason === "tool_calls" ? "tool_use" : "end_turn",
-            content: contentBlocks,
-            usage: {
-                input_tokens: response.usage?.prompt_tokens || 0,
-                output_tokens: response.usage?.completion_tokens || 0
-            }
-        };
-
-    } else if (model.includes("gemini")) {
-        // Google GenAI Adapter
-        const { GoogleGenAI } = await import("@google/genai");
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY });
-
-        const geminiTools = [{
-            functionDeclarations: tools.map(t => ({
-                name: t.name,
-                description: t.description,
-                parameters: {
-                    type: "OBJECT",
-                    properties: (t.input_schema as any).properties,
-                    required: (t.input_schema as any).required
-                }
-            }))
-        }];
-
-        const geminiMessages: any[] = [];
-        for (const m of messages) {
-            const role = m.role === "user" ? "user" : "model";
-            const parts: any[] = [];
-
-            if (typeof m.content === "string") {
-                parts.push({ text: m.content });
-            } else if (Array.isArray(m.content)) {
-                for (const block of m.content) {
-                    if (block.type === "text") parts.push({ text: block.text });
-                    if (block.type === "tool_use") {
-                        parts.push({
-                            functionCall: {
-                                name: block.name,
-                                args: block.input
-                            }
-                        });
-                    }
-                    if (block.type === "tool_result") {
-                        geminiMessages.push({
-                            role: "user",
-                            parts: [{
-                                functionResponse: {
-                                    name: (block as unknown as any).name || "ExecuteCommand", // Fallback name since we don't have it natively in tool_result here
-                                    response: { result: block.content }
-                                }
-                            }]
-                        });
-                    }
-                }
-            }
-            if (parts.length > 0) {
-                geminiMessages.push({ role, parts });
-            }
-        }
-
-        // Generate ID for tools since Gemini may not provide an ID
-        const generateId = () => Math.random().toString(36).substring(2, 10);
-
-        const response = await ai.models.generateContent({
-            model: model,
-            contents: geminiMessages,
-            config: {
-                systemInstruction: systemPrompt,
-                tools: geminiTools as any,
-                temperature: 0.2
-            }
-        });
-
-        const contentBlocks: Anthropic.Messages.ContentBlock[] = [];
-
-        if (response.text) {
-            contentBlocks.push({ type: "text", text: response.text } as any);
-        }
-
-        let stopReason = "end_turn";
-        if (response.functionCalls && response.functionCalls.length > 0) {
-            stopReason = "tool_use";
-            for (const fc of response.functionCalls) {
-                contentBlocks.push({
-                    type: "tool_use",
-                    id: "call_" + Math.random().toString(36).substring(7),
-                    name: fc.name,
-                    input: fc.args as any
-                } as any);
-            }
-        }
-
-        return {
-            stop_reason: stopReason,
-            content: contentBlocks,
-            usage: {
-                input_tokens: response.usageMetadata?.promptTokenCount || 0,
-                output_tokens: response.usageMetadata?.candidatesTokenCount || 0
-            }
-        };
-
-    } else {
-        // Default Anthropic
-        const requestOptions: any = {};
-        if (abortSignal) requestOptions.signal = abortSignal;
-
-        const response = await anthropicClient.messages.create({
-            model: model,
-            max_tokens: 8192,
-            system: systemPrompt,
-            tools: tools,
-            messages: messages,
-        }, requestOptions);
-
-        return {
-            stop_reason: response.stop_reason as string,
-            content: response.content,
-            usage: {
-                input_tokens: response.usage.input_tokens,
-                output_tokens: response.usage.output_tokens
-            }
-        };
+    // Convert Anthropic-format messages to OpenAI format
+    const openAiMessages: any[] = [];
+    if (systemPrompt) {
+        openAiMessages.push({ role: "system", content: systemPrompt });
     }
+
+    for (const m of messages) {
+        if (typeof m.content === "string") {
+            openAiMessages.push({ role: m.role, content: m.content });
+        } else if (Array.isArray(m.content)) {
+            let textContent = "";
+            const toolCalls: any[] = [];
+            for (const block of m.content) {
+                if (block.type === "text") textContent += block.text;
+                if (block.type === "tool_use") {
+                    toolCalls.push({
+                        id: block.id,
+                        type: "function",
+                        function: {
+                            name: block.name,
+                            arguments: JSON.stringify(block.input)
+                        }
+                    });
+                }
+                if (block.type === "tool_result") {
+                    openAiMessages.push({
+                        role: "tool",
+                        tool_call_id: block.tool_use_id,
+                        content: String(block.content)
+                    });
+                }
+            }
+
+            if (m.role === "assistant") {
+                if (textContent || toolCalls.length > 0) {
+                    openAiMessages.push({
+                        role: "assistant",
+                        content: textContent || null,
+                        tool_calls: toolCalls.length > 0 ? toolCalls : undefined
+                    });
+                }
+            } else {
+                if (textContent && openAiMessages[openAiMessages.length - 1]?.role !== "tool") {
+                    openAiMessages.push({ role: "user", content: textContent });
+                }
+            }
+        }
+    }
+
+    const requestOptions: any = {};
+    if (abortSignal) requestOptions.signal = abortSignal;
+
+    const response = await openRouterClient.chat.completions.create({
+        model: actualModel,
+        messages: openAiMessages as any,
+        tools: openAiTools.length > 0 ? openAiTools as any : undefined,
+    }, requestOptions);
+
+    const choice = response.choices[0];
+    const msg = choice.message;
+
+    // Convert back to Anthropic-like format for internal consistency
+    const contentBlocks: any[] = [];
+    if (msg.content) {
+        contentBlocks.push({ type: "text", text: msg.content });
+    }
+
+    if (msg.tool_calls) {
+        for (const tc of msg.tool_calls) {
+            contentBlocks.push({
+                type: "tool_use",
+                id: tc.id,
+                name: tc.function.name,
+                input: JSON.parse(tc.function.arguments)
+            });
+        }
+    }
+
+    return {
+        stop_reason: choice.finish_reason === "tool_calls" ? "tool_use" : "end_turn",
+        content: contentBlocks,
+        usage: {
+            input_tokens: response.usage?.prompt_tokens || 0,
+            output_tokens: response.usage?.completion_tokens || 0
+        }
+    };
 }
