@@ -14,10 +14,6 @@ RUN npm run build
 FROM node:20.19.0-alpine3.21
 WORKDIR /app
 
-LABEL org.opencontainers.image.source="https://github.com/HASHT85/mcp-vibe-skills"
-LABEL org.opencontainers.image.description="VEIST Orchestrator"
-LABEL org.opencontainers.image.licenses="MIT"
-
 ENV PORT=8080
 ENV STORE_PATH=/data/store.json
 
