@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VEIST | Container Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#D7FF2F", // Acid Green
+                        "warning": "#FF6A3D", // Safety Orange
+                        "background-dark": "#0B0F14",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "sans-serif"]
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Public Sans', sans-serif; }
+        .text-xs-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 10px; }
+    </style>
+</head>
+<body class="bg-background-dark text-slate-400 selection:bg-primary selection:text-background-dark overflow-x-hidden">
+<div class="flex flex-col min-h-screen">
+<!-- Ultra-Light Top Navigation -->
+<header class="flex items-center justify-between border-b border-white/5 px-6 py-4 bg-background-dark/80 backdrop-blur-md sticky top-0 z-50">
+<div class="flex items-center gap-10">
+<div class="flex items-center gap-3">
+<img alt="VEIST V Logo" class="size-6 object-contain opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBagtTa91GXRG7NvNtWkaEL2FS-96x1_uCIEvccDSQ4rAB3oyX6sYZCmE1LfAKcP8F_G6BSLHQD0L8qUmwVoBQJ8i3coz7tQCrrgVmATjTzKh8y0X3Q6a2egnVTytqrIoaibG1EFj_ByyweHMB3Z1tiqV--yWVWHdPbJovHBZq-kwIomHJfiA0TwpefzK5B1-ZhFF1P-3_3qQAZXLdFflGq8LnMtWcbEPxCI9_TJV21cdNQIv8CC1l7yScv18UtwifsXaOxXeMITQo"/>
+<h2 class="text-white text-sm font-black tracking-tighter uppercase italic">VEIST</h2>
+</div>
+<nav class="hidden md:flex items-center gap-8">
+<a class="text-xs-mono font-bold uppercase tracking-widest hover:text-white transition-colors" href="#">Nodes</a>
+<a class="text-xs-mono font-bold uppercase tracking-widest text-primary" href="#">Containers</a>
+<a class="text-xs-mono font-bold uppercase tracking-widest hover:text-white transition-colors" href="#">Volumes</a>
+<a class="text-xs-mono font-bold uppercase tracking-widest hover:text-white transition-colors" href="#">Network</a>
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-0 top-1/2 -translate-y-1/2 text-white/20 text-lg">search</span>
+<input class="bg-transparent border-none text-white text-xs font-medium pl-8 pr-4 py-2 focus:ring-0 w-32 placeholder:text-white/10" placeholder="Search..." type="text"/>
+</div>
+<div class="flex gap-4">
+<button class="text-white/20 hover:text-white transition-all">
+<span class="material-symbols-outlined text-[18px]">notifications</span>
+</button>
+<div class="size-6 rounded-full border border-white/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px]">person</span>
+</div>
+</div>
+</div>
+</header>
+<main class="flex flex-1">
+<!-- Minimal Sidebar -->
+<aside class="w-16 md:w-20 border-r border-white/5 bg-background-dark/50 flex flex-col items-center py-8 gap-10">
+<a class="text-white/20 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+</a>
+<a class="text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+</a>
+<a class="text-white/20 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">layers</span>
+</a>
+<a class="text-white/20 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">storage</span>
+</a>
+<div class="mt-auto flex flex-col gap-8 items-center border-t border-white/5 pt-8 w-full">
+<div class="text-[9px] font-bold text-primary vertical-text -rotate-180 uppercase tracking-widest h-20">72% LOAD</div>
+<span class="material-symbols-outlined text-white/10 text-lg">settings</span>
+</div>
+</aside>
+<!-- Main Content Area -->
+<section class="flex-1 px-8 py-12 lg:px-20 max-w-7xl">
+<div class="flex flex-col md:flex-row justify-between items-start mb-16 gap-8">
+<div>
+<h1 class="text-5xl font-light text-white uppercase tracking-tight mb-2">Instances</h1>
+<div class="flex gap-4 text-xs-mono uppercase tracking-widest font-medium opacity-60">
+<span>12_Active</span>
+<span>02_Warning</span>
+</div>
+</div>
+<button class="border border-white/10 text-white hover:bg-white hover:text-background-dark text-xs-mono font-black py-4 px-8 transition-all uppercase">
+                        + Deploy_New_Node
+                    </button>
+</div>
+<!-- Text-Focused Grid -->
+<div class="divide-y divide-white/5 border-t border-b border-white/5">
+<!-- Row 1 -->
+<div class="group grid grid-cols-12 py-8 items-center hover:bg-white/[0.02] transition-colors px-4">
+<div class="col-span-1 flex items-center">
+<div class="size-1.5 bg-primary"></div>
+</div>
+<div class="col-span-4">
+<p class="text-xs-mono text-primary/40 mb-1 uppercase tracking-widest">Service</p>
+<h3 class="text-lg font-medium text-white">api-gateway-v2</h3>
+</div>
+<div class="col-span-2">
+<p class="text-xs-mono text-white/20 mb-1 uppercase tracking-widest">CPU</p>
+<span class="text-white text-sm">12%</span>
+</div>
+<div class="col-span-2">
+<p class="text-xs-mono text-white/20 mb-1 uppercase tracking-widest">Memory</p>
+<span class="text-white text-sm">30%</span>
+</div>
+<div class="col-span-3 flex justify-end gap-6">
+<button class="text-white/20 hover:text-white transition-colors uppercase text-xs-mono">Logs</button>
+<button class="text-white/20 hover:text-warning transition-colors uppercase text-xs-mono">Stop</button>
+</div>
+</div>
+<!-- Row 2 (Warning) -->
+<div class="group grid grid-cols-12 py-8 items-center hover:bg-white/[0.02] transition-colors px-4">
+<div class="col-span-1 flex items-center">
+<div class="size-1.5 bg-warning animate-pulse"></div>
+</div>
+<div class="col-span-4">
+<p class="text-xs-mono text-warning/60 mb-1 uppercase tracking-widest">Critical_Load</p>
+<h3 class="text-lg font-medium text-white">auth-service</h3>
+</div>
+<div class="col-span-2">
+<p class="text-xs-mono text-warning/40 mb-1 uppercase tracking-widest">CPU</p>
+<span class="text-warning text-sm font-bold">94%</span>
+</div>
+<div class="col-span-2">
+<p class="text-xs-mono text-warning/40 mb-1 uppercase tracking-widest">Memory</p>
+<span class="text-warning text-sm font-bold">99%</span>
+</div>
+<div class="col-span-3 flex justify-end gap-6">
+<button class="text-white/20 hover:text-white transition-colors uppercase text-xs-mono">Logs</button>
+<button class="text-warning hover:text-white transition-colors uppercase text-xs-mono">Restart</button>
+</div>
+</div>
+<!-- Row 3 -->
+<div class="group grid grid-cols-12 py-8 items-center hover:bg-white/[0.02] transition-colors px-4">
+<div class="col-span-1 flex items-center">
+<div class="size-1.5 bg-primary"></div>
+</div>
+<div class="col-span-4">
+<p class="text-xs-mono text-primary/40 mb-1 uppercase tracking-widest">Service</p>
+<h3 class="text-lg font-medium text-white">db-primary-01</h3>
+</div>
+<div class="col-span-2">
+<p class="text-xs-mono text-white/20 mb-1 uppercase tracking-widest">CPU</p>
+<span class="text-white text-sm">45%</span>
+</div>
+<div class="col-span-2">
+<p class="text-xs-mono text-white/20 mb-1 uppercase tracking-widest">Memory</p>
+<span class="text-white text-sm">52%</span>
+</div>
+<div class="col-span-3 flex justify-end gap-6">
+<button class="text-white/20 hover:text-white transition-colors uppercase text-xs-mono">Logs</button>
+<button class="text-white/20 hover:text-warning transition-colors uppercase text-xs-mono">Stop</button>
+</div>
+</div>
+<!-- Row 4 (Inactive) -->
+<div class="group grid grid-cols-12 py-8 items-center opacity-30 hover:opacity-100 transition-all px-4">
+<div class="col-span-1 flex items-center">
+<div class="size-1.5 bg-white/40"></div>
+</div>
+<div class="col-span-4">
+<p class="text-xs-mono mb-1 uppercase tracking-widest">Stopped</p>
+<h3 class="text-lg font-medium text-white">worker-node-88</h3>
+</div>
+<div class="col-span-2">
+<p class="text-xs-mono text-white/20 mb-1 uppercase tracking-widest">CPU</p>
+<span class="text-white text-sm">-</span>
+</div>
+<div class="col-span-2">
+<p class="text-xs-mono text-white/20 mb-1 uppercase tracking-widest">Memory</p>
+<span class="text-white text-sm">-</span>
+</div>
+<div class="col-span-3 flex justify-end gap-6">
+<button class="text-primary hover:text-white transition-colors uppercase text-xs-mono font-bold">Start</button>
+</div>
+</div>
+</div>
+<!-- Clean Footer Logs -->
+<div class="mt-24 border-t border-white/5 pt-12">
+<div class="flex justify-between items-center mb-6 text-xs-mono uppercase tracking-widest opacity-30">
+<span>System_Journal</span>
+<div class="flex items-center gap-2">
+<div class="size-1 bg-primary animate-pulse"></div>
+<span>Active_Stream</span>
+</div>
+</div>
+<div class="space-y-3 text-xs-mono opacity-40">
+<p><span class="opacity-40">10:24:55</span> // NODE US-EAST-01 HANDSHAKE COMPLETE</p>
+<p><span class="opacity-40">10:25:02</span> // CONTAINER API-GATEWAY-V2 HEALTH_STATUS: OK</p>
+<p class="text-warning"><span class="opacity-40">10:25:11</span> // CRITICAL_ALERT: AUTH-SERVICE-POD RESOURCE EXHAUSTION</p>
+<p><span class="opacity-40">10:26:15</span> // STATE PERSISTED TO CLUSTER MESH</p>
+</div>
+</div>
+</section>
+</main>
+</div>
+</body></html>
