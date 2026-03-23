@@ -4,52 +4,50 @@ import { formatTime } from '../utils';
 
 export function LiveActivityPanel({ events }: { events: PipelineEvent[] }) {
     return (
-        <aside className="hidden lg:flex w-80 flex-col border-l border-border-muted bg-panel/50 backdrop-blur-md shrink-0">
-            <div className="p-6 border-b border-border-muted flex items-center justify-between">
+        <aside className="hidden lg:flex w-72 flex-col border-l border-[#2A3442] bg-[#0a0e13] shrink-0">
+            <div className="p-4 border-b border-[#2A3442] flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-accent animate-ping"></span>
-                    <h2 className="text-xs font-black tracking-widest text-white uppercase">Live Activity</h2>
+                    <span className="w-2 h-2 bg-[#D7FF2F] animate-pulse"></span>
+                    <h2 className="text-[10px] font-mono font-bold tracking-widest text-white uppercase">Live Activity</h2>
                 </div>
-                <span className="text-[10px] font-bold text-accent monospaced">78ms_ping</span>
+                <span className="text-[10px] font-mono text-[#D7FF2F]">78ms</span>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-4 monospaced space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
                 {events.length === 0 && (
-                    <div className="text-slate-500 text-xs text-center mt-10">
+                    <div className="text-gray-600 text-[10px] font-mono text-center mt-10 uppercase tracking-widest">
                         Scanning for activity...
                     </div>
                 )}
                 
                 {events.map((ev) => {
-                    // Different border colors based on the role/event for veist
-                    const borderColorClass = ev.agentRole === 'developer' || ev.agentRole === 'architect' ? 'border-primary/50' : 'border-accent/30';
-                    const textColorClass = ev.agentRole === 'developer' || ev.agentRole === 'architect' ? 'text-primary' : 'text-accent';
+                    const isAgent = ev.agentRole === 'developer' || ev.agentRole === 'architect';
+                    const borderColor = isAgent ? 'border-[#FF6A3D]/30' : 'border-[#D7FF2F]/20';
+                    const textColor = isAgent ? 'text-[#FF6A3D]' : 'text-[#D7FF2F]';
 
                     return (
                         <motion.div
                             key={ev.id + ev.timestamp}
-                            className={`border-l ${borderColorClass} pl-3 py-1`}
+                            className={`border-l-2 ${borderColor} pl-3 py-1`}
                             initial={{ opacity: 0, x: 10 }}
                             animate={{ opacity: 1, x: 0 }}
                         >
-                            <div className="flex justify-between text-[10px] mb-1">
-                                <span className={`${textColorClass} font-bold uppercase`}>{ev.agentEmoji} {ev.agentRole || 'SYS'}</span>
-                                <span className="text-slate-500">{formatTime(ev.timestamp)}</span>
+                            <div className="flex justify-between text-[10px] mb-1 font-mono">
+                                <span className={`${textColor} font-bold uppercase`}>{ev.agentEmoji} {ev.agentRole || 'SYS'}</span>
+                                <span className="text-gray-600">{formatTime(ev.timestamp)}</span>
                             </div>
-                            <p className="text-[11px] text-slate-300 leading-relaxed">
+                            <p className="text-[10px] text-gray-400 leading-relaxed font-mono">
                                 {ev.action}
                             </p>
                         </motion.div>
                     );
                 })}
-
-
             </div>
 
-            <div className="p-4 bg-background-dark/80 border-t border-border-muted mt-auto">
+            <div className="p-4 border-t border-[#2A3442] mt-auto">
                 <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 bg-accent rounded-full shadow-[0_0_8px_rgba(212,255,0,0.6)]"></div>
-                    <span className="text-[10px] font-bold tracking-widest text-slate-400">ENCRYPTED_CHANNEL // ACTIVE</span>
+                    <div className="w-1.5 h-1.5 bg-[#D7FF2F]"></div>
+                    <span className="text-[10px] font-mono tracking-widest text-gray-600 uppercase">Encrypted_Channel</span>
                 </div>
             </div>
         </aside>

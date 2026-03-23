@@ -1,28 +1,23 @@
 export function TopBar() {
     return (
-        <header className="flex shrink-0 flex-col md:flex-row justify-between items-end gap-4 border-b-2 border-v-accent bg-v-bg px-6 py-4 relative z-10 w-full mb-0">
-            <div data-purpose="brand-id" className="flex items-center gap-3">
-                <img src="/logo.png" alt="VEIST" className="h-14 w-14 object-contain" />
-                <div>
-                    <h1 className="text-3xl md:text-5xl font-sans font-bold text-v-accent leading-none tracking-tighter">VEIST</h1>
-                    <p className="text-xs mt-1 text-white/60 font-mono uppercase tracking-widest">System Status: Active</p>
-                </div>
+        <header className="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-[#0B0F14] border-b border-[#2A3442]">
+            <div className="flex items-center gap-8">
+                <span className="text-2xl font-bold text-[#D7FF2F] tracking-widest font-headline uppercase">VEIST</span>
+                <nav className="hidden md:flex items-center gap-6">
+                    <a className="font-headline uppercase tracking-tighter text-gray-500 hover:text-white transition-colors text-sm" href="#">Docs</a>
+                    <a className="font-headline uppercase tracking-tighter text-gray-500 hover:text-white transition-colors text-sm" href="#">API</a>
+                    <a className="font-headline uppercase tracking-tighter text-gray-500 hover:text-white transition-colors text-sm" href="#">Status</a>
+                </nav>
             </div>
-            
-            <div className="flex gap-6 text-right font-mono" data-purpose="global-metrics">
-                <div>
-                   <span className="block text-[10px] text-v-accent uppercase tracking-widest">Network Nodes</span>
-                   <span className="text-xl font-bold text-white">NOMINAL</span>
-                </div>
-                <div>
-                   <span className="block text-[10px] text-v-alert uppercase tracking-widest">Intrusion Attempts</span>
-                   <span className="text-xl font-bold text-v-alert">00</span>
-                </div>
-                <div className="hidden sm:block">
-                   <span className="block text-[10px] text-v-accent uppercase tracking-widest">Term Uplink</span>
-                   <div className="h-6 w-8 bg-v-accent flex items-center justify-center mt-1 border-2 border-v-accent hover:bg-transparent hover:text-v-accent transition-colors cursor-crosshair text-black">
-                       <span className="material-symbols-outlined font-bold text-sm">person</span>
-                   </div>
+            <div className="flex items-center gap-4">
+                <button className="p-2 text-gray-500 hover:text-[#D7FF2F] transition-all active:scale-95">
+                    <span className="material-symbols-outlined">notifications</span>
+                </button>
+                <button className="p-2 text-gray-500 hover:text-[#D7FF2F] transition-all active:scale-95">
+                    <span className="material-symbols-outlined">settings</span>
+                </button>
+                <div className="w-8 h-8 bg-surface-container-high border border-[#2A3442] flex items-center justify-center">
+                    <span className="material-symbols-outlined text-gray-400 text-sm">person</span>
                 </div>
             </div>
         </header>
