@@ -30,41 +30,54 @@ export function AgentsView({ pipelines }: { pipelines: Pipeline[] }) {
                         <span className="text-[10px] text-slate-500 font-bold ml-2">[{agents.length} INSTANCES]</span>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="flex flex-col border border-border-muted divide-y divide-border-muted bg-panel/30">
                         {agents.map((agent, i) => {
                             const isStatusActive = agent.status === 'active';
                             const isStatusDone = agent.status === 'done';
                             const isStatusError = agent.status === 'error';
                             
-                            const borderColor = isStatusActive ? 'border-primary/50' : (isStatusDone ? 'border-accent/30' : (isStatusError ? 'border-red-500/50' : 'border-border-muted'));
                             const statusColor = isStatusActive ? 'text-primary' : (isStatusDone ? 'text-accent' : (isStatusError ? 'text-red-500' : 'text-slate-500'));
-                            const statusBg = isStatusActive ? 'bg-primary/10' : (isStatusDone ? 'bg-accent/10' : (isStatusError ? 'bg-red-500/10' : 'bg-white/5'));
+                            const dotColor = isStatusActive ? 'bg-primary' : (isStatusDone ? 'bg-accent' : (isStatusError ? 'bg-red-500' : 'bg-slate-500'));
 
                             return (
                                 <motion.div
                                     key={`${agent.pipelineName}-${i}`}
-                                    className={`bg-panel border ${borderColor} p-4 flex flex-col relative overflow-hidden`}
+                                    className="group grid grid-cols-12 py-3 px-4 items-center hover:bg-white/[0.02] transition-colors relative overflow-hidden"
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: i * 0.05 }}
                                 >
-                                    {isStatusActive && <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 rounded-full blur-xl -mr-6 -mt-6"></div>}
+                                    {isStatusActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>}
+                                    {isStatusError && <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500"></div>}
                                     
-                                    <div className="flex justify-between items-start mb-3 relative z-10">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xl">{agent.emoji}</span>
-                                            <span className="text-xs font-bold text-white uppercase tracking-widest">{agent.role}</span>
-                                        </div>
-                                        <span className={`${statusBg} ${statusColor} text-[9px] font-black px-2 py-0.5 uppercase tracking-widest flex items-center gap-1`}>
-                                            {isStatusActive && <span className="w-1.5 h-1.5 bg-primary rounded-full animate-ping mr-1"></span>}
-                                            {agent.status}
+                                    <div className="col-span-1 flex justify-center items-center">
+                                        <span className="text-base">{agent.emoji}</span>
+                                    </div>
+
+                                    <div className="col-span-3">
+                                        <p className="font-mono text-[9px] text-slate-500 mb-0.5 uppercase tracking-widest">Role</p>
+                                        <h3 className="text-[11px] font-bold text-white uppercase tracking-widest truncate pr-2">{agent.role}</h3>
+                                    </div>
+
+                                    <div className="col-span-3">
+                                        <p className="font-mono text-[9px] text-slate-500 mb-0.5 uppercase tracking-widest">Node</p>
+                                        <span className="font-mono text-[10px] text-slate-300 block truncate pr-2" title={agent.pipelineName}>
+                                            {(agent.pipelineName || 'unknown').replace(/\s+/g, '_').toUpperCase()}
                                         </span>
                                     </div>
-                                    <div className="text-[10px] text-slate-400 mb-1 monospaced truncate" title={agent.pipelineName}>
-                                        NODE: {(agent.pipelineName || 'unknown').replace(/\s+/g, '_').toUpperCase()}
+                                    
+                                    <div className="col-span-3">
+                                        <p className="font-mono text-[9px] text-slate-500 mb-0.5 uppercase tracking-widest">Action</p>
+                                        <span className="font-mono text-[10px] text-slate-400 block truncate pr-2" title={agent.currentAction || agent.pipelinePhase}>
+                                            {agent.currentAction || agent.pipelinePhase || 'AWAITING_INSTRUCTIONS'}
+                                        </span>
                                     </div>
-                                    <div className="text-xs text-slate-300 mt-2 font-medium line-clamp-2">
-                                        {agent.currentAction || agent.pipelinePhase}
+
+                                    <div className="col-span-2 flex justify-end items-center">
+                                        <div className="flex items-center gap-2">
+                                            <span className={`w-1.5 h-1.5 rounded-full ${dotColor} ${isStatusActive ? 'animate-pulse' : ''}`}></span>
+                                            <span className={`text-[9px] font-black uppercase tracking-widest ${statusColor}`}>{agent.status}</span>
+                                        </div>
                                     </div>
                                 </motion.div>
                             );
