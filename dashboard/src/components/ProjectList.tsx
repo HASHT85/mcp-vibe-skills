@@ -53,13 +53,13 @@ export function ProjectList({ pipelines, onSelect, onRetry }: ProjectListProps) 
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="flex flex-col border border-border-muted divide-y divide-border-muted">
                 {filtered.map((p, i) => (
                     <motion.div
                         key={p.id}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: i * 0.05, duration: 0.2 }}
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.03, duration: 0.15 }}
                     >
                         <ProjectCard pipeline={p} onClick={() => onSelect(p.id)} onRetry={onRetry} />
                     </motion.div>

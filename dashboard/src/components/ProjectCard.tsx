@@ -13,84 +13,76 @@ export function ProjectCard({ pipeline: p, onClick, onRetry }: ProjectCardProps)
     const isCompleted = p.phase === 'COMPLETED';
     const isFailed = p.phase === 'FAILED';
     const isRunning = !isCompleted && !isFailed;
-    
-    // Choose styling based on status
-    let cardClass = "brutalist-card p-4 relative overflow-hidden flex flex-col justify-between h-64 cursor-pointer";
-    let badgeClass = "bg-white text-v-bg px-2 py-1 text-[10px] font-bold uppercase";
-    let progressBorderClass = "border-white";
-    let progressFillClass = "bg-white h-full";
-    let accentTextClass = "text-white";
-    
-    if (isRunning) {
-        badgeClass = "bg-v-accent text-v-bg px-2 py-1 text-[10px] font-bold";
-        progressBorderClass = "border-v-accent";
-        progressFillClass = "bg-v-accent h-full";
-        accentTextClass = "text-v-accent";
-    } else if (isFailed) {
-        cardClass += " alert-card";
-        badgeClass = "bg-v-alert text-v-bg px-2 py-1 text-[10px] font-bold italic animate-pulse";
-        progressBorderClass = "border-v-alert";
-        progressFillClass = "bg-v-alert h-full";
-        accentTextClass = "text-v-alert";
-    } else if (isCompleted) {
-        cardClass += " border-v-nominal";
-        badgeClass = "bg-v-nominal text-v-bg px-2 py-1 text-[10px] font-bold";
-        progressBorderClass = "border-v-nominal";
-        progressFillClass = "bg-v-nominal h-full";
-        accentTextClass = "text-v-nominal";
-    }
-    
+
+    // Status colors
+    const statusColor = isRunning ? 'text-v-accent' : (isFailed ? 'text-v-alert' : 'text-v-nominal');
+    const dotColor = isRunning ? 'bg-v-accent' : (isFailed ? 'bg-v-alert' : 'bg-v-nominal');
+    const barColor = isRunning ? 'bg-v-accent' : (isFailed ? 'bg-v-alert' : 'bg-v-nominal');
+    const borderLeft = isRunning ? 'border-l-2 border-l-v-accent' : (isFailed ? 'border-l-2 border-l-v-alert' : '');
+
     // Format name safely
     const formattedName = p.name ? p.name.replace(/\s+/g, '_').toUpperCase() : `NODE_${(p.id || '').substring(0,4)}`;
 
     return (
-        <section className={cardClass} onClick={onClick}>
-            {isRunning && <div className="scanline"></div>}
-            
-            <div className="flex justify-between items-start mb-4 relative z-10">
-                <h2 className="text-lg md:text-xl font-bold leading-tight font-sans truncate pr-2" title={formattedName}>
+        <section
+            className={`group grid grid-cols-12 gap-2 py-3 px-4 items-center bg-panel/30 hover:bg-white/[0.03] transition-colors cursor-pointer relative ${borderLeft}`}
+            onClick={onClick}
+        >
+            {/* Scanline for running */}
+            {isRunning && <div className="scanline absolute inset-0 pointer-events-none"></div>}
+
+            {/* Name — col 3 */}
+            <div className="col-span-3 relative z-10">
+                <p className="font-mono text-[9px] text-slate-500 mb-0.5 uppercase tracking-widest">Node</p>
+                <h2 className="text-[11px] font-bold text-white uppercase tracking-widest truncate pr-2" title={formattedName}>
                     {formattedName}
                 </h2>
-                <span className={badgeClass}>
-                    {p.phase || 'STANDBY'}
+            </div>
+
+            {/* Description — col 3 */}
+            <div className="col-span-3 relative z-10">
+                <p className="font-mono text-[9px] text-slate-500 mb-0.5 uppercase tracking-widest">Stream</p>
+                <span className="font-mono text-[10px] text-slate-400 block truncate pr-2" title={p.description}>
+                    {p.description || 'NO DATA STREAM'}
                 </span>
             </div>
-            
-            <div className="space-y-4 relative z-10">
-                <div className="text-[10px] text-white/60 line-clamp-2 h-8 leading-relaxed mb-2 font-mono">
-                    {p.description || "NO DATA STREAM"}
-                </div>
-                
-                <div data-purpose="technical-data">
-                    <div className="flex justify-between text-[10px] mb-1 font-mono font-bold">
-                        <span className="uppercase tracking-widest text-white/60">Progress</span>
-                        <span className={accentTextClass}>{(p.progress || 0).toFixed(1)}%</span>
-                    </div>
-                    <div className={`w-full h-4 border ${progressBorderClass} p-[2px]`}>
-                        <div className={progressFillClass} style={{ width: `${p.progress || 0}%` }}></div>
-                    </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-                    <div className="border border-white/20 p-2">
-                        <span className="text-white/40 block pb-1">TOKENS</span>
-                        <span className={accentTextClass}>{totalTokens > 0 ? formatTokenCount(totalTokens) : '0'}</span>
-                    </div>
-                    <div className="border border-white/20 p-2">
-                        <span className="text-white/40 block pb-1">HASH ID</span>
-                        <span className="font-bold">{(p.id || '').substring(0, 8)}</span>
-                    </div>
-                </div>
 
+            {/* Progress — col 2 */}
+            <div className="col-span-2 relative z-10">
+                <p className="font-mono text-[9px] text-slate-500 mb-0.5 uppercase tracking-widest">Progress</p>
+                <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 border border-white/20 p-[1px]">
+                        <div className={`${barColor} h-full`} style={{ width: `${p.progress || 0}%` }}></div>
+                    </div>
+                    <span className={`text-[9px] font-bold ${statusColor}`}>{(p.progress || 0).toFixed(0)}%</span>
+                </div>
+            </div>
+
+            {/* Tokens — col 2 */}
+            <div className="col-span-2 relative z-10">
+                <p className="font-mono text-[9px] text-slate-500 mb-0.5 uppercase tracking-widest">Tokens</p>
+                <span className="font-mono text-[10px] text-white">
+                    {totalTokens > 0 ? formatTokenCount(totalTokens) : '0'}
+                </span>
+            </div>
+
+            {/* Status + Retry — col 2 */}
+            <div className="col-span-2 flex justify-end items-center gap-2 relative z-10">
                 {isFailed && onRetry && (
                     <button
-                        className="w-full border border-v-accent/50 bg-v-accent/10 text-v-accent font-bold text-[10px] px-3 py-2 hover:bg-v-accent/30 uppercase flex items-center justify-center gap-2 transition-colors mt-1"
+                        className="border border-v-accent/50 bg-v-accent/10 text-v-accent font-bold text-[9px] px-2 py-1 hover:bg-v-accent/30 uppercase flex items-center gap-1 transition-colors"
                         onClick={(e) => { e.stopPropagation(); onRetry(p.id); }}
                         title="Retry Pipeline"
                     >
-                        <span className="material-symbols-outlined text-[14px]">replay</span> RETRY
+                        <span className="material-symbols-outlined text-[12px]">replay</span> RETRY
                     </button>
                 )}
+                <div className="flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${dotColor} ${isRunning ? 'animate-pulse' : ''}`}></span>
+                    <span className={`text-[9px] font-black uppercase tracking-widest ${statusColor}`}>
+                        {p.phase || 'STANDBY'}
+                    </span>
+                </div>
             </div>
         </section>
     );
