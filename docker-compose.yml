@@ -1,7 +1,9 @@
 services:
   orchestrator:
-    image: ghcr.io/hasht85/veist:latest
-    pull_policy: always
+    build:
+      context: .
+      args:
+        CACHE_BUSTER: "20260323-1815"
     container_name: veist
     restart: unless-stopped
     environment:
@@ -38,8 +40,10 @@ services:
       start_period: 10s
 
   dashboard:
-    image: ghcr.io/hasht85/veist-dashboard:latest
-    pull_policy: always
+    build:
+      context: ./dashboard
+      args:
+        CACHE_BUSTER: "20260323-1815"
     container_name: veist-dashboard
     restart: unless-stopped
     networks:
