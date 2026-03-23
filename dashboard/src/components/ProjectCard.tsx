@@ -84,42 +84,15 @@ export function ProjectCard({ pipeline: p, onClick, onRetry }: ProjectCardProps)
                     </div>
                 </div>
 
-            {/* Progress — col 2 */}
-            <div className="col-span-2 relative z-10">
-                <p className="font-mono text-[9px] text-slate-500 mb-0.5 uppercase tracking-widest">Progress</p>
-                <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 border border-white/20 p-[1px]">
-                        <div className={`${barColor} h-full`} style={{ width: `${p.progress || 0}%` }}></div>
-                    </div>
-                    <span className={`text-[9px] font-bold ${statusColor}`}>{(p.progress || 0).toFixed(0)}%</span>
-                </div>
-            </div>
-
-            {/* Tokens — col 2 */}
-            <div className="col-span-2 relative z-10">
-                <p className="font-mono text-[9px] text-slate-500 mb-0.5 uppercase tracking-widest">Tokens</p>
-                <span className="font-mono text-[10px] text-white">
-                    {totalTokens > 0 ? formatTokenCount(totalTokens) : '0'}
-                </span>
-            </div>
-
-            {/* Status + Retry — col 2 */}
-            <div className="col-span-2 flex justify-end items-center gap-2 relative z-10">
                 {isFailed && onRetry && (
                     <button
                         className="w-full border border-[#D7FF2F]/30 bg-[#D7FF2F]/5 text-[#D7FF2F] font-bold text-[10px] px-3 py-2 hover:bg-[#D7FF2F]/10 uppercase flex items-center justify-center gap-2 transition-colors mt-1"
                         onClick={(e) => { e.stopPropagation(); onRetry(p.id); }}
                         title="Retry Pipeline"
                     >
-                        <span className="material-symbols-outlined text-[12px]">replay</span> RETRY
+                        <span className="material-symbols-outlined text-[14px]">replay</span> RETRY
                     </button>
                 )}
-                <div className="flex items-center gap-1.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${dotColor} ${isRunning ? 'animate-pulse' : ''}`}></span>
-                    <span className={`text-[9px] font-black uppercase tracking-widest ${statusColor}`}>
-                        {p.phase || 'STANDBY'}
-                    </span>
-                </div>
             </div>
         </section>
     );
