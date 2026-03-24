@@ -1,6 +1,6 @@
 services:
   orchestrator:
-    image: hasht85/veist:latest
+    image: ihachi/veist:latest
     container_name: veist
     restart: unless-stopped
     environment:
@@ -37,7 +37,7 @@ services:
       start_period: 10s
 
   dashboard:
-    image: hasht85/veist-dashboard:latest
+    image: ihachi/veist-dashboard:latest
     container_name: veist-dashboard
     restart: unless-stopped
     networks:

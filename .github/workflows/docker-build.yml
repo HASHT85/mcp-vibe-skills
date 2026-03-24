@@ -29,8 +29,8 @@ jobs:
           context: .
           push: true
           tags: |
-            hasht85/veist:latest
-            hasht85/veist:${{ github.sha }}
+            ihachi/veist:latest
+            ihachi/veist:${{ github.sha }}
           cache-from: type=gha,scope=orchestrator
           cache-to: type=gha,mode=max,scope=orchestrator
 
@@ -40,7 +40,7 @@ jobs:
           context: ./dashboard
           push: true
           tags: |
-            hasht85/veist-dashboard:latest
-            hasht85/veist-dashboard:${{ github.sha }}
+            ihachi/veist-dashboard:latest
+            ihachi/veist-dashboard:${{ github.sha }}
           cache-from: type=gha,scope=dashboard
           cache-to: type=gha,mode=max,scope=dashboard
