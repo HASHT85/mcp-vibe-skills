@@ -58,7 +58,7 @@ Always read from `c:\Projet\mcp-vibe-skills\mcp-vibe-skills\.env` and pass ALL v
 - **Project name**: `veist`
 - **Dashboard URL**: `https://veist.hach.dev`
 - **API URL**: `https://api.veist.hach.dev`
-- **Images**: `ghcr.io/hasht85/veist:latest` + `ghcr.io/hasht85/veist-dashboard:latest`
+- **Images**: `ihachi/veist:latest` + `ihachi/veist-dashboard:latest` (Docker Hub)
 - **Volumes to preserve**: `orchestrator-data` (pipelines.json, store.json, chat_sessions.json)
 - **Host workspace**: `/opt/veistcraft/workspace`
 
