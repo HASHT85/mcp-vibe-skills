@@ -277,23 +277,13 @@ function Dashboard() {
       <Sidebar active={activeNav} onChange={(id) => { setActiveNav(id); setSelectedId(null); }} />
 
       {/* ─── Main Content Area ─── */}
-      <main className="ml-20 mt-16 h-[calc(100vh-64px-32px)] overflow-y-auto bg-[#0B0F14] p-8 relative custom-scrollbar">
+      <main className="ml-20 mt-16 h-[calc(100vh-64px)] overflow-y-auto bg-[#0B0F14] p-8 relative custom-scrollbar">
         <AnimatePresence mode="wait">
           {renderMainContent()}
         </AnimatePresence>
       </main>
 
-      {/* ─── System Footer ─── */}
-      <footer className="fixed bottom-0 w-full z-50 flex justify-between items-center px-4 h-8 bg-[#0B0F14] border-t border-[#2A3442]">
-        <div className="font-label text-[10px] tracking-widest text-[#D7FF2F]">
-          VEIST_FORENSIC_INTERFACE_2024
-        </div>
-        <div className="flex gap-6 items-center">
-          <span className="font-label text-[10px] tracking-widest text-gray-600 hover:text-white cursor-default uppercase">LATENCY: 14MS</span>
-          <span className="font-label text-[10px] tracking-widest text-gray-600 hover:text-white cursor-default uppercase">COORD: 40.7128N</span>
-          <span className="font-label text-[10px] tracking-widest text-gray-600 hover:text-white cursor-default uppercase">UPTIME: 99.99%</span>
-        </div>
-      </footer>
+
 
     </div>
   );

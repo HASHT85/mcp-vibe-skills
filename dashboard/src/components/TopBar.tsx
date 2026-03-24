@@ -10,15 +10,6 @@ export function TopBar() {
                 </nav>
             </div>
             <div className="flex items-center gap-4">
-                <button className="p-2 text-gray-500 hover:text-[#D7FF2F] transition-all active:scale-95">
-                    <span className="material-symbols-outlined">notifications</span>
-                </button>
-                <button className="p-2 text-gray-500 hover:text-[#D7FF2F] transition-all active:scale-95">
-                    <span className="material-symbols-outlined">settings</span>
-                </button>
-                <div className="w-8 h-8 bg-surface-container-high border border-[#2A3442] flex items-center justify-center">
-                    <span className="material-symbols-outlined text-gray-400 text-sm">person</span>
-                </div>
             </div>
         </header>
     );
