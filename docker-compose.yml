@@ -1,9 +1,6 @@
 services:
   orchestrator:
-    build:
-      context: .
-      args:
-        CACHE_BUSTER: "20260323-1815"
+    image: hasht85/veist:latest
     container_name: veist
     restart: unless-stopped
     environment:
@@ -40,10 +37,7 @@ services:
       start_period: 10s
 
   dashboard:
-    build:
-      context: ./dashboard
-      args:
-        CACHE_BUSTER: "20260323-1815"
+    image: hasht85/veist-dashboard:latest
     container_name: veist-dashboard
     restart: unless-stopped
     networks:
