@@ -1,5 +1,5 @@
 import { DagNode, type NodeContext } from "../Node.js";
-import { findSkillsForContext, type SkillContent } from "../../skills.js";
+import { findSkillsForContext, type SkillContent, SKILL_RELEVANCE_THRESHOLD } from "../../skills.js";
 
 /**
  * SkillsEnrichmentNode — Lightweight DAG node (no Claude call)

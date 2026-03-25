@@ -1,180 +1,145 @@
-# veist
+# VEIST — Multi-Agent AI Orchestrator
 
-Orchestrateur MVP exposant **API HTTP** + **MCP stdio** + **events persistés**.
-Conçu pour s'intégrer avec [veistcraft](https://github.com/Nearcyan/veistcraft) et [skills.sh](https://skills.sh).
+> Orchestrateur multi-agents autonome qui conçoit, développe et déploie des projets complets via un essaim d'agents IA spécialisés.
+
+[![Deploy](https://img.shields.io/badge/deploy-Hostinger%20VPS-blue)](https://veist.hach.dev)
+[![CI](https://img.shields.io/badge/CI-GitHub%20Actions-green)](../../actions)
+
+---
+
+## 🚀 Features
+
+### Core
+- **Dynamic DAG Pipeline** — LLM-generated topology : un Planner crée l'essaim d'agents optimal pour chaque projet
+- **Multi-Model Routing** — Chaque agent utilise le modèle le plus adapté (Claude, Gemini, DeepSeek, GPT) via OpenRouter
+- **Auto-Deploy** — Docker build + Traefik reverse proxy → chaque projet reçoit un sous-domaine `*.hach.dev`
+- **Skills Enrichment** — Injection automatique de best practices depuis [skills.sh](https://skills.sh)
+- **Chat Conversationnel** — Mode discussion pré-pipeline pour affiner le brief avec l'utilisateur
+- **GitHub Integration** — Création automatique de repos + push à chaque étape
+
+### Intelligence (DeerFlow Patterns)
+- **🧠 Long-Term Memory** — Extraction de faits, déduplication, injection `<memory>` dans les prompts agents
+- **📋 Context Summarization** — Compression automatique des conversations longues (seuil 80k tokens)
+- **⚙️ Middleware Chain** — Hooks pre/post sur chaque appel agent (memory, loop detection, token tracking)
+- **🎯 Skills TF-IDF Scoring** — Pertinence par cosine similarity au lieu du keyword matching
+
+### Dashboard
+- **Node Map** — Visualisation du DAG en temps réel avec statut de chaque agent
+- **Chat UI** — Interface conversationnelle avec support fichiers/images
+- **Agent Details** — Tokens consommés, coût estimé, logs par agent
+- **Containers View** — Monitoring des containers Docker déployés
 
 ---
 
 ## Quickstart
 
-### Local (Node.js)
+### Docker (recommandé)
 
 ```bash
-# Install dependencies
-npm install
+# Pull et run
+docker compose up -d
 
-# Build TypeScript
-npm run build
-
-# Run HTTP server (default port 3000)
-npm start
-
-# Run MCP stdio server (for Claude, etc.)
-npm run mcp
-```
-
-### Docker
-
-```bash
-# Build and run with docker-compose
-docker compose up --build -d
-
-# Check health
+# Health check
 curl http://localhost:8080/health
-
-# Stop
-docker compose down
 ```
 
-### Dokploy (Hostinger)
+### Local (dev)
 
-1. Connect your repo to Dokploy
-2. Configure environment variables in Dokploy UI:
-   - `PORT=3000`
-   - `STORE_PATH=/data/store.json`
-3. Configure volume: `/data` for persistence
-4. Deploy!
+```bash
+npm install
+npm run build
+npm start
+```
 
----
-
-## Environment Variables
+### Variables d'environnement
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3000` | HTTP server port |
-| `STORE_PATH` | `/data/store.json` | Path to JSON store file |
+| `OPENROUTER_API_KEY` | — | Clé API OpenRouter (requis) |
+| `GITHUB_TOKEN` | — | Token GitHub pour création de repos |
+| `AI_MODEL` | `anthropic/claude-sonnet-4` | Modèle par défaut |
+| `PORT` | `3000` | Port du serveur HTTP |
+| `STORE_PATH` | `/data/store.json` | Chemin du store JSON |
+
+---
+
+## Architecture
+
+```
+src/
+├── orchestrator.ts          # Pipeline manager (launch, pause, modify, retry)
+├── chat_service.ts          # Chat sessions + memory injection + summarization
+├── memory_service.ts        # Long-term memory (facts extraction & storage)
+├── middleware.ts             # Middleware chain (memory, loop detection, tokens)
+├── skills.ts                # Skills lookup + TF-IDF scoring
+├── claude_code.ts           # Agent execution (OpenRouter)
+├── dag/
+│   ├── Graph.ts             # DAG execution engine
+│   ├── Node.ts              # Base node class
+│   └── nodes/
+│       ├── AgentNode.ts     # Base agent with middleware integration
+│       ├── DynamicAgentNode  # Planner-generated agents
+│       ├── ResearchNode      # Web research
+│       ├── AnalysisNode      # Project analysis
+│       ├── SkillsEnrichment  # skills.sh lookup + scoring
+│       ├── ArchitectureNode  # Architecture design
+│       ├── ScaffoldNode      # Project scaffolding
+│       ├── SupervisorNode    # Quality gates
+│       ├── QANode            # Testing
+│       └── DeployNode        # Docker deploy
+└── templates/               # Project templates (web-spa, api, fullstack, bot...)
+
+dashboard/                   # React dashboard (Vite + TypeScript)
+```
 
 ---
 
 ## API Endpoints
 
-### Health
-- `GET /health` → `{ "ok": true }`
+### Pipeline
+- `POST /pipelines` — Launch new project `{ description, name?, model?, templateId?, githubUrl? }`
+- `GET /pipelines` — List all pipelines
+- `GET /pipelines/:id` — Pipeline details + events
+- `POST /pipelines/:id/modify` — Modify existing project `{ instructions, model? }`
+- `POST /pipelines/:id/retry` — Smart retry from failure point
+- `POST /pipelines/:id/pause` / `POST /pipelines/:id/resume`
+- `DELETE /pipelines/:id` — Delete + cleanup Docker containers
 
-### Skills (skills.sh proxy)
-- `GET /skills/trending?limit=10`
-- `GET /skills/search?q=...&limit=10`
+### Chat
+- `POST /chat/sessions` — Create session `{ model? }`
+- `POST /chat/sessions/:id/messages` — Send message `{ content, files? }`
+- `GET /chat/sessions` — List sessions
+- `DELETE /chat/sessions/:id`
+
+### Skills
+- `GET /skills/trending` / `GET /skills/hot`
+- `GET /skills/search?q=...`
 - `GET /skills/get?owner=...&repo=...&skill=...`
 
-### Profiles & Templates
-- `GET /profiles` → Liste des profils de skills
-- `GET /templates` → Liste des templates de projets
-
-### Agents
-- `GET /agents` → Liste des agents
-- `POST /agents` → Create agent `{ name, meta?, profileId? }`
-- `GET /agents/:id/skills` → Skills assignés
-- `POST /agents/:id/skills` → Assign skill `{ owner, repo, skill, href, ... }`
-- `DELETE /agents/:id/skills?href=...` → Unassign skill
-
-### Projects
-- `GET /projects` → Liste des projets
-- `GET /projects/:id` → Détails projet + agents liés
-- `GET /projects/:id/full` → Projet + agents + skills
-- `POST /projects` → Create from template `{ name, templateId, meta? }`
-- `POST /projects/:id/agents` → Add agent `{ name, profileId?, role?, meta? }`
-
-### Events
-- `GET /events?limit=200` → Derniers N events
+### System
+- `GET /health` — Health check
+- `GET /containers` — Docker containers status
+- `GET /models` — Available OpenRouter models
 
 ---
 
-## MCP Tools
+## Deployment
 
-| Tool | Description |
-|------|-------------|
-| `skills_trending` | Get skills.sh trending |
-| `skills_search` | Search skills |
-| `skills_get` | Get skill details |
-| `profiles_list` | List profiles |
-| `templates_list` | List templates |
-| `agents_list` | List agents |
-| `agent_list_skills` | List agent's skills |
-| `agent_assign_skill` | Assign skill to agent |
-| `agent_unassign_skill` | Unassign skill |
-| `projects_list` | List projects |
-| `project_create` | Create project from template |
-| `project_get` | Get project details |
-| `project_add_agent` | Add agent to project |
-| `events_tail` | Get last N events |
+VEIST utilise un pipeline CI/CD automatisé :
+
+1. **Git push** → GitHub Actions build les images Docker
+2. **Docker Hub** → `ihachi/veist:latest` + `ihachi/veist-dashboard:latest`
+3. **VPS** → `updateProjectV1` pull les nouvelles images
+
+Voir [deploy.md](.agents/workflows/deploy.md) pour les détails.
 
 ---
 
-## Events Specification
+## Roadmap
 
-### Event Schema
+- [x] **Phase 1** — Dynamic Agent Orchestration
+- [x] **Phase 2** — Contextual Intelligence (DeerFlow Patterns)
+- [ ] **Phase 2.5** — Embedding & Semantic Search
+- [ ] **Phase 3** — Autonomie & Self-Improvement
 
-```json
-{
-  "ts": "2025-01-09T10:30:00.000Z",
-  "type": "agent.created",
-  "payload": { ... }
-}
-```
-
-### Event Types
-
-| Type | Payload | Description |
-|------|---------|-------------|
-| `agent.created` | `{ id, name, created_at, meta? }` | Agent created |
-| `agent.deleted` | `{ agentId }` | Agent deleted |
-| `skill.assigned` | `{ agentId, skill: {...} }` | Skill assigned to agent |
-| `skill.unassigned` | `{ agentId, href }` | Skill removed from agent |
-| `project.created` | `{ project: {...} }` | Project created |
-| `project.agent.created` | `{ projectId, agent: {...} }` | Agent created for project |
-| `project.agent.linked` | `{ projectId, agentId }` | Agent linked to project |
-| `profile.applied` | `{ projectId, agentId, profileId }` | Profile applied to agent |
-| `profile.missing` | `{ projectId, agentId, profileId }` | Profile not found |
-
----
-
-## Skill Reference Format
-
-Standard skill reference:
-
-```typescript
-type SkillRef = {
-  owner: string;     // e.g. "vercel-labs"
-  repo: string;      // e.g. "agent-skills"
-  skill: string;     // e.g. "web-design"
-  href: string;      // Full URL or path
-};
-```
-
----
-
-## veistcraft Integration
-
-veistcraft ne fait que visualiser les events. Ce serveur produit les events structurés que veistcraft consomme via `GET /events`.
-
-Point de contact: `GET /events?limit=200` retourne les derniers events pour le dashboard veistcraft.
-
----
-
-## Development
-
-```bash
-# Run in dev mode (rebuild on changes)
-npm run build && npm start
-
-# Test health
-curl http://localhost:8080/health
-
-# Create an agent
-curl -X POST http://localhost:3000/agents \
-  -H "Content-Type: application/json" \
-  -d '{"name": "test-agent"}'
-
-# Check events
-curl http://localhost:3000/events
-```
+Voir [vision-roadmap.md](.agents/workflows/vision-roadmap.md) pour le détail.

@@ -1,5 +1,6 @@
 import { DagNode, type NodeContext } from "../Node.js";
 import { runClaudeAgent } from "../../claude_code.js";
+import { getDefaultMiddlewareChain, type AgentCallContext, type AgentCallResult } from "../../middleware.js";
 
 export interface AgentNodeOptions {
     id: string;
@@ -35,15 +36,57 @@ export abstract class AgentNode extends DagNode {
         context.updateAgentStatus(this.role, "active", this.name);
         context.addEvent(this.role, this.emoji, `Début : ${this.name}`, "info");
 
+        // ─── DeerFlow Pattern: Middleware Chain (before agent) ───
+        let prompt = this.getPrompt(context);
+        let systemPrompt = this.getSystemPrompt(context);
+        
+        try {
+            const chain = getDefaultMiddlewareChain();
+            const mwContext: AgentCallContext = {
+                pipelineId: context.pipeline.id,
+                nodeId: this.id,
+                prompt,
+                systemPrompt,
+                model: this.model || context.pipeline.model,
+                cwd: context.workspace,
+            };
+            const enriched = await chain.runBefore(mwContext);
+            prompt = enriched.prompt;
+            systemPrompt = enriched.systemPrompt;
+        } catch (err) {
+            console.warn(`⚙️ [AgentNode:${this.id}] Middleware beforeAgent failed, continuing:`, err);
+        }
+
         const result = await runClaudeAgent({
             model: this.model || context.pipeline.model,
-            prompt: this.getPrompt(context),
-            systemPrompt: this.getSystemPrompt(context),
+            prompt,
+            systemPrompt,
             cwd: context.workspace,
             allowedTools: this.allowedTools,
             maxTurns: this.maxTurns,
             abortSignal: undefined, // Handled roughly by context.checkAbort if we had a way to pass signal
         });
+
+        // ─── DeerFlow Pattern: Middleware Chain (after agent) ───
+        try {
+            const chain = getDefaultMiddlewareChain();
+            const mwContext: AgentCallContext = {
+                pipelineId: context.pipeline.id,
+                nodeId: this.id,
+                prompt,
+                systemPrompt,
+                model: this.model || context.pipeline.model,
+            };
+            const mwResult: AgentCallResult = {
+                success: result.success,
+                output: result.finalResult,
+                error: result.error,
+                usage: { input_tokens: result.inputTokens, output_tokens: result.outputTokens },
+            };
+            await chain.runAfter(mwContext, mwResult);
+        } catch (err) {
+            console.warn(`⚙️ [AgentNode:${this.id}] Middleware afterAgent failed, continuing:`, err);
+        }
 
         if (!result.success) {
             context.updateAgentStatus(this.role, "error", `Erreur: ${result.error}`);

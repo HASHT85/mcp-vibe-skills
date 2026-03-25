@@ -12,6 +12,7 @@ import OpenAI from "openai";
 import { randomUUID } from "node:crypto";
 import { promises as fs, readFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { getMemoryService } from "./memory_service.js";
 
 // ─── Types ───
 
@@ -115,6 +116,21 @@ EXEMPLE DE FORMAT CORRECT pour comparer des stacks :
 **Ma recommandation :** Option 1 pour démarrer rapidement.
 
 Réponds en français, sois concis et technique.`;
+
+// ─── Summarization Constants (DeerFlow Pattern) ───
+
+const SUMMARIZATION_MODEL = process.env.SUMMARIZATION_MODEL || process.env.AI_MODEL || "anthropic/claude-sonnet-4";
+const MAX_CONTEXT_TOKENS = 80_000; // trigger summarization at ~80% of 100k context
+const CHARS_PER_TOKEN = 3.3; // approximate, same as DeerFlow for Anthropic models
+const KEEP_RECENT_MESSAGES = 6; // always preserve the last N messages
+
+const SUMMARIZATION_PROMPT = `You are a conversation summarizer. Create a concise summary of the following conversation, preserving:
+- Key decisions made
+- Technical choices and preferences
+- Action items and next steps
+- Important context about the user's project
+
+Keep the summary under 500 words. Be factual and concise.`;
 
 export class ChatService {
     private sessions: Map<string, ChatSession> = new Map();
@@ -254,6 +270,21 @@ INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
 - Quand EXECUTE_MODIFY est cliqué, un agent a accès au workspace et peut exécuter des commandes (npm, build, etc.) directement`;
         }
 
+        // ─── DeerFlow Pattern: Inject Memory Context ───
+        try {
+            const memory = getMemoryService();
+            const memoryBlock = memory.buildMemoryBlock();
+            if (memoryBlock) {
+                systemPrompt += memoryBlock;
+                console.log(`💬 [Chat] Memory context injected (${memoryBlock.length} chars)`);
+            }
+        } catch (err) {
+            console.warn("💬 [Chat] Memory injection skipped:", err);
+        }
+
+        // ─── DeerFlow Pattern: Context Summarization ───
+        await this.maybeSummarize(session);
+
         // Build messages for OpenRouter (OpenAI-compatible format)
         const apiMessages: any[] = [
             { role: "system", content: systemPrompt },
@@ -314,11 +345,74 @@ INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
 
             session.updatedAt = new Date().toISOString();
             this.scheduleSave();
+
+            // ─── DeerFlow Pattern: Queue conversation for memory extraction ───
+            try {
+                const memory = getMemoryService();
+                memory.queueConversation(sessionId, session.messages.map(m => ({ role: m.role, content: m.content })));
+            } catch (err) {
+                console.warn("💬 [Chat] Memory queue skipped:", err);
+            }
+
             return { reply, session };
         } catch (err: any) {
             // Remove failed user message
             session.messages.pop();
             throw err;
+        }
+    }
+
+    // ─── DeerFlow Pattern: Context Summarization ───
+
+    private estimateTokens(messages: ChatMessage[]): number {
+        const totalChars = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
+        return Math.ceil(totalChars / CHARS_PER_TOKEN);
+    }
+
+    private async maybeSummarize(session: ChatSession): Promise<void> {
+        const tokenCount = this.estimateTokens(session.messages);
+        if (tokenCount < MAX_CONTEXT_TOKENS || session.messages.length <= KEEP_RECENT_MESSAGES + 2) {
+            return; // Not enough tokens or messages to warrant summarization
+        }
+
+        console.log(`💬 [Summarization] Token estimate: ${tokenCount} > ${MAX_CONTEXT_TOKENS} — summarizing...`);
+
+        // Partition: older messages vs recent messages to keep
+        const cutoff = session.messages.length - KEEP_RECENT_MESSAGES;
+        const toSummarize = session.messages.slice(0, cutoff);
+        const toKeep = session.messages.slice(cutoff);
+
+        // Format older messages for summarization
+        const conversationText = toSummarize
+            .map(m => `${m.role}: ${m.content}`)
+            .join("\n");
+
+        try {
+            const response = await this.client.chat.completions.create({
+                model: SUMMARIZATION_MODEL,
+                max_tokens: 1024,
+                messages: [
+                    { role: "system", content: SUMMARIZATION_PROMPT },
+                    { role: "user", content: conversationText.slice(0, 12000) },
+                ],
+            });
+
+            const summary = response.choices[0]?.message?.content || "";
+            if (!summary) return;
+
+            // Replace old messages with a single summary message
+            const summaryMessage: ChatMessage = {
+                role: "assistant",
+                content: `📋 **Résumé de la conversation précédente:**\n\n${summary}`,
+                timestamp: new Date().toISOString(),
+            };
+
+            session.messages = [summaryMessage, ...toKeep];
+            console.log(`💬 [Summarization] Compressed ${toSummarize.length} messages → 1 summary + ${toKeep.length} recent`);
+            this.scheduleSave();
+        } catch (err) {
+            console.error("💬 [Summarization] Failed:", err);
+            // Non-critical — continue without summarization
         }
     }
 

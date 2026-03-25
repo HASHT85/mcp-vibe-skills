@@ -116,6 +116,56 @@ function normalizeKeywords(raw: string[]): string[] {
     return Array.from(result);
 }
 
+// ─── TF-IDF Scoring (DeerFlow-inspired relevance scoring) ───
+
+function tokenize(text: string): string[] {
+    return text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(t => t.length >= 2);
+}
+
+function buildTfVector(tokens: string[]): Map<string, number> {
+    const tf = new Map<string, number>();
+    for (const t of tokens) {
+        tf.set(t, (tf.get(t) || 0) + 1);
+    }
+    // Normalize by total tokens
+    const total = tokens.length || 1;
+    for (const [k, v] of tf) {
+        tf.set(k, v / total);
+    }
+    return tf;
+}
+
+function cosineSimilarity(a: Map<string, number>, b: Map<string, number>): number {
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+
+    for (const [key, valA] of a) {
+        const valB = b.get(key) || 0;
+        dotProduct += valA * valB;
+        normA += valA * valA;
+    }
+    for (const [, valB] of b) {
+        normB += valB * valB;
+    }
+
+    const denom = Math.sqrt(normA) * Math.sqrt(normB);
+    return denom === 0 ? 0 : dotProduct / denom;
+}
+
+export function scoreSkillRelevance(query: string, skill: SkillItem): number {
+    const queryTokens = tokenize(query);
+    const skillText = `${skill.title} ${skill.skill} ${skill.owner} ${skill.repo}`;
+    const skillTokens = tokenize(skillText);
+
+    const queryVec = buildTfVector(queryTokens);
+    const skillVec = buildTfVector(skillTokens);
+
+    return cosineSimilarity(queryVec, skillVec);
+}
+
+export const SKILL_RELEVANCE_THRESHOLD = 0.15;
+
 export async function searchSkills(q: string, limit = 20): Promise<SkillItem[]> {
     const query = q.toLowerCase().trim();
     if (!query) return [];
@@ -169,21 +219,33 @@ export async function findSkillsForContext(
             allResults.push(...results);
         }
 
-        // Deduplicate + score by number of keyword matches
+        // Deduplicate + score by TF-IDF relevance (DeerFlow pattern)
         const uniq = new Map<string, SkillItem>();
         const scoreMap = new Map<string, number>();
+        const queryText = normalized.join(" ");
+
         for (const item of allResults) {
-            scoreMap.set(item.href, (scoreMap.get(item.href) || 0) + 1);
-            uniq.set(item.href, item);
+            if (!uniq.has(item.href)) {
+                uniq.set(item.href, item);
+                const score = scoreSkillRelevance(queryText, item);
+                scoreMap.set(item.href, score);
+            } else {
+                // Boost score if found by multiple keywords
+                const prev = scoreMap.get(item.href) || 0;
+                scoreMap.set(item.href, prev + 0.1);
+            }
         }
 
-        // Sort: most keyword matches first, then by install count
+        // Sort: highest TF-IDF score first, then by install count
         const topSkills = Array.from(uniq.values())
+            .filter(item => (scoreMap.get(item.href) || 0) >= SKILL_RELEVANCE_THRESHOLD)
             .sort((a, b) => {
                 const diff = (scoreMap.get(b.href) || 0) - (scoreMap.get(a.href) || 0);
                 return diff !== 0 ? diff : (b.installs || 0) - (a.installs || 0);
             })
             .slice(0, limit);
+
+        console.log(`[Skills] Scored ${uniq.size} skills, ${topSkills.length} above threshold (${SKILL_RELEVANCE_THRESHOLD})`);
 
         // Fetch detail for each skill
         const { fetchSkillDetail } = await import("./skills_get.js");
