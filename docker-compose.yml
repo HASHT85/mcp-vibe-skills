@@ -1,6 +1,7 @@
 services:
   orchestrator:
     image: ihachi/veist:latest
+    pull_policy: always
     container_name: veist
     restart: unless-stopped
     environment:
@@ -38,6 +39,7 @@ services:
 
   dashboard:
     image: ihachi/veist-dashboard:latest
+    pull_policy: always
     container_name: veist-dashboard
     restart: unless-stopped
     networks:
