@@ -29,3 +29,6 @@ npm-debug.log*
 .env.local
 help.txt
 .agents/workflows/deploy.md
+.agents/rules/docker.md
+.agents/rules/github.md
+.agents/rules/hostinger.md
