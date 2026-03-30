@@ -336,6 +336,58 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
 
     const selectedPipelineName = linkablePipelines.find(p => p.id === selectedPipelineId)?.name;
 
+    const handleInitialSearch = async () => {
+        if ((!input.trim() && files.length === 0) || sending || launching) return;
+        setSending(true);
+        try {
+            const data = await createChatSession(model);
+            const newSession = data.session;
+            setSessions(prev => [newSession, ...prev]);
+            
+            const msg = input.trim();
+            const attachedFiles = files.filter(f => !f.error).map(f => ({ base64: f.data, type: f.type }));
+            setInput('');
+            setFiles([]);
+            
+            const fileNames = attachedFiles.length > 0 ? `\n[📎 ${attachedFiles.length} FILE(S) ATTACHED]` : '';
+            const displayContent = msg + fileNames;
+            let aiContent = msg || '[Attached files]';
+            
+            if (selectedPipelineId) {
+                const targetPipeline = linkablePipelines.find(p => p.id === selectedPipelineId);
+                if (targetPipeline) {
+                    const repoCtx = await getRepoContext(selectedPipelineId);
+                    const ctx = [
+                        `[CONTEXTE PROJET - MODE MODIFICATION]`,
+                        `Nom: ${targetPipeline.name || 'N/A'}`,
+                        `ID: ${targetPipeline.id}`,
+                        `Phase: ${targetPipeline.phase}`,
+                        `Description: ${targetPipeline.description || 'N/A'}`,
+                        targetPipeline.github ? `GitHub: ${targetPipeline.github.url}` : null,
+                        repoCtx ? `\n# CONTENU DU REPO\n${repoCtx}` : null,
+                        `---`,
+                        `L'utilisateur veut MODIFIER ce projet existant. Voici sa demande :`,
+                    ].filter(Boolean).join('\n');
+                    aiContent = ctx + '\n' + aiContent;
+                }
+            }
+            
+            const optimisticMsg: ChatMessage = { role: 'user', content: displayContent, timestamp: new Date().toISOString() };
+            setActiveSession({ ...newSession, messages: [optimisticMsg] });
+            
+            const sendData = await sendChatMessage(
+                newSession.id,
+                aiContent,
+                attachedFiles.length > 0 ? attachedFiles : undefined
+            );
+            setActiveSession(sendData.session);
+        } catch (err: any) {
+            alert(`SYS_ERR: ${err.message}`);
+        } finally {
+            setSending(false);
+        }
+    };
+
     const [showSessions, setShowSessions] = useState(false);
 
     return (
@@ -613,17 +665,104 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                 )}
 
                 {!activeSession ? (
-                    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center relative z-10">
-                        <span className="material-symbols-outlined text-6xl text-white/20 mb-6 font-light">terminal</span>
-                        <h2 className="text-xl font-black text-white tracking-widest uppercase mb-2 font-sans">Com_Link Offline</h2>
-                        <p className="text-v-accent text-xs max-w-sm mb-8 leading-relaxed opacity-70">Awaiting input connection parameters...</p>
-                        <button 
-                            className="bg-v-accent text-v-bg text-xs font-bold px-6 py-3 uppercase tracking-widest flex items-center gap-2 transition-colors hover:bg-white"
-                            onClick={() => setShowSessions(true)}
-                        >
-                            <span className="material-symbols-outlined">menu</span>
-                            <span>Open Link Interface</span>
-                        </button>
+                    <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative z-10 w-full">
+                        {/* Thin Top Bar for config */}
+                        <div className="absolute top-0 left-0 right-0 py-3 px-4 flex items-center justify-between border-b border-[#2A2F35] bg-[#0E1318]/90 backdrop-blur-md">
+                            <button 
+                                className="text-slate-400 hover:text-white flex items-center gap-2 transition-colors"
+                                onClick={() => setShowSessions(true)}
+                            >
+                                <span className="material-symbols-outlined text-[20px]">menu</span>
+                                <span className="text-[11px] font-bold tracking-widest uppercase hidden md:inline">Historique</span>
+                            </button>
+                            <div className="flex items-center gap-4">
+                                {/* Configuration quick access */}
+                                <div className="flex items-center gap-2 bg-[#1A1F25] px-2 py-1 rounded">
+                                    <span className="material-symbols-outlined text-v-accent text-[14px]">tune</span>
+                                    <select 
+                                        className="bg-transparent border-none text-[11px] text-slate-300 outline-none cursor-pointer focus:ring-0 appearance-none font-bold tracking-wider"
+                                        value={model} 
+                                        onChange={(e) => setModel(e.target.value)}
+                                    >
+                                        {MODEL_OPTIONS.map(m => (
+                                            <option key={m.value} value={m.value} className="bg-v-bg">{m.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* BIG SPOTLIGHT SEARCH */}
+                        <div className="w-full max-w-2xl flex flex-col items-center justify-center flex-1 -mt-10">
+                            <span className="material-symbols-outlined text-5xl text-v-accent/20 mb-6 font-light">tips_and_updates</span>
+                            <h2 className="text-xl md:text-3xl font-black text-white tracking-tight text-center mb-8 font-sans">Que voulez-vous construire aujourd'hui ?</h2>
+                            
+                            <div className="w-full relative group">
+                                <div className="absolute -inset-1 bg-gradient-to-r from-v-accent/30 to-v-accent/0 rounded-xl blur-lg opacity-25 group-hover:opacity-60 transition duration-1000 group-hover:duration-200"></div>
+                                <div className="relative flex items-center bg-[#0B0F14] border border-[#2A2F35] focus-within:border-v-accent rounded-xl shadow-2xl p-2 gap-2 transition-colors">
+                                    <button
+                                        className="shrink-0 text-slate-500 hover:text-white p-2 self-start transition-colors tooltip mt-1"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        title="Joindre des fichiers"
+                                    >
+                                        <span className="material-symbols-outlined text-[22px]">attach_file</span>
+                                    </button>
+                                    <textarea
+                                        ref={textareaRef}
+                                        className="w-full bg-transparent p-3 text-sm md:text-[15px] text-white placeholder:text-slate-500 focus:outline-none focus:ring-0 resize-none min-h-[48px] max-h-[250px] overflow-y-auto leading-relaxed custom-scrollbar"
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                if (input.trim() || files.length > 0) {
+                                                    handleInitialSearch();
+                                                }
+                                            }
+                                        }}
+                                        placeholder="Décrivez votre idée, collez un lien GitHub ou demandez une modification..."
+                                        disabled={sending || launching}
+                                        spellCheck="false"
+                                    />
+                                    <button
+                                        className={`shrink-0 h-[48px] w-[48px] flex items-center justify-center rounded-lg transition-all self-end mb-[2px] ${
+                                            (input.trim() || files.length > 0)
+                                            ? 'bg-v-accent text-v-bg hover:opacity-90 shadow-lg'
+                                            : 'bg-transparent text-slate-600 cursor-not-allowed opacity-50'
+                                        }`}
+                                        onClick={handleInitialSearch}
+                                        disabled={(!input.trim() && files.length === 0) || sending || launching}
+                                    >
+                                        {(sending || launching) ? (
+                                            <span className="material-symbols-outlined text-[24px] animate-spin">sync</span>
+                                        ) : (
+                                            <span className="material-symbols-outlined text-[24px]">arrow_upward</span>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {/* Attached Files Preview for Spotlight */}
+                            {files.length > 0 && (
+                                <div className="w-full flex justify-start flex-wrap gap-2 mt-4">
+                                    {files.map((f, i) => (
+                                        <div key={i} className={`flex items-center gap-1.5 p-1.5 px-3 bg-[#1A1F25] border ${f.error ? 'border-v-alert' : 'border-[#2A2F35]'} rounded-full shadow-sm`}>
+                                            {f.thumbnail ? (
+                                                <img src={f.thumbnail} alt="preview" className="w-4 h-4 rounded-full object-cover shrink-0" />
+                                            ) : (
+                                                <span className="material-symbols-outlined text-slate-400 text-[14px] shrink-0">description</span>
+                                            )}
+                                            <span className={`text-[10px] font-bold truncate max-w-[120px] ${f.error ? 'text-v-alert' : 'text-slate-300'}`}>
+                                                {f.name}
+                                            </span>
+                                            <button className="text-slate-500 hover:text-white shrink-0 ml-1 rounded-full p-0.5 hover:bg-white/10" onClick={() => removeFile(i)}>
+                                                <span className="material-symbols-outlined text-[12px] block">close</span>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 ) : (
                     <>
