@@ -282,7 +282,7 @@ function Dashboard() {
       <Sidebar active={activeNav} onChange={(id) => { setActiveNav(id); setSelectedId(null); }} />
 
       {/* ─── Main Content Area ─── */}
-      <main className="md:ml-20 mt-14 md:mt-16 h-[calc(100vh-56px)] md:h-[calc(100vh-64px)] overflow-y-auto bg-[#0B0F14] p-4 md:p-8 pb-24 md:pb-8 relative custom-scrollbar">
+      <main className="mt-14 md:mt-16 h-[calc(100vh-56px)] md:h-[calc(100vh-64px)] overflow-y-auto bg-[#0B0F14] p-4 md:pl-28 md:pr-8 md:py-8 pb-24 md:pb-8 relative custom-scrollbar">
         <AnimatePresence mode="wait">
           {renderMainContent()}
         </AnimatePresence>
