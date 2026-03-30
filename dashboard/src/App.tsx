@@ -119,6 +119,8 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
                   value={user}
                   onChange={(e) => setUser(e.target.value)}
                   autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                   spellCheck={false}
                 />
               </div>
@@ -136,6 +138,9 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
                   placeholder="••••••••"
                   value={pass}
                   onChange={(e) => setPass(e.target.value)}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  autoComplete="current-password"
                 />
               </div>
               <div className="absolute -top-[1px] -left-[1px] w-1 h-1 bg-[#D7FF2F]"></div>
