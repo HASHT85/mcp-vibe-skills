@@ -137,3 +137,17 @@ input, button {
   background-color: #cbf21d;
   color: #171e00;
 }
+
+/* ── Mobile PWA Safe Area ── */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Prevent text selection on UI elements for native-like feel ── */
+@media (max-width: 768px) {
+  button, nav, aside {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+}

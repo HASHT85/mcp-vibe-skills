@@ -201,17 +201,17 @@ export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
         >
-            <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-accent text-2xl">deployed_code</span>
-                    <h2 className="text-2xl font-black text-white tracking-widest uppercase">Docker Projects</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="material-symbols-outlined text-accent text-xl md:text-2xl">deployed_code</span>
+                    <h2 className="text-lg md:text-2xl font-black text-white tracking-widest uppercase">Docker Projects</h2>
                     {!loading && projects.length > 0 && (
-                        <span className="bg-white/10 text-accent text-[10px] font-bold px-2 py-0.5 ml-2 mt-1 border border-white/5">
+                        <span className="bg-white/10 text-accent text-[10px] font-bold px-2 py-0.5 border border-white/5">
                             {projects.length} {projects.length === 1 ? 'PROJECT' : 'PROJECTS'}
                         </span>
                     )}
                     {!loading && totalRunning > 0 && (
-                        <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 mt-1 border border-primary/20">
+                        <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 border border-primary/20">
                             {totalRunning} RUNNING
                         </span>
                     )}
@@ -253,8 +253,8 @@ export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
                 </div>
             ) : (
                 <div className="border border-border-muted bg-panel/40 overflow-hidden">
-                    {/* Table Header */}
-                    <div className="grid grid-cols-[1fr_140px_140px_200px] px-5 py-3 bg-background-dark border-b border-border-muted text-[10px] font-bold text-slate-500 tracking-widest uppercase">
+                    {/* Table Header - Desktop Only */}
+                    <div className="hidden md:grid grid-cols-[1fr_140px_140px_200px] px-5 py-3 bg-background-dark border-b border-border-muted text-[10px] font-bold text-slate-500 tracking-widest uppercase">
                         <span>Project</span>
                         <span>Status</span>
                         <span>Access</span>
@@ -274,9 +274,9 @@ export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
                                 animate={{ opacity: 1 }}
                                 transition={{ delay: idx * 0.03 }}
                             >
-                                {/* Project Row */}
+                                {/* Project Row - Desktop Grid */}
                                 <div
-                                    className={`grid grid-cols-[1fr_140px_140px_200px] items-center px-5 py-3.5 border-b border-border-muted/50 transition-colors cursor-pointer hover:bg-white/[0.02] ${isExpanded ? 'bg-white/[0.03]' : ''}`}
+                                    className={`hidden md:grid grid-cols-[1fr_140px_140px_200px] items-center px-5 py-3.5 border-b border-border-muted/50 transition-colors cursor-pointer hover:bg-white/[0.02] ${isExpanded ? 'bg-white/[0.03]' : ''}`}
                                     onClick={() => isMulti && toggleProject(project.name)}
                                 >
                                     {/* Project Name */}
@@ -372,12 +372,73 @@ export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
                                                 : 'bg-white/5 text-slate-400 border-slate-600/50 hover:bg-white/10'
                                                 }`}
                                             onClick={() => {
-                                                // Hide/show all containers in the project
                                                 for (const c of project.containers) toggleHidden(c.name);
                                             }}
                                             title={hiddenNames.has(project.containers[0].name) ? 'Show project' : 'Hide project'}
                                         >
                                             <span className="material-symbols-outlined text-[11px]">{hiddenNames.has(project.containers[0].name) ? 'visibility' : 'visibility_off'}</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Project Row - Mobile Card */}
+                                <div
+                                    className={`md:hidden flex flex-col gap-3 px-4 py-4 border-b border-border-muted/50 transition-colors ${isExpanded ? 'bg-white/[0.03]' : ''}`}
+                                    onClick={() => isMulti && toggleProject(project.name)}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                                            {isMulti && (
+                                                <motion.span
+                                                    className="material-symbols-outlined text-[16px] text-slate-500 shrink-0"
+                                                    animate={{ rotate: isExpanded ? 90 : 0 }}
+                                                    transition={{ duration: 0.15 }}
+                                                >
+                                                    chevron_right
+                                                </motion.span>
+                                            )}
+                                            <div className={`w-2 h-2 rounded-full shrink-0 ${sc.dot}`}></div>
+                                            <span className="text-white font-bold text-sm truncate">{project.name}</span>
+                                            <span className={`text-[10px] font-semibold ${sc.text} shrink-0`}>{sc.label}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
+                                        {project.url && (
+                                            <a href={project.url} target="_blank" rel="noopener noreferrer"
+                                                className="text-accent text-[10px] font-bold tracking-wider uppercase flex items-center gap-1"
+                                            >
+                                                <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                                                Open
+                                            </a>
+                                        )}
+                                        <div className="flex-1" />
+                                        <button
+                                            className="bg-slate-700/30 text-slate-300 border border-slate-600/50 p-1.5 transition-colors"
+                                            onClick={() => showLogs(project.containers[0].name)}
+                                            title="Logs"
+                                        >
+                                            <span className="material-symbols-outlined text-[14px]">terminal</span>
+                                        </button>
+                                        {project.containers.length === 1 && project.containers[0].state === 'running' && (
+                                            <button
+                                                className="bg-yellow-500/10 text-yellow-500 border border-yellow-500/30 p-1.5 transition-colors"
+                                                onClick={() => doAction(project.containers[0].name, () => restartContainer(project.containers[0].name))}
+                                                disabled={actionLoading === project.containers[0].name}
+                                                title="Restart"
+                                            >
+                                                <span className="material-symbols-outlined text-[14px]">restart_alt</span>
+                                            </button>
+                                        )}
+                                        <button
+                                            className={`p-1.5 transition-colors border ${hiddenNames.has(project.containers[0].name)
+                                                ? 'bg-accent/10 text-accent border-accent/30'
+                                                : 'bg-white/5 text-slate-400 border-slate-600/50'
+                                                }`}
+                                            onClick={() => {
+                                                for (const c of project.containers) toggleHidden(c.name);
+                                            }}
+                                        >
+                                            <span className="material-symbols-outlined text-[14px]">{hiddenNames.has(project.containers[0].name) ? 'visibility' : 'visibility_off'}</span>
                                         </button>
                                     </div>
                                 </div>
@@ -398,7 +459,7 @@ export function ContainersView({ pipelines = [] }: { pipelines?: Pipeline[] }) {
                                                 return (
                                                     <div
                                                         key={c.id}
-                                                        className={`grid grid-cols-[1fr_140px_140px_200px] items-center px-5 py-2.5 border-b border-border-muted/30 bg-white/[0.01] ${isHidden ? 'opacity-40' : ''}`}
+                                                        className={`hidden md:grid grid-cols-[1fr_140px_140px_200px] items-center px-5 py-2.5 border-b border-border-muted/30 bg-white/[0.01] ${isHidden ? 'opacity-40' : ''}`}
                                                     >
                                                         {/* Container Name */}
                                                         <div className="flex items-center gap-3 min-w-0 pl-10">

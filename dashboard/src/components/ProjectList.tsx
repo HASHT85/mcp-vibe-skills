@@ -15,7 +15,7 @@ export function ProjectList({ pipelines, onSelect, onRetry }: ProjectListProps) 
     if (!filtered.length) {
         return (
             <motion.div 
-                className="flex flex-col items-center justify-center p-20 mt-10 bg-[#1c2025] border border-[#2A3442] relative overflow-hidden h-[60vh]" 
+                className="flex flex-col items-center justify-center p-10 md:p-20 mt-6 md:mt-10 bg-[#1c2025] border border-[#2A3442] relative overflow-hidden h-[50vh] md:h-[60vh]" 
                 initial={{ opacity: 0 }} 
                 animate={{ opacity: 1 }}
             >
@@ -42,13 +42,13 @@ export function ProjectList({ pipelines, onSelect, onRetry }: ProjectListProps) 
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="flex justify-between items-end mb-12">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-8 md:mb-12">
                 <div>
                     <div className="flex items-center gap-2 mb-2">
                         <span className="w-2 h-2 bg-[#D7FF2F]"></span>
                         <p className="font-mono text-xs text-[#D7FF2F] tracking-[0.2em] uppercase">System_State: Operational</p>
                     </div>
-                    <h1 className="font-headline font-bold text-5xl tracking-tight text-white uppercase">Overview</h1>
+                    <h1 className="font-headline font-bold text-3xl md:text-5xl tracking-tight text-white uppercase">Overview</h1>
                 </div>
                 <div className="flex items-center gap-4 font-mono text-[10px] text-gray-500">
                     <span className="border border-[#2A3442] px-2 py-1">{filtered.length} ACTIVE NODES</span>

@@ -336,15 +336,23 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
 
     const selectedPipelineName = linkablePipelines.find(p => p.id === selectedPipelineId)?.name;
 
+    const [showSessions, setShowSessions] = useState(false);
+
     return (
         <motion.div
-            className="flex h-[calc(100vh-140px)] brutalist-border bg-v-bg font-mono"
+            className="flex h-[calc(100vh-140px)] md:h-[calc(100vh-140px)] brutalist-border bg-v-bg font-mono relative"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
         >
-            {/* Sessions sidebar */}
-            <div className="w-1/3 md:w-1/4 max-w-[300px] min-w-[200px] brutalist-border-r flex flex-col bg-v-surface overflow-hidden">
+            {/* Sessions sidebar - Desktop: always visible, Mobile: slide-in drawer */}
+            <div className={`
+                fixed md:relative inset-y-0 left-0 z-40 md:z-auto
+                w-[280px] md:w-1/4 md:max-w-[300px] md:min-w-[200px]
+                brutalist-border-r flex flex-col bg-v-surface overflow-hidden
+                transition-transform duration-300 ease-in-out
+                ${showSessions ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+            `}>
                 <div className="p-4 brutalist-border-b flex flex-col gap-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-v-accent">
@@ -561,7 +569,23 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                         </div>
                     )}
                 </div>
+
+                {/* Mobile close button for sessions drawer */}
+                <button 
+                    className="md:hidden absolute top-2 right-2 text-slate-400 hover:text-white bg-v-bg/80 p-1 z-50"
+                    onClick={() => setShowSessions(false)}
+                >
+                    <span className="material-symbols-outlined">close</span>
+                </button>
             </div>
+
+            {/* Mobile backdrop for sessions drawer */}
+            {showSessions && (
+                <div 
+                    className="md:hidden fixed inset-0 bg-black/60 z-30"
+                    onClick={() => setShowSessions(false)}
+                />
+            )}
 
             {/* Chat main area */}
             <div
@@ -604,25 +628,28 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                 ) : (
                     <>
                         {/* Header bar */}
-                        <div className="bg-v-accent text-v-bg px-4 py-1 font-black flex justify-between items-center font-sans tracking-tight z-10 relative">
-                            <div className="flex items-center gap-3">
-                                <span>COM_LINK_STREAM</span>
+                        <div className="bg-v-accent text-v-bg px-3 md:px-4 py-1 font-black flex justify-between items-center font-sans tracking-tight z-10 relative text-xs md:text-sm">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <button 
+                                    className="md:hidden shrink-0 p-1 hover:bg-v-bg/20 transition-colors"
+                                    onClick={() => setShowSessions(true)}
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">menu</span>
+                                </button>
+                                <span className="truncate">COM_LINK</span>
                                 {selectedPipelineName && (
-                                    <span className="text-[10px] bg-v-bg text-v-accent px-2 py-0.5 font-mono">
+                                    <span className="text-[9px] md:text-[10px] bg-v-bg text-v-accent px-1.5 py-0.5 font-mono truncate max-w-[120px] md:max-w-none">
                                         → {selectedPipelineName.replace(/\s+/g, '_').toUpperCase()}
                                     </span>
                                 )}
-                                <span className="text-[10px] bg-v-bg/20 px-2 py-0.5 font-mono">
-                                    🤖 {(MODEL_OPTIONS.find(m => m.value === model)?.label || model).replace(/\s+/g, '_').toUpperCase()}
-                                </span>
                             </div>
-                            <span className="text-[10px] uppercase">
-                                {selectedPipelineId ? 'MODE: MODIFY_PROJECT' : 'MODE: NEW_PROJECT'}
+                            <span className="text-[9px] md:text-[10px] uppercase shrink-0 hidden sm:block">
+                                {selectedPipelineId ? 'MODIFY' : 'NEW'}
                             </span>
                         </div>
 
                         {/* Messages Area */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 flex flex-col gap-6 relative z-10 bg-v-bg text-sm leading-relaxed" id="terminal-display">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 md:p-6 flex flex-col gap-4 md:gap-6 relative z-10 bg-v-bg text-xs md:text-sm leading-relaxed" id="terminal-display">
                             {activeSession.messages.length === 0 && (
                                 <div className="flex flex-col gap-2 max-w-3xl">
                                     <div className="flex items-center gap-2 text-[10px] text-slate-500">
@@ -699,25 +726,24 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                         </div>
 
                         {/* Input Area */}
-                        <div className="p-6 border-t border-[#2A2F35] bg-v-bg flex flex-col gap-4 relative z-10">
+                        <div className="p-3 md:p-6 border-t border-[#2A2F35] bg-v-bg flex flex-col gap-2 md:gap-4 relative z-10">
                             {/* Status bar */}
-                            <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold px-1">
-                                <div className="flex gap-4">
+                            <div className="flex flex-wrap justify-between items-center gap-2 text-[9px] md:text-[10px] text-slate-500 font-bold px-1">
+                                <div className="flex gap-2 md:gap-4">
                                     <span className="flex items-center gap-1">
-                                        <span className="h-1.5 w-1.5 bg-v-accent rounded-full inline-block"></span> LINK: STABLE
+                                        <span className="h-1.5 w-1.5 bg-v-accent rounded-full inline-block"></span> LINK
                                     </span>
                                     {selectedPipelineId && (
-                                        <span className="text-v-nominal flex items-center gap-1">
+                                        <span className="text-v-nominal flex items-center gap-1 truncate max-w-[100px] md:max-w-none">
                                             <span className="material-symbols-outlined text-[12px]">link</span>
                                             {selectedPipelineName?.replace(/\s+/g,'_').toUpperCase()}
                                         </span>
                                     )}
                                 </div>
-                                <div className="flex gap-4 uppercase">
-                                    <span>{selectedPipelineId ? 'MODE: MODIFY_PROJECT' : 'MODE: NEW_PROJECT'}</span>
+                                <div className="flex gap-2 md:gap-4 uppercase">
                                     {activeSession.messages.length >= 2 && (
                                         <button
-                                            className={`text-[10px] font-black px-3 py-1 uppercase tracking-widest flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                            className={`text-[9px] md:text-[10px] font-black px-2 md:px-3 py-1 uppercase tracking-widest flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                                                 selectedPipelineId
                                                 ? 'text-v-alert border border-v-alert hover:bg-v-alert hover:text-v-bg'
                                                 : 'text-v-accent border border-v-accent hover:bg-v-accent hover:text-v-bg'
@@ -728,7 +754,7 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                                             <span className={`material-symbols-outlined text-[12px] ${launching ? 'animate-bounce' : ''}`}>
                                                 {selectedPipelineId ? 'edit_square' : 'rocket_launch'}
                                             </span>
-                                            {launching ? 'EXECUTING...' : (selectedPipelineId ? 'EXECUTE_MODIFY' : 'DEPLOY')}
+                                            <span className="hidden sm:inline">{launching ? 'EXEC...' : (selectedPipelineId ? 'MODIFY' : 'DEPLOY')}</span>
                                         </button>
                                     )}
                                 </div>

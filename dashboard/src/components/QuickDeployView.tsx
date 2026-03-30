@@ -138,9 +138,9 @@ export function QuickDeployView() {
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="max-w-4xl mx-auto">
             {/* Header */}
-            <div className="flex items-center gap-3 mb-8">
+            <div className="flex flex-wrap items-center gap-3 mb-6 md:mb-8">
                 <span className="material-symbols-outlined text-v-accent text-xl">bolt</span>
-                <h1 className="text-2xl font-black text-white tracking-widest uppercase">Quick_Deploy</h1>
+                <h1 className="text-xl md:text-2xl font-black text-white tracking-widest uppercase">Quick_Deploy</h1>
                 <span className="bg-v-accent/10 text-v-accent text-[10px] font-bold px-2 py-0.5 border border-v-accent/20">
                     GITHUB → HOSTINGER
                 </span>
@@ -156,7 +156,7 @@ export function QuickDeployView() {
                                 STEP_01 // REPOSITORY_URL
                             </div>
 
-                            <div className="flex gap-3">
+                            <div className="flex flex-col sm:flex-row gap-3">
                                 <input
                                     className="flex-1 bg-black border-2 border-slate-700 focus:border-v-accent text-sm text-white p-4 outline-none font-mono placeholder:text-slate-600 transition-all"
                                     value={githubUrl}
@@ -210,7 +210,7 @@ export function QuickDeployView() {
                                 <span className="material-symbols-outlined text-[14px]">analytics</span>
                                 ANALYSIS_RESULT
                             </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-2 gap-3 md:gap-4">
                                 <div className="bg-black/50 border border-slate-800 p-3">
                                     <div className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">Language</div>
                                     <div className="text-sm font-bold text-white">{LANG_ICONS[analysis.language]} {analysis.language.toUpperCase()}</div>
@@ -241,7 +241,7 @@ export function QuickDeployView() {
                             {/* Deploy Mode */}
                             <div className="mb-4">
                                 <label className="text-[9px] text-slate-400 uppercase tracking-widest font-bold block mb-2">Deploy Mode</label>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                     {Object.entries(MODE_LABELS).map(([mode, info]) => {
                                         const isAvailable = mode === 'hub_image' ? !!analysis.dockerHubImage :
                                             mode === 'build_from_source' ? analysis.hasDockerfile :
@@ -272,7 +272,7 @@ export function QuickDeployView() {
                             </div>
 
                             {/* Name & Subdomain */}
-                            <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                 <div>
                                     <label className="text-[9px] text-slate-400 uppercase tracking-widest font-bold block mb-2">Project Name</label>
                                     <input
