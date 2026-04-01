@@ -172,6 +172,17 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     const handleSend = async () => {
         if ((!input.trim() && files.length === 0) || !activeSession || sending) return;
         const msg = input.trim();
+
+        const detectedUrl = msg.match(/https?:\/\/(?:www\.)?github\.com\/[^\s]+/);
+        if (detectedUrl) {
+            const url = detectedUrl[0];
+            setGithubUrl(url);
+            const matchName = url.match(/github\.com\/[^\/]+\/([^\/\.]+)/);
+            if (matchName && matchName[1]) {
+                setProjectName(matchName[1].toLowerCase().replace(/[^a-z0-9-]/g, '-'));
+            }
+        }
+
         const attachedFiles = files.filter(f => !f.error).map(f => ({ base64: f.data, type: f.type }));
         setInput('');
         setFiles([]);
@@ -298,8 +309,15 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                 return; // Don't setLaunching(false) yet — polling will do it
             } else {
                 // ─── CREATE new project ───
-                const result = await launchFromChat(activeSession.id, projectName.trim() || undefined, undefined, githubUrl.trim() || undefined);
-                const launchName = projectName.trim() || 'AUTO_NAMED';
+                const askedName = window.prompt("Nom du déploiement (laissez vide pour un nom automatique) :", projectName);
+                if (askedName === null) {
+                    setLaunching(false);
+                    return;
+                }
+                const finalProjectName = askedName.trim();
+
+                const result = await launchFromChat(activeSession.id, finalProjectName || undefined, undefined, githubUrl.trim() || undefined);
+                const launchName = finalProjectName || 'AUTO_NAMED';
 
                 // Save secrets to vault if any are defined
                 const validSecrets = secrets.filter(s => s.key.trim() && s.value.trim());
@@ -345,6 +363,17 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
             setSessions(prev => [newSession, ...prev]);
             
             const msg = input.trim();
+
+            const detectedUrl = msg.match(/https?:\/\/(?:www\.)?github\.com\/[^\s]+/);
+            if (detectedUrl) {
+                const url = detectedUrl[0];
+                setGithubUrl(url);
+                const matchName = url.match(/github\.com\/[^\/]+\/([^\/\.]+)/);
+                if (matchName && matchName[1]) {
+                    setProjectName(matchName[1].toLowerCase().replace(/[^a-z0-9-]/g, '-'));
+                }
+            }
+
             const attachedFiles = files.filter(f => !f.error).map(f => ({ base64: f.data, type: f.type }));
             setInput('');
             setFiles([]);
@@ -459,122 +488,81 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
                         <span className="material-symbols-outlined absolute right-2 bottom-2 text-v-accent pointer-events-none text-[16px]">expand_more</span>
                     </div>
 
-                    {/* Project Name & GitHub URL (only when no project linked = new project mode) */}
+                    {/* NEW_PROJECT Configuration */}
                     {!selectedPipelineId && (
-                            <div className="flex flex-col gap-3 mb-3">
-                                <div>
-                                    <label className="text-[9px] text-slate-400 font-bold tracking-widest uppercase mb-1 block">GITHUB_URL (OPT.)</label>
-                                    <input
-                                        className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 outline-none focus:ring-0 rounded-none placeholder:text-v-accent/20"
-                                        value={githubUrl}
-                                        onChange={(e) => {
-                                            const url = e.target.value;
-                                            setGithubUrl(url);
-                                            // Auto-derive project name if URL is provided
-                                            if (url) {
-                                                const match = url.match(/github\.com\/[^\/]+\/([^\/\.]+)/);
-                                                if (match && match[1]) {
-                                                    setProjectName(match[1].toLowerCase().replace(/[^a-z0-9-]/g, '-'));
-                                                }
-                                            } else {
-                                                setProjectName('');
-                                            }
-                                        }}
-                                        placeholder="https://github.com/owner/repo"
-                                        spellCheck="false"
-                                    />
-                                </div>
-                                
-                                <div>
-                                    <label className="text-[9px] text-slate-400 font-bold tracking-widest uppercase mb-1 flex items-center justify-between">
-                                        <span>PROJECT_ID (OPT.)</span>
-                                        {githubUrl && <span className="text-v-accent/60 text-[8px] italic">AUTO-LINKED FROM REPO</span>}
-                                    </label>
-                                    <input
-                                        className={`w-full brutalist-border text-xs p-2 outline-none focus:ring-0 rounded-none placeholder:text-v-accent/20 uppercase transition-all ${githubUrl ? 'bg-v-bg/50 text-v-accent/50 cursor-not-allowed border-v-accent/30' : 'bg-v-bg text-v-accent'}`}
-                                        value={projectName}
-                                        onChange={(e) => setProjectName(e.target.value)}
-                                        placeholder={githubUrl ? "AUTO-DERIVED" : "AUTO_GENERATED"}
-                                        spellCheck="false"
-                                        disabled={!!githubUrl}
-                                        title={githubUrl ? "Project ID is locked and derived from the GitHub repository URL" : ""}
-                                    />
-                                </div>
+                        <>
+                            {/* 🔐 Secrets Vault */}
+                            <div className="brutalist-border">
+                                <button
+                                    className="w-full flex items-center justify-between px-2 py-1.5 text-[9px] text-slate-400 font-bold tracking-widest uppercase hover:text-v-accent transition-colors"
+                                    onClick={() => setSecretsExpanded(!secretsExpanded)}
+                                >
+                                    <span>🔐 SECRETS_VAULT {secrets.length > 0 && `(${secrets.length})`}</span>
+                                    <span className="material-symbols-outlined text-[14px]">{secretsExpanded ? 'expand_less' : 'expand_more'}</span>
+                                </button>
+                                {secretsExpanded && (
+                                    <div className="px-2 pb-2 flex flex-col gap-1.5">
+                                        {secrets.map((s, i) => (
+                                            <div key={i} className="flex gap-1 items-center">
+                                                <input
+                                                    className="flex-1 bg-v-bg border border-slate-700 text-[10px] text-v-accent p-1.5 outline-none rounded-none placeholder:text-slate-600 uppercase font-mono"
+                                                    value={s.key}
+                                                    onChange={(e) => {
+                                                        const updated = [...secrets];
+                                                        updated[i] = { ...s, key: e.target.value };
+                                                        setSecrets(updated);
+                                                    }}
+                                                    placeholder="KEY"
+                                                    spellCheck="false"
+                                                />
+                                                <input
+                                                    className="flex-1 bg-v-bg border border-slate-700 text-[10px] text-v-accent p-1.5 outline-none rounded-none placeholder:text-slate-600 font-mono"
+                                                    type={secretsVisible.has(i) ? "text" : "password"}
+                                                    value={s.value}
+                                                    onChange={(e) => {
+                                                        const updated = [...secrets];
+                                                        updated[i] = { ...s, value: e.target.value };
+                                                        setSecrets(updated);
+                                                    }}
+                                                    placeholder="value"
+                                                    spellCheck="false"
+                                                />
+                                                <button
+                                                    className="text-slate-600 hover:text-v-accent shrink-0 transition-colors"
+                                                    onClick={() => {
+                                                        setSecretsVisible(prev => {
+                                                            const next = new Set(prev);
+                                                            next.has(i) ? next.delete(i) : next.add(i);
+                                                            return next;
+                                                        });
+                                                    }}
+                                                    title={secretsVisible.has(i) ? "Hide" : "Show"}
+                                                    type="button"
+                                                >
+                                                    <span className="material-symbols-outlined text-[14px]">{secretsVisible.has(i) ? 'visibility_off' : 'visibility'}</span>
+                                                </button>
+                                                <button
+                                                    className="text-v-alert hover:text-red-400 shrink-0"
+                                                    onClick={() => setSecrets(secrets.filter((_, j) => j !== i))}
+                                                    title="Remove"
+                                                >
+                                                    <span className="material-symbols-outlined text-[14px]">close</span>
+                                                </button>
+                                            </div>
+                                        ))}
+                                        <button
+                                            className="w-full text-[9px] text-slate-500 hover:text-v-accent border border-dashed border-slate-700 hover:border-v-accent py-1 transition-colors uppercase tracking-widest"
+                                            onClick={() => setSecrets([...secrets, { key: '', value: '' }])}
+                                        >
+                                            + ADD_SECRET
+                                        </button>
+                                        <p className="text-[8px] text-slate-600 leading-tight mt-0.5">
+                                            Injected into .env — never sent to AI
+                                        </p>
+                                    </div>
+                                )}
                             </div>
-                    )}
-
-                    {/* 🔐 Secrets Vault (only in NEW_PROJECT mode) */}
-                    {!selectedPipelineId && (
-                        <div className="brutalist-border">
-                            <button
-                                className="w-full flex items-center justify-between px-2 py-1.5 text-[9px] text-slate-400 font-bold tracking-widest uppercase hover:text-v-accent transition-colors"
-                                onClick={() => setSecretsExpanded(!secretsExpanded)}
-                            >
-                                <span>🔐 SECRETS_VAULT {secrets.length > 0 && `(${secrets.length})`}</span>
-                                <span className="material-symbols-outlined text-[14px]">{secretsExpanded ? 'expand_less' : 'expand_more'}</span>
-                            </button>
-                            {secretsExpanded && (
-                                <div className="px-2 pb-2 flex flex-col gap-1.5">
-                                    {secrets.map((s, i) => (
-                                        <div key={i} className="flex gap-1 items-center">
-                                            <input
-                                                className="flex-1 bg-v-bg border border-slate-700 text-[10px] text-v-accent p-1.5 outline-none rounded-none placeholder:text-slate-600 uppercase font-mono"
-                                                value={s.key}
-                                                onChange={(e) => {
-                                                    const updated = [...secrets];
-                                                    updated[i] = { ...s, key: e.target.value };
-                                                    setSecrets(updated);
-                                                }}
-                                                placeholder="KEY"
-                                                spellCheck="false"
-                                            />
-                                            <input
-                                                className="flex-1 bg-v-bg border border-slate-700 text-[10px] text-v-accent p-1.5 outline-none rounded-none placeholder:text-slate-600 font-mono"
-                                                type={secretsVisible.has(i) ? "text" : "password"}
-                                                value={s.value}
-                                                onChange={(e) => {
-                                                    const updated = [...secrets];
-                                                    updated[i] = { ...s, value: e.target.value };
-                                                    setSecrets(updated);
-                                                }}
-                                                placeholder="value"
-                                                spellCheck="false"
-                                            />
-                                            <button
-                                                className="text-slate-600 hover:text-v-accent shrink-0 transition-colors"
-                                                onClick={() => {
-                                                    setSecretsVisible(prev => {
-                                                        const next = new Set(prev);
-                                                        next.has(i) ? next.delete(i) : next.add(i);
-                                                        return next;
-                                                    });
-                                                }}
-                                                title={secretsVisible.has(i) ? "Hide" : "Show"}
-                                                type="button"
-                                            >
-                                                <span className="material-symbols-outlined text-[14px]">{secretsVisible.has(i) ? 'visibility_off' : 'visibility'}</span>
-                                            </button>
-                                            <button
-                                                className="text-v-alert hover:text-red-400 shrink-0"
-                                                onClick={() => setSecrets(secrets.filter((_, j) => j !== i))}
-                                                title="Remove"
-                                            >
-                                                <span className="material-symbols-outlined text-[14px]">close</span>
-                                            </button>
-                                        </div>
-                                    ))}
-                                    <button
-                                        className="w-full text-[9px] text-slate-500 hover:text-v-accent border border-dashed border-slate-700 hover:border-v-accent py-1 transition-colors uppercase tracking-widest"
-                                        onClick={() => setSecrets([...secrets, { key: '', value: '' }])}
-                                    >
-                                        + ADD_SECRET
-                                    </button>
-                                    <p className="text-[8px] text-slate-600 leading-tight mt-0.5">
-                                        Injected into .env — never sent to AI
-                                    </p>
-                                </div>
-                            )}
-                        </div>
+                        </>
                     )}
                 </div>
                 
