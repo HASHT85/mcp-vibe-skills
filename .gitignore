@@ -28,7 +28,8 @@ npm-debug.log*
 .env
 .env.local
 help.txt
+# Agent workflows with infra details (VM IDs, paths)
 .agents/workflows/deploy.md
-.agents/rules/docker.md
-.agents/rules/github.md
-.agents/rules/hostinger.md
+
+# Agent rules are versioned — DO NOT ignore them
+# .agents/rules/ → all tracked in git

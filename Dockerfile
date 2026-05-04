@@ -21,8 +21,8 @@ ENV STORE_PATH=/data/store.json
 RUN apk add --no-cache git curl bash docker-cli docker-cli-compose
 
 # Configure git globally so agents can commit
-RUN git config --global user.email "veistcraft@auto.dev" && \
-    git config --global user.name "veistCraft"
+RUN git config --global user.email "veist@auto.dev" && \
+    git config --global user.name "veist"
 
 RUN mkdir -p /data /workspace
 
@@ -35,4 +35,4 @@ EXPOSE 8080
 
 VOLUME ["/data", "/workspace"]
 
-CMD ["sh", "-c", "git config --global user.email veistcraft@auto.dev && git config --global user.name veistCraft && exec node dist/index.js"]
+CMD ["sh", "-c", "git config --global user.email veist@auto.dev && git config --global user.name veist && exec node dist/index.js"]

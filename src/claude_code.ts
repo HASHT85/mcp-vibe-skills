@@ -292,7 +292,7 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
             }
             case "read_memory": {
                 try {
-                    const memPath = path.resolve(cwd, ".veistcraft_memory.json");
+                    const memPath = path.resolve(cwd, ".veist_memory.json");
                     let memStr = "{}";
                     try { memStr = await fs.readFile(memPath, "utf-8"); } catch { }
                     const mem = JSON.parse(memStr);
@@ -306,7 +306,7 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
             }
             case "write_memory": {
                 try {
-                    const memPath = path.resolve(cwd, ".veistcraft_memory.json");
+                    const memPath = path.resolve(cwd, ".veist_memory.json");
                     let memStr = "{}";
                     try { memStr = await fs.readFile(memPath, "utf-8"); } catch { }
                     const mem = JSON.parse(memStr);
@@ -536,7 +536,7 @@ export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult
                     // Read dev_progress from shared memory to prevent agent from re-doing work
                     let progressHint = "";
                     try {
-                        const memPath = path.resolve(options.cwd, ".veistcraft_memory.json");
+                        const memPath = path.resolve(options.cwd, ".veist_memory.json");
                         const memStr = await fs.readFile(memPath, "utf-8").catch(() => "{}");
                         const mem = JSON.parse(memStr);
                         if (mem.dev_progress) {
@@ -649,8 +649,8 @@ export async function gitPush(cwd: string, message: string, authRemoteUrl?: stri
         // If an authenticated URL is provided, update remote before push
         const commands: [string, string[]][] = authRemoteUrl
             ? [
-                ["git", ["config", "--global", "user.email", "veistcraft@auto.dev"]],
-                ["git", ["config", "--global", "user.name", "veistCraft"]],
+                ["git", ["config", "--global", "user.email", "veist@auto.dev"]],
+                ["git", ["config", "--global", "user.name", "veist"]],
                 ["git", ["remote", "set-url", "origin", authRemoteUrl]],
                 ["git", ["add", "-A"]],
                 ["git", ["commit", "-m", message]],
@@ -658,8 +658,8 @@ export async function gitPush(cwd: string, message: string, authRemoteUrl?: stri
                 ["git", ["push", "--force", "origin", "main"]],
             ]
             : [
-                ["git", ["config", "--global", "user.email", "veistcraft@auto.dev"]],
-                ["git", ["config", "--global", "user.name", "veistCraft"]],
+                ["git", ["config", "--global", "user.email", "veist@auto.dev"]],
+                ["git", ["config", "--global", "user.name", "veist"]],
                 ["git", ["add", "-A"]],
                 ["git", ["commit", "-m", message]],
                 ["git", ["push", "origin", "main"]],
@@ -714,8 +714,8 @@ export async function gitInit(cwd: string, remoteUrl: string): Promise<boolean> 
             ["git", ["remote", "add", "origin", remoteUrl]],
             ["git", ["checkout", "-b", "main"]],
             // Configure git user for commits (global so it persists)
-            ["git", ["config", "--global", "user.email", "veistcraft@auto.dev"]],
-            ["git", ["config", "--global", "user.name", "veistCraft"]],
+            ["git", ["config", "--global", "user.email", "veist@auto.dev"]],
+            ["git", ["config", "--global", "user.name", "veist"]],
         ] as const;
 
         let idx = 0;

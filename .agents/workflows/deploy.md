@@ -2,70 +2,138 @@
 description: Deploy VEIST to Hostinger VPS (safe — preserves volumes/data)
 ---
 
-# Deploy VEIST to Hostinger
-
-## Quick Deploy (normal code changes)
+# Deploy VEIST to Hostinger VPS
 
 // turbo-all
 
-1. **Commit and push** to GitHub:
+## Quick Deploy (code changes only — image already on Docker Hub)
+
+> Utiliser quand : seul le code TypeScript/React a changé, PAS le `docker-compose.yml`
+
+### 1. Push to GitHub
+```bash
+git -c core.hooksPath=/dev/null add -A
 ```
-git add -A; git commit -m "deploy: <description>"; git push
+```bash
+git -c core.hooksPath=/dev/null commit -m "deploy: <description>"
+```
+```bash
+git push origin main
 ```
 
-2. **Wait ~3 min** for GitHub Actions to build and push images to GHCR.
-   Check status at: https://github.com/HASHT85/mcp-vibe-skills/actions
+### 2. Wait for CI
+Attendre ~3 min que GitHub Actions build et push les images sur Docker Hub.
+Vérifier : https://github.com/HASHT85/mcp-vibe-skills/actions
 
-3. **Pull latest images** via Hostinger MCP — use `updateProjectV1` with:
-   - `virtualMachineId`: `1287719`
-   - `projectName`: `veist`
+### 3. Pull latest images on VPS
+```
+mcp: VPS_updateProjectV1(
+  virtualMachineId: 1287719,
+  projectName: "veist"
+)
+```
 
-4. **Verify** containers are running with `getProjectContainersV1`:
-   - `veist-dashboard` should be `running` (new container ID)
-   - `veist` should be `running` + `healthy` (new container ID)
+### 4. Verify
+```
+mcp: VPS_getProjectContainersV1(
+  virtualMachineId: 1287719,
+  projectName: "veist"
+)
+```
+- `veist` → `running` + `healthy`
+- `veist-dashboard` → `running`
 
-## First-Time Setup / Compose File Changes
+---
 
-If `docker-compose.yml` itself changed (not just code), use `createNewProjectV1`:
+## Full Deploy (docker-compose.yml changed)
 
-1. `git push` and wait for GitHub Actions to finish
-2. Deploy via `createNewProjectV1` with:
-   - `content`: `https://github.com/HASHT85/mcp-vibe-skills`
-   - `project_name`: `veist`
-   - `virtualMachineId`: `1287719`
-   - `environment`: Read from the local `.env` file at `c:\Projet\mcp-vibe-skills\mcp-vibe-skills\.env`
-   
-   > This replaces the existing project config but **preserves volumes**.
+> Utiliser quand : le `docker-compose.yml`, les volumes, ou les labels Traefik ont changé
 
-3. **Wait ~60s** then check with `getProjectContainersV1`
+### 1. Push to GitHub
+```bash
+git -c core.hooksPath=/dev/null add -A && git -c core.hooksPath=/dev/null commit -m "deploy: <description>" && git push origin main
+```
+
+### 2. Read current environment (CRITICAL)
+```
+mcp: VPS_getProjectContentsV1(
+  virtualMachineId: 1287719,
+  projectName: "veist"
+)
+```
+**Extraire le champ `environment`** — il contient toutes les variables d'env sous forme de string multiligne.
+
+### 3. Deploy with environment preserved
+```
+mcp: VPS_createNewProjectV1(
+  virtualMachineId: 1287719,
+  project_name: "veist",
+  content: "https://github.com/HASHT85/mcp-vibe-skills",
+  environment: "<paste the environment string from step 2>"
+)
+```
+
+### 4. Monitor deployment
+```
+mcp: VPS_getActionsV1(
+  virtualMachineId: 1287719
+)
+```
+Attendre que l'action passe en `success`.
+
+### 5. Verify containers
+```
+mcp: VPS_getProjectContainersV1(
+  virtualMachineId: 1287719,
+  projectName: "veist"
+)
+```
+
+---
 
 ## Environment Variables
 
-Always read from `c:\Projet\mcp-vibe-skills\mcp-vibe-skills\.env` and pass ALL variables:
-- `ANTHROPIC_API_KEY`
-- `OPENAI_API_KEY`  
-- `GOOGLE_API_KEY`
-- `GITHUB_TOKEN`
-- `GITHUB_OWNER`
-- `ADMIN_USER`
-- `ADMIN_PASS`
-- `OPENROUTER_API_KEY`
-- `TAVILY_API_KEY`
-- `HOST_WORKSPACE_PATH=/opt/veistcraft/workspace`
+Variables requises dans le `environment` de VEIST :
+- `OPENROUTER_API_KEY` — Clé API OpenRouter (multi-model)
+- `GITHUB_TOKEN` — Token GitHub pour création de repos
+- `GITHUB_OWNER` — Username GitHub (`HASHT85`)
+- `ADMIN_USER` — Login dashboard
+- `ADMIN_PASS` — Password dashboard (aussi clé dérivation SecretsService)
+- `TAVILY_API_KEY` — Clé API Tavily (web search)
+- `HOSTINGER_API_TOKEN` — Token API Hostinger
+- `HOST_WORKSPACE_PATH=/opt/veist/workspace`
+- `PORT=8080`
+- `STORE_PATH=/data/store.json`
+- `PIPELINES_STORE=/data/pipelines.json`
+- `WORKSPACE_ROOT=/workspace`
+
+---
 
 ## Key Facts
-- **VM ID**: `1287719`
-- **Project name**: `veist`
-- **Dashboard URL**: `https://veist.hach.dev`
-- **API URL**: `https://api.veist.hach.dev`
-- **Images**: `ihachi/veist:latest` + `ihachi/veist-dashboard:latest` (Docker Hub)
-- **Volumes to preserve**: `orchestrator-data` (pipelines.json, store.json, chat_sessions.json)
-- **Host workspace**: `/opt/veistcraft/workspace`
 
-## Important Rules
+| Fact | Value |
+|------|-------|
+| VM ID | `1287719` |
+| Project name | `veist` |
+| Dashboard | `https://veist.hach.dev` |
+| API | `https://api.veist.hach.dev` |
+| Docker images | `ihachi/veist:latest` + `ihachi/veist-dashboard:latest` |
+| GitHub repo | `https://github.com/HASHT85/mcp-vibe-skills` |
+| Data volume | `/opt/veist/data` (store.json, secrets.json, memory.json) |
+| Workspace | `/opt/veist/workspace` |
 
-> ⚠️ **NEVER use `deleteProjectV1`** — it destroys Docker volumes and loses ALL data!
+---
 
-> ⚠️ **NEVER use `updateProjectV1` when docker-compose.yml changed** — use `createNewProjectV1` instead.
+## ⚠️ Rules
 
+> [!CAUTION]
+> **NEVER use `deleteProjectV1`** — it destroys Docker volumes and ALL data!
+
+> [!WARNING]
+> **NEVER use `updateProjectV1` when docker-compose.yml changed** — use `createNewProjectV1`
+
+> [!IMPORTANT]
+> **ALWAYS read env vars with `getProjectContentsV1` BEFORE `createNewProjectV1`** — pass the `environment` field to preserve API keys and credentials.
+
+> [!NOTE]
 > For normal code changes, just use `updateProjectV1` — it pulls latest images and restarts.

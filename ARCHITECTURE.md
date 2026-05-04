@@ -1,4 +1,4 @@
-# Architecture: Autonomous Multi-Agent System (Perplexity Computer Clone)
+# Architecture: VEIST — Autonomous Multi-Agent System
 
 ## Vision
 Transform the linear, monolithic project generator into a highly autonomous, graph-based multi-agent system capable of breaking down complex user intents, parallelizing work, and self-correcting.

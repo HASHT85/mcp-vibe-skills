@@ -17,7 +17,7 @@ import { runClaudeAgent, gitPush, gitClone, gitInit, agentEvents, type AgentActi
 import type { ModifyRun } from "./types.js";
 import { GraphManager } from "./dag/Graph.js";
 import type { NodeContext } from "./dag/Node.js";
-import { AnalysisNode, ArchitectureNode, ScaffoldNode, DevelopmentNode, QANode, DeployNode } from "./dag/nodes/veistCraftNodes.js";
+import { AnalysisNode, ArchitectureNode, ScaffoldNode, DevelopmentNode, QANode, DeployNode } from "./dag/nodes/veistNodes.js";
 import { SupervisorNode } from "./dag/nodes/SupervisorNode.js";
 import { fetchOpenRouterModels } from "./openrouter_models.js";
 import { SkillsEnrichmentNode } from "./dag/nodes/SkillsEnrichmentNode.js";
