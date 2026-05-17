@@ -1,14 +1,14 @@
+/* ── Google Fonts (must be before @tailwind directives) ── */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Google Fonts ── */
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
-
 @layer base {
   body {
-    @apply bg-v-bg font-body text-on-surface;
+    @apply bg-surface-0 font-body text-text-primary;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -27,127 +27,126 @@
   vertical-align: middle;
 }
 
-/* ── Scrollbar (thin, refined) ── */
-::-webkit-scrollbar {
-  width: 4px;
-}
-::-webkit-scrollbar-track {
-  background: #0B0F14;
-}
-::-webkit-scrollbar-thumb {
-  background: #2A3442;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #3A4452;
-}
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #252C3A; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #3D4557; }
+
+.custom-scrollbar::-webkit-scrollbar { width: 3px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #1E2430; border-radius: 9999px; }
 
 /* ── Focus Ring ── */
 *:focus-visible {
-  outline: 1px solid #D7FF2F;
-  outline-offset: 1px;
+  outline: 2px solid rgba(215, 255, 47, 0.5);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
-/* ── Card Styles ── */
+/* ── Glass Surface ── */
+.glass-surface {
+  background: rgba(17, 22, 29, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(37, 44, 58, 0.6);
+}
+
+/* ── Surface Card ── */
 .surface-card {
-  background-color: #1c2025;
-  border: 1px solid #2A3442;
-  transition: border-color 0.2s ease;
+  background-color: #181D25;
+  border: 1px solid #1E2430;
+  border-radius: 14px;
+  transition: all 0.2s ease;
 }
 .surface-card:hover {
-  border-color: #D7FF2F33;
+  border-color: rgba(215, 255, 47, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
-/* ── Status Badges ── */
-.status-badge {
-  @apply px-3 py-1 font-mono text-[10px] uppercase tracking-widest;
+/* ── Input Pill ── */
+.input-pill {
+  background: #13171E;
+  border: 1px solid #1E2430;
+  border-radius: 18px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
 }
-.status-operational {
-  @apply bg-[#D7FF2F]/5 text-[#D7FF2F] border border-[#D7FF2F]/20;
-}
-.status-error {
-  @apply bg-red-500/5 text-red-400 border border-red-500/20;
-}
-.status-warning {
-  @apply bg-orange-500/5 text-orange-400 border border-orange-500/20;
-}
-
-/* ── Scanline (subtle) ── */
-.scanline {
-  position: relative;
-}
-.scanline::after {
-  content: '';
-  position: absolute;
-  width: 100%;
-  height: 1px;
-  background: rgba(215, 255, 47, 0.04);
-  top: 0;
-  left: 0;
-  animation: scan 6s linear infinite;
-  z-index: 50;
-  pointer-events: none;
-}
-@keyframes scan {
-  0% { top: 0%; }
-  100% { top: 100%; }
+.input-pill:focus-within {
+  border-color: rgba(215, 255, 47, 0.4);
+  box-shadow: 0 0 0 3px rgba(215, 255, 47, 0.08), 0 4px 24px rgba(0, 0, 0, 0.4);
 }
 
-/* ── Grid Dot Background ── */
-.technical-grid {
-  background-image: radial-gradient(circle, #2A3442 1px, transparent 1px);
-  background-size: 40px 40px;
+/* ── Agent Step Card ── */
+.agent-step {
+  background: rgba(19, 23, 30, 0.7);
+  border: 1px solid #1E2430;
+  border-radius: 12px;
+  padding: 12px 16px;
+  transition: all 0.2s ease;
+}
+.agent-step:hover { background: rgba(24, 29, 37, 0.9); border-color: #252C3A; }
+.agent-step.active { border-color: rgba(215, 255, 47, 0.3); background: rgba(215, 255, 47, 0.04); }
+.agent-step.completed { border-color: rgba(34, 197, 94, 0.3); }
+.agent-step.error { border-color: rgba(239, 68, 68, 0.3); }
+
+/* ── Quick Action Chip ── */
+.action-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 9999px;
+  border: 1px solid #1E2430; background: #13171E;
+  color: #8B93A6; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s ease; white-space: nowrap;
+}
+.action-chip:hover {
+  border-color: rgba(215, 255, 47, 0.3); color: #E8EAF0;
+  background: rgba(215, 255, 47, 0.06);
+  box-shadow: 0 0 12px rgba(215, 255, 47, 0.08);
 }
 
-/* ── Borders ── */
-input, button {
-  border-radius: 0 !important;
+/* ── Chat Messages ── */
+.msg-user {
+  background: #1A2030;
+  border-radius: 18px 18px 4px 18px;
+  padding: 14px 18px;
+  max-width: 85%;
+  margin-left: auto;
 }
-
-/* ── Corner Marker (decorative) ── */
-.corner-marker::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0;
-  width: 8px; height: 8px;
-  border-top: 1px solid #D7FF2F;
-  border-left: 1px solid #D7FF2F;
-}
-.corner-marker::after {
-  content: '';
-  position: absolute;
-  bottom: 0; right: 0;
-  width: 8px; height: 8px;
-  border-bottom: 1px solid #D7FF2F;
-  border-right: 1px solid #D7FF2F;
-}
-
-/* ── Custom Scrollbar for narrow panels ── */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 2px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: #0B0F14;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #454933;
-}
+.msg-assistant { padding: 14px 4px; max-width: 90%; }
 
 /* ── Selection ── */
-::selection {
-  background-color: #cbf21d;
-  color: #171e00;
+::selection { background-color: rgba(215, 255, 47, 0.3); color: #E8EAF0; }
+
+/* ── Status Badges ── */
+.status-badge { @apply px-2.5 py-1 text-2xs font-medium rounded-full; }
+.status-operational { @apply bg-status-success/10 text-status-success border border-status-success/20; }
+.status-error { @apply bg-status-error/10 text-status-error border border-status-error/20; }
+.status-warning { @apply bg-status-warning/10 text-status-warning border border-status-warning/20; }
+
+/* ── Typing indicator ── */
+.typing-dot {
+  width: 6px; height: 6px; background: #8B93A6;
+  border-radius: 50%; animation: dotPulse 1.5s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dotPulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
 }
 
-/* ── Mobile PWA Safe Area ── */
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-/* ── Prevent text selection on UI elements for native-like feel ── */
+/* ── Mobile PWA ── */
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 @media (max-width: 768px) {
   button, nav, aside {
-    -webkit-user-select: none;
-    user-select: none;
+    -webkit-user-select: none; user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
 }
+
+/* ── Sidebar items ── */
+.sidebar-item {
+  @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm cursor-pointer transition-all duration-200;
+}
+.sidebar-item:hover { @apply bg-surface-4 text-text-primary; }
+.sidebar-item.active { @apply bg-accent-muted text-v-accent font-semibold; }

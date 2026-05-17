@@ -16,24 +16,29 @@ const MODEL_OPTIONS = [
     { value: 'deepseek/deepseek-chat', label: 'DeepSeek Chat' },
 ];
 
+const QUICK_ACTIONS = [
+    { icon: 'rocket_launch', label: 'Create', desc: 'Build a new project' },
+    { icon: 'edit_note', label: 'Modify', desc: 'Edit existing project' },
+    { icon: 'search', label: 'Research', desc: 'Explore & analyze' },
+    { icon: 'bolt', label: 'Quick Deploy', desc: 'Deploy from GitHub' },
+];
+
 type AttachedFile = {
-    name: string;
-    type: string;
-    data: string;    // base64
-    size: number;
-    error?: string;
-    thumbnail?: string;
+    name: string; type: string; data: string; size: number; error?: string; thumbnail?: string;
 };
 
 interface ChatViewProps {
     pipelines?: Pipeline[];
     onPipelineLaunched?: () => void;
     onRefresh?: () => void;
+    activeSession: ChatSession | null;
+    setActiveSession: (s: ChatSession | null) => void;
+    sessions: ChatSession[];
+    setSessions: (s: ChatSession[] | ((prev: ChatSession[]) => ChatSession[])) => void;
+    onOpenDetail?: (pipeline: Pipeline) => void;
 }
 
-export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: ChatViewProps) {
-    const [sessions, setSessions] = useState<ChatSession[]>([]);
-    const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
+export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh, activeSession, setActiveSession, sessions, setSessions, onOpenDetail }: ChatViewProps) {
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     const [launching, setLaunching] = useState(false);
@@ -43,45 +48,29 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     const [dragOver, setDragOver] = useState(false);
     const [projectName, setProjectName] = useState('');
     const [githubUrl, setGithubUrl] = useState('');
-    const [secrets, setSecrets] = useState<{key: string; value: string}[]>([]);
-    const [secretsExpanded, setSecretsExpanded] = useState(false);
-    const [secretsVisible, setSecretsVisible] = useState<Set<number>>(new Set());
+    const [showModelPicker, setShowModelPicker] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const modifyCleanupRef = useRef<(() => void) | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    // Auto-resize textarea
-    useEffect(() => {
-        if (textareaRef.current) {
-            textareaRef.current.style.height = '30px'; // Reset height to recalculate
-            const scrollHeight = textareaRef.current.scrollHeight;
-            textareaRef.current.style.height = `${Math.max(30, Math.min(scrollHeight, 200))}px`;
-        }
-    }, [input]);
-
-    // All pipelines for linking
     const linkablePipelines = pipelines.filter(p => ['COMPLETED', 'FAILED'].includes(p.phase));
 
-    const loadSessions = useCallback(async () => {
-        try {
-            const data = await listChatSessions();
-            setSessions(data.sessions || []);
-        } catch {}
-    }, []);
-
-    useEffect(() => { loadSessions(); }, [loadSessions]);
+    useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.style.height = '24px';
+            textareaRef.current.style.height = `${Math.max(24, Math.min(textareaRef.current.scrollHeight, 200))}px`;
+        }
+    }, [input]);
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [activeSession?.messages, sending]);
 
     // ─── File Handling ───
-
     const processFile = (f: File) => {
-        const MAX_MB = 10;
-        if (f.size > MAX_MB * 1024 * 1024) {
-            setFiles(prev => [...prev, { name: f.name, type: f.type, data: '', size: f.size, error: `MAX ${MAX_MB}MB` }]);
+        if (f.size > 10 * 1024 * 1024) {
+            setFiles(prev => [...prev, { name: f.name, type: f.type, data: '', size: f.size, error: 'Max 10MB' }]);
             return;
         }
         const reader = new FileReader();
@@ -113,818 +102,332 @@ export function ChatView({ pipelines = [], onPipelineLaunched, onRefresh }: Chat
     };
 
     const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        setDragOver(false);
+        e.preventDefault(); setDragOver(false);
         if (e.dataTransfer.files) Array.from(e.dataTransfer.files).forEach(processFile);
     };
 
     const removeFile = (index: number) => setFiles(prev => prev.filter((_, i) => i !== index));
 
-    // ─── Chat Logic ───
-
-    const createNewSession = async () => {
-        try {
-            const data = await createChatSession(model);
-            setActiveSession(data.session);
-            setSessions(prev => [data.session, ...prev]);
-        } catch (err: any) {
-            alert(`SYS_ERR: ${err.message}`);
-        }
-    };
-
-    const selectSession = async (s: ChatSession) => {
-        // Set immediately with truncated data for responsiveness
-        setActiveSession(s);
-        // Sync model selector with session's model
-        if (s.model) setModel(s.model);
-        // Restore linked pipeline if any
-        const pid = (s as any).projectId || '';
-        setSelectedPipelineId(pid);
-        // Sync projectName from linked pipeline or reset
-        if (pid) {
-            const linked = pipelines.find(p => p.id === pid);
-            setProjectName(linked?.name || '');
-        } else {
-            setProjectName('');
-        }
-        setGithubUrl('');
-        // Clear secrets — they're per-session, not global
-        setSecrets([]);
-        setSecretsExpanded(false);
-        // Then fetch full session with all messages
-        try {
-            const data = await getChatSession(s.id);
-            setActiveSession(data.session);
-            if (data.session.model) setModel(data.session.model);
-            const fullPid = (data.session as any).projectId || '';
-            setSelectedPipelineId(fullPid);
-            if (fullPid) {
-                const linked = pipelines.find(p => p.id === fullPid);
-                setProjectName(linked?.name || '');
-            } else {
-                setProjectName('');
-            }
-        } catch {
-            // Keep truncated version if fetch fails
-        }
-    };
-
-    const handleSend = async () => {
-        if ((!input.trim() && files.length === 0) || !activeSession || sending) return;
-        const msg = input.trim();
-
-        const detectedUrl = msg.match(/https?:\/\/(?:www\.)?github\.com\/[^\s]+/);
-        if (detectedUrl) {
-            const url = detectedUrl[0];
-            setGithubUrl(url);
-            const matchName = url.match(/github\.com\/[^\/]+\/([^\/\.]+)/);
-            if (matchName && matchName[1]) {
-                setProjectName(matchName[1].toLowerCase().replace(/[^a-z0-9-]/g, '-'));
-            }
-        }
-
-        const attachedFiles = files.filter(f => !f.error).map(f => ({ base64: f.data, type: f.type }));
-        setInput('');
-        setFiles([]);
-        setSending(true);
-
-        // Build display content (what the user sees)
-        const fileNames = attachedFiles.length > 0 ? `\n[📎 ${attachedFiles.length} FILE(S) ATTACHED]` : '';
-        const displayContent = msg + fileNames;
-
-        // Build actual content sent to AI (with project context if linked)
+    // ─── Build AI content with project context ───
+    const buildAiContent = async (msg: string, session: ChatSession) => {
         let aiContent = msg || '[Attached files]';
         if (selectedPipelineId) {
             const targetPipeline = linkablePipelines.find(p => p.id === selectedPipelineId);
-            if (targetPipeline && activeSession.messages.length === 0) {
-                // First message: inject full project context + repo contents
+            if (targetPipeline && session.messages.length === 0) {
                 const repoCtx = await getRepoContext(selectedPipelineId);
                 const ctx = [
                     `[CONTEXTE PROJET - MODE MODIFICATION]`,
-                    `Nom: ${targetPipeline.name || 'N/A'}`,
-                    `ID: ${targetPipeline.id}`,
-                    `Phase: ${targetPipeline.phase}`,
-                    `Description: ${targetPipeline.description || 'N/A'}`,
+                    `Nom: ${targetPipeline.name || 'N/A'}`, `ID: ${targetPipeline.id}`,
+                    `Phase: ${targetPipeline.phase}`, `Description: ${targetPipeline.description || 'N/A'}`,
                     targetPipeline.github ? `GitHub: ${targetPipeline.github.url}` : null,
                     repoCtx ? `\n# CONTENU DU REPO\n${repoCtx}` : null,
-                    `---`,
-                    `L'utilisateur veut MODIFIER ce projet existant. Voici sa demande :`,
+                    `---`, `L'utilisateur veut MODIFIER ce projet existant. Voici sa demande :`,
                 ].filter(Boolean).join('\n');
                 aiContent = ctx + '\n' + aiContent;
             }
         }
-
-        // Optimistic UI
-        const optimisticMsg: ChatMessage = { role: 'user', content: displayContent, timestamp: new Date().toISOString() };
-        setActiveSession(prev => prev ? { ...prev, messages: [...prev.messages, optimisticMsg] } : null);
-
-        try {
-            const data = await sendChatMessage(
-                activeSession.id,
-                aiContent,
-                attachedFiles.length > 0 ? attachedFiles : undefined
-            );
-            setActiveSession(data.session);
-        } catch (err: any) {
-            alert(`SYS_ERR: ${err.message}`);
-            setActiveSession(prev => prev ? {
-                ...prev,
-                messages: prev.messages.filter(m => m !== optimisticMsg),
-            } : null);
-        } finally {
-            setSending(false);
-        }
+        return aiContent;
     };
 
+    // ─── Send message in active session ───
+    const handleSend = async () => {
+        if ((!input.trim() && files.length === 0) || !activeSession || sending) return;
+        const msg = input.trim();
+        const detectedUrl = msg.match(/https?:\/\/(?:www\.)?github\.com\/[^\s]+/);
+        if (detectedUrl) {
+            setGithubUrl(detectedUrl[0]);
+            const matchName = detectedUrl[0].match(/github\.com\/[^\/]+\/([^\/\.]+)/);
+            if (matchName?.[1]) setProjectName(matchName[1].toLowerCase().replace(/[^a-z0-9-]/g, '-'));
+        }
+        const attachedFiles = files.filter(f => !f.error).map(f => ({ base64: f.data, type: f.type }));
+        setInput(''); setFiles([]); setSending(true);
+        const fileNames = attachedFiles.length > 0 ? `\n[📎 ${attachedFiles.length} file(s)]` : '';
+        const displayContent = msg + fileNames;
+        const aiContent = await buildAiContent(msg, activeSession);
+        const optimisticMsg: ChatMessage = { role: 'user', content: displayContent, timestamp: new Date().toISOString() };
+        setActiveSession({ ...activeSession, messages: [...activeSession.messages, optimisticMsg] });
+        try {
+            const data = await sendChatMessage(activeSession.id, aiContent, attachedFiles.length > 0 ? attachedFiles : undefined);
+            setActiveSession(data.session);
+        } catch (err: any) {
+            alert(`Error: ${err.message}`);
+            setActiveSession({ ...activeSession, messages: activeSession.messages });
+        } finally { setSending(false); }
+    };
+
+    // ─── Initial search (new session + send) ───
+    const handleInitialSearch = async (prefill?: string) => {
+        const msgText = prefill || input.trim();
+        if ((!msgText && files.length === 0) || sending || launching) return;
+        setSending(true);
+        try {
+            const data = await createChatSession(model);
+            const newSession = data.session;
+            setSessions((prev: ChatSession[]) => [newSession, ...prev]);
+            const detectedUrl = msgText.match(/https?:\/\/(?:www\.)?github\.com\/[^\s]+/);
+            if (detectedUrl) {
+                setGithubUrl(detectedUrl[0]);
+                const matchName = detectedUrl[0].match(/github\.com\/[^\/]+\/([^\/\.]+)/);
+                if (matchName?.[1]) setProjectName(matchName[1].toLowerCase().replace(/[^a-z0-9-]/g, '-'));
+            }
+            const attachedFiles = files.filter(f => !f.error).map(f => ({ base64: f.data, type: f.type }));
+            setInput(''); setFiles([]);
+            const fileNames = attachedFiles.length > 0 ? `\n[📎 ${attachedFiles.length} file(s)]` : '';
+            const aiContent = await buildAiContent(msgText, newSession);
+            const optimisticMsg: ChatMessage = { role: 'user', content: msgText + fileNames, timestamp: new Date().toISOString() };
+            setActiveSession({ ...newSession, messages: [optimisticMsg] });
+            const sendData = await sendChatMessage(newSession.id, aiContent, attachedFiles.length > 0 ? attachedFiles : undefined);
+            setActiveSession(sendData.session);
+        } catch (err: any) { alert(`Error: ${err.message}`); }
+        finally { setSending(false); }
+    };
+
+    // ─── Deploy / Modify action ───
     const handleAction = async () => {
         if (!activeSession || launching) return;
         setLaunching(true);
         try {
             if (selectedPipelineId) {
-                // ─── MODIFY existing project ───
-                const pipelineId = selectedPipelineId;
-                const instructions = activeSession.messages
-                    .filter(m => m.role === 'user')
-                    .map(m => m.content)
-                    .join('\n');
+                const instructions = activeSession.messages.filter(m => m.role === 'user').map(m => m.content).join('\n');
                 const attachedFiles = files.filter(f => !f.error).map(f => ({ base64: f.data, type: f.type }));
-                await modifyPipeline(pipelineId, instructions, model, attachedFiles.length > 0 ? attachedFiles : undefined);
+                await modifyPipeline(selectedPipelineId, instructions, model, attachedFiles.length > 0 ? attachedFiles : undefined);
                 setFiles([]);
-
-                // Add initial dispatched message
-                setActiveSession(prev => prev ? {
-                    ...prev,
-                    messages: [...prev.messages, {
-                        role: 'assistant',
-                        content: `⚡ MODIFY_NODE DISPATCHED → Pipeline ${pipelineId.slice(0,8)}\n\n🔄 Streaming live progress below...`,
-                        timestamp: new Date().toISOString(),
-                    }],
-                } : null);
-
-                // Subscribe to SSE events for this pipeline
+                setActiveSession({ ...activeSession, messages: [...activeSession.messages, {
+                    role: 'assistant', content: `⚡ Modification dispatched → Pipeline ${selectedPipelineId.slice(0,8)}...`, timestamp: new Date().toISOString(),
+                }]});
                 if (modifyCleanupRef.current) modifyCleanupRef.current();
                 const closeSSE = connectAllSSE((event) => {
-                    if (event.pipelineId !== pipelineId) return;
+                    if (event.pipelineId !== selectedPipelineId) return;
                     const msg = `${event.agentEmoji || '📡'} **${(event.agentRole || 'System').toUpperCase()}** — ${event.action}`;
-                    setActiveSession(prev => prev ? {
-                        ...prev,
-                        messages: [...prev.messages, {
-                            role: 'assistant',
-                            content: msg,
-                            timestamp: event.timestamp || new Date().toISOString(),
-                        }],
-                    } : null);
+                    setActiveSession(prev => prev ? { ...prev, messages: [...prev.messages, { role: 'assistant', content: msg, timestamp: event.timestamp || new Date().toISOString() }] } : null);
                 });
-
-                // Poll pipeline status until COMPLETED or FAILED
                 const pollInterval = setInterval(async () => {
                     try {
-                        const result = await getPipeline(pipelineId);
+                        const result = await getPipeline(selectedPipelineId);
                         const phase = result?.pipeline?.phase;
                         if (phase === 'COMPLETED' || phase === 'FAILED') {
-                            clearInterval(pollInterval);
-                            closeSSE();
-                            modifyCleanupRef.current = null;
-                            setLaunching(false);
+                            clearInterval(pollInterval); closeSSE(); modifyCleanupRef.current = null; setLaunching(false);
                             const icon = phase === 'COMPLETED' ? '✅' : '❌';
-                            setActiveSession(prev => prev ? {
-                                ...prev,
-                                messages: [...prev.messages, {
-                                    role: 'assistant',
-                                    content: `${icon} **MODIFICATION ${phase}** — Pipeline ${pipelineId.slice(0,8)} is now ${phase.toLowerCase()}.`,
-                                    timestamp: new Date().toISOString(),
-                                }],
-                            } : null);
+                            setActiveSession(prev => prev ? { ...prev, messages: [...prev.messages, { role: 'assistant', content: `${icon} Modification ${phase.toLowerCase()}.`, timestamp: new Date().toISOString() }] } : null);
                             onRefresh?.();
                         }
                     } catch {}
                 }, 3000);
-
-                modifyCleanupRef.current = () => {
-                    clearInterval(pollInterval);
-                    closeSSE();
-                };
-
-                onRefresh?.();
-                return; // Don't setLaunching(false) yet — polling will do it
+                modifyCleanupRef.current = () => { clearInterval(pollInterval); closeSSE(); };
+                onRefresh?.(); return;
             } else {
-                // ─── CREATE new project ───
-                const askedName = window.prompt("Nom du déploiement (laissez vide pour un nom automatique) :", projectName);
-                if (askedName === null) {
-                    setLaunching(false);
-                    return;
-                }
-                const finalProjectName = askedName.trim();
-
-                const result = await launchFromChat(activeSession.id, finalProjectName || undefined, undefined, githubUrl.trim() || undefined);
-                const launchName = finalProjectName || 'AUTO_NAMED';
-
-                // Save secrets to vault if any are defined
-                const validSecrets = secrets.filter(s => s.key.trim() && s.value.trim());
-                if (validSecrets.length > 0 && result?.pipeline?.id) {
-                    const secretsObj: Record<string, string> = {};
-                    for (const s of validSecrets) secretsObj[s.key.trim()] = s.value.trim();
-                    await saveSecrets(result.pipeline.id, secretsObj);
-                }
-
-                setActiveSession(prev => prev ? {
-                    ...prev,
-                    messages: [...prev.messages, {
-                        role: 'assistant',
-                        content: `DEPLOYMENT_INITIATED → Pipeline "${launchName}" spawned.${validSecrets.length > 0 ? ` 🔐 ${validSecrets.length} secret(s) saved to vault.` : ''} Orchestrator is bootstrapping agents.`,
-                        timestamp: new Date().toISOString(),
-                    }],
-                } : null);
-                setProjectName('');
-                setSecrets([]);
-                onPipelineLaunched?.();
+                const askedName = window.prompt("Project name (leave empty for auto):", projectName);
+                if (askedName === null) { setLaunching(false); return; }
+                const result = await launchFromChat(activeSession.id, askedName.trim() || undefined, undefined, githubUrl.trim() || undefined);
+                setActiveSession({ ...activeSession, messages: [...activeSession.messages, { role: 'assistant', content: `🚀 Deployment initiated — "${askedName.trim() || 'auto'}"`, timestamp: new Date().toISOString() }]});
+                setProjectName(''); onPipelineLaunched?.();
             }
-        } catch (err: any) {
-            alert(`SYS_ERR: ${err.message}`);
-        } finally {
-            setLaunching(false);
-        }
+        } catch (err: any) { alert(`Error: ${err.message}`); }
+        finally { setLaunching(false); }
     };
 
-    const handleDeleteSession = async (id: string) => {
-        await deleteChatSession(id);
-        setSessions(prev => prev.filter(s => s.id !== id));
-        if (activeSession?.id === id) setActiveSession(null);
-    };
+    const selectedModelLabel = MODEL_OPTIONS.find(m => m.value === model)?.label || 'Model';
 
-    const selectedPipelineName = linkablePipelines.find(p => p.id === selectedPipelineId)?.name;
-
-    const handleInitialSearch = async () => {
-        if ((!input.trim() && files.length === 0) || sending || launching) return;
-        setSending(true);
-        try {
-            const data = await createChatSession(model);
-            const newSession = data.session;
-            setSessions(prev => [newSession, ...prev]);
-            
-            const msg = input.trim();
-
-            const detectedUrl = msg.match(/https?:\/\/(?:www\.)?github\.com\/[^\s]+/);
-            if (detectedUrl) {
-                const url = detectedUrl[0];
-                setGithubUrl(url);
-                const matchName = url.match(/github\.com\/[^\/]+\/([^\/\.]+)/);
-                if (matchName && matchName[1]) {
-                    setProjectName(matchName[1].toLowerCase().replace(/[^a-z0-9-]/g, '-'));
-                }
-            }
-
-            const attachedFiles = files.filter(f => !f.error).map(f => ({ base64: f.data, type: f.type }));
-            setInput('');
-            setFiles([]);
-            
-            const fileNames = attachedFiles.length > 0 ? `\n[📎 ${attachedFiles.length} FILE(S) ATTACHED]` : '';
-            const displayContent = msg + fileNames;
-            let aiContent = msg || '[Attached files]';
-            
-            if (selectedPipelineId) {
-                const targetPipeline = linkablePipelines.find(p => p.id === selectedPipelineId);
-                if (targetPipeline) {
-                    const repoCtx = await getRepoContext(selectedPipelineId);
-                    const ctx = [
-                        `[CONTEXTE PROJET - MODE MODIFICATION]`,
-                        `Nom: ${targetPipeline.name || 'N/A'}`,
-                        `ID: ${targetPipeline.id}`,
-                        `Phase: ${targetPipeline.phase}`,
-                        `Description: ${targetPipeline.description || 'N/A'}`,
-                        targetPipeline.github ? `GitHub: ${targetPipeline.github.url}` : null,
-                        repoCtx ? `\n# CONTENU DU REPO\n${repoCtx}` : null,
-                        `---`,
-                        `L'utilisateur veut MODIFIER ce projet existant. Voici sa demande :`,
-                    ].filter(Boolean).join('\n');
-                    aiContent = ctx + '\n' + aiContent;
-                }
-            }
-            
-            const optimisticMsg: ChatMessage = { role: 'user', content: displayContent, timestamp: new Date().toISOString() };
-            setActiveSession({ ...newSession, messages: [optimisticMsg] });
-            
-            const sendData = await sendChatMessage(
-                newSession.id,
-                aiContent,
-                attachedFiles.length > 0 ? attachedFiles : undefined
-            );
-            setActiveSession(sendData.session);
-        } catch (err: any) {
-            alert(`SYS_ERR: ${err.message}`);
-        } finally {
-            setSending(false);
-        }
-    };
-
-    const [showSessions, setShowSessions] = useState(false);
+    // ═══════════════════════════════════════════
+    // RENDER
+    // ═══════════════════════════════════════════
 
     return (
-        <motion.div
-            className="flex h-[calc(100vh-140px)] md:h-[calc(100vh-140px)] brutalist-border bg-v-bg font-mono relative"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
+        <div
+            className={`flex-1 flex flex-col relative bg-surface-0 overflow-hidden ${dragOver ? 'ring-2 ring-v-accent/30 ring-inset rounded-xl' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
         >
-            {/* Sessions sidebar - Slide-in Drawer for all screens */}
-            <div className={`
-                fixed inset-y-0 left-0 z-50
-                w-[280px] max-w-[85vw]
-                brutalist-border-r flex flex-col bg-v-surface overflow-hidden
-                transition-transform duration-300 ease-in-out shadow-2xl
-                ${showSessions ? 'translate-x-0' : '-translate-x-full'}
-            `}>
-                <div className="p-4 brutalist-border-b flex flex-col gap-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-v-accent">
-                            <span className="material-symbols-outlined text-lg">forum</span>
-                            <h3 className="text-sm font-black tracking-widest uppercase">Com_Link</h3>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button 
-                                className="bg-v-accent/20 hover:bg-v-accent/40 text-v-accent border border-v-accent/50 text-[10px] font-bold px-2 py-1 uppercase tracking-widest flex items-center transition-colors"
-                                onClick={createNewSession} title="New Session"
-                            >
-                                <span className="material-symbols-outlined text-[12px]">add</span>
-                            </button>
-                            <button 
-                                className="text-slate-400 hover:text-white p-1"
-                                onClick={() => setShowSessions(false)}
-                            >
-                                <span className="material-symbols-outlined text-[18px]">close</span>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    {/* Model Selector */}
-                    <div className="relative">
-                        <select 
-                            className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 appearance-none outline-none focus:ring-0 rounded-none cursor-pointer"
-                            value={model} 
-                            onChange={(e) => setModel(e.target.value)}
-                        >
-                            {MODEL_OPTIONS.map(m => (
-                                <option key={m.value} value={m.value}>{m.label}</option>
-                            ))}
-                        </select>
-                        <span className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-v-accent pointer-events-none text-[16px]">expand_more</span>
-                    </div>
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*,application/pdf,.txt,.md,.json,.csv,.html,.css,.js,.ts,.tsx,.jsx,.py" className="hidden" multiple />
 
-                    {/* Link to Project (optional) */}
-                    <div className="relative">
-                        <label className="text-[9px] text-slate-400 font-bold tracking-widest uppercase mb-1 block">LINK_TO_PROJECT</label>
-                        <select
-                            className="w-full bg-v-bg brutalist-border text-xs text-v-accent p-2 appearance-none outline-none focus:ring-0 rounded-none cursor-pointer"
-                            value={selectedPipelineId}
-                            onChange={(e) => setSelectedPipelineId(e.target.value)}
-                        >
-                            <option value="">[ NEW_PROJECT ]</option>
-                            {linkablePipelines.map(p => (
-                                <option key={p.id} value={p.id}>
-                                    {(p.name || 'unnamed').replace(/\s+/g, '_').toUpperCase()} [{p.phase}]
-                                </option>
-                            ))}
-                        </select>
-                        <span className="material-symbols-outlined absolute right-2 bottom-2 text-v-accent pointer-events-none text-[16px]">expand_more</span>
-                    </div>
-
-                    {/* NEW_PROJECT Configuration */}
-                    {!selectedPipelineId && (
-                        <>
-                            {/* 🔐 Secrets Vault */}
-                            <div className="brutalist-border">
-                                <button
-                                    className="w-full flex items-center justify-between px-2 py-1.5 text-[9px] text-slate-400 font-bold tracking-widest uppercase hover:text-v-accent transition-colors"
-                                    onClick={() => setSecretsExpanded(!secretsExpanded)}
-                                >
-                                    <span>🔐 SECRETS_VAULT {secrets.length > 0 && `(${secrets.length})`}</span>
-                                    <span className="material-symbols-outlined text-[14px]">{secretsExpanded ? 'expand_less' : 'expand_more'}</span>
-                                </button>
-                                {secretsExpanded && (
-                                    <div className="px-2 pb-2 flex flex-col gap-1.5">
-                                        {secrets.map((s, i) => (
-                                            <div key={i} className="flex gap-1 items-center">
-                                                <input
-                                                    className="flex-1 bg-v-bg border border-slate-700 text-[10px] text-v-accent p-1.5 outline-none rounded-none placeholder:text-slate-600 uppercase font-mono"
-                                                    value={s.key}
-                                                    onChange={(e) => {
-                                                        const updated = [...secrets];
-                                                        updated[i] = { ...s, key: e.target.value };
-                                                        setSecrets(updated);
-                                                    }}
-                                                    placeholder="KEY"
-                                                    spellCheck="false"
-                                                />
-                                                <input
-                                                    className="flex-1 bg-v-bg border border-slate-700 text-[10px] text-v-accent p-1.5 outline-none rounded-none placeholder:text-slate-600 font-mono"
-                                                    type={secretsVisible.has(i) ? "text" : "password"}
-                                                    value={s.value}
-                                                    onChange={(e) => {
-                                                        const updated = [...secrets];
-                                                        updated[i] = { ...s, value: e.target.value };
-                                                        setSecrets(updated);
-                                                    }}
-                                                    placeholder="value"
-                                                    spellCheck="false"
-                                                />
-                                                <button
-                                                    className="text-slate-600 hover:text-v-accent shrink-0 transition-colors"
-                                                    onClick={() => {
-                                                        setSecretsVisible(prev => {
-                                                            const next = new Set(prev);
-                                                            next.has(i) ? next.delete(i) : next.add(i);
-                                                            return next;
-                                                        });
-                                                    }}
-                                                    title={secretsVisible.has(i) ? "Hide" : "Show"}
-                                                    type="button"
-                                                >
-                                                    <span className="material-symbols-outlined text-[14px]">{secretsVisible.has(i) ? 'visibility_off' : 'visibility'}</span>
-                                                </button>
-                                                <button
-                                                    className="text-v-alert hover:text-red-400 shrink-0"
-                                                    onClick={() => setSecrets(secrets.filter((_, j) => j !== i))}
-                                                    title="Remove"
-                                                >
-                                                    <span className="material-symbols-outlined text-[14px]">close</span>
-                                                </button>
-                                            </div>
-                                        ))}
-                                        <button
-                                            className="w-full text-[9px] text-slate-500 hover:text-v-accent border border-dashed border-slate-700 hover:border-v-accent py-1 transition-colors uppercase tracking-widest"
-                                            onClick={() => setSecrets([...secrets, { key: '', value: '' }])}
-                                        >
-                                            + ADD_SECRET
-                                        </button>
-                                        <p className="text-[8px] text-slate-600 leading-tight mt-0.5">
-                                            Injected into .env — never sent to AI
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        </>
-                    )}
+            {/* Drag overlay */}
+            {dragOver && (
+                <div className="absolute inset-0 z-50 bg-surface-0/90 flex flex-col items-center justify-center pointer-events-none rounded-xl">
+                    <span className="material-symbols-outlined text-5xl text-v-accent mb-3 animate-bounce">upload_file</span>
+                    <span className="text-v-accent text-sm font-semibold">Drop files here</span>
                 </div>
-                
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 flex flex-col gap-2 relative">
-                    <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:10px_10px] pointer-events-none opacity-20" />
-                    
-                    {sessions.map(s => {
-                        const isActive = activeSession?.id === s.id;
-                        const modelLabel = MODEL_OPTIONS.find(m => m.value === s.model)?.label || s.model || 'N/A';
-                        const linkedPipeline = pipelines.find(p => p.id === (s as any).projectId);
-                        const chatTitle = linkedPipeline
-                            ? `📦 ${linkedPipeline.name?.replace(/\s+/g, '_').toUpperCase() || 'PROJECT'}`
-                            : (s.messages?.[0]?.content?.slice(0, 30) || `SESSION_${(s.id || '').slice(0,6)}`);
-                        const linkedProject = !!(s as any).projectId;
-                        return (
-                            <div
-                                key={s.id}
-                                className={`flex items-center gap-3 p-3 cursor-pointer brutalist-border-b transition-colors relative z-10 ${
-                                    isActive 
-                                    ? 'bg-v-accent text-v-bg font-bold' 
-                                    : 'bg-transparent text-slate-400 hover:bg-v-accent hover:text-v-bg'
-                                }`}
-                                onClick={() => selectSession(s)}
-                            >
-                                <span className="material-symbols-outlined text-[16px] shrink-0">{linkedProject ? 'deployed_code' : 'chat_bubble'}</span>
-                                <div className="flex-1 overflow-hidden flex flex-col">
-                                    <span className="text-xs font-bold tracking-wider truncate">
-                                        {chatTitle}
-                                    </span>
-                                    <span className={`text-[9px] uppercase tracking-widest monospaced truncate mt-0.5 ${isActive ? 'opacity-70' : 'opacity-50'}`}>
-                                        🤖 {modelLabel}
-                                    </span>
-                                    {linkedProject && !linkedPipeline && (
-                                        <span className={`text-[9px] uppercase tracking-widest monospaced truncate mt-0.5 ${isActive ? 'opacity-70' : 'opacity-50'}`}>
-                                            🔗 LINKED_PROJECT
-                                        </span>
-                                    )}
-                                </div>
-                                <button
-                                    className={`p-1 rounded opacity-0 transition-opacity hover:bg-v-alert/20 text-v-alert ${isActive ? 'opacity-100 hover:text-white' : 'group-hover:opacity-100'}`}
-                                    onClick={(e) => { e.stopPropagation(); handleDeleteSession(s.id); }}
-                                    title="Purge Com_Link"
-                                >
-                                    <span className="material-symbols-outlined text-[14px]">delete</span>
-                                </button>
-                            </div>
-                        );
-                    })}
-                    {sessions.length === 0 && (
-                        <div className="p-4 text-center text-[10px] text-slate-500 uppercase tracking-widest leading-relaxed border border-dashed border-border-muted m-2 relative z-10 bg-black/50">
-                            NO COM_LINKS ACTIVE.<br/>ESTABLISH NEW CONNECTION.
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Backdrop for sessions drawer */}
-            {showSessions && (
-                <div 
-                    className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm transition-opacity"
-                    onClick={() => setShowSessions(false)}
-                />
             )}
 
-            {/* Chat main area */}
-            <div
-                className={`flex-1 flex flex-col relative bg-v-bg overflow-hidden scanline ${dragOver ? 'ring-2 ring-v-accent ring-inset' : ''}`}
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-            >
-                {/* Hidden file input */}
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    accept="image/*,application/pdf,.txt,.md,.json,.csv,.html,.css,.js,.ts,.tsx,.jsx,.py"
-                    className="hidden"
-                    multiple
-                />
+            {!activeSession ? (
+                /* ════════════ WELCOME SCREEN ════════════ */
+                <div className="flex-1 flex flex-col items-center justify-center px-4 md:px-8">
+                    <div className="w-full max-w-2xl flex flex-col items-center flex-1 justify-center -mt-8">
+                        {/* Greeting */}
+                        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="text-center mb-10">
+                            <h1 className="text-3xl md:text-4xl font-headline font-bold text-text-primary tracking-tight mb-2">
+                                What shall we build?
+                            </h1>
+                            <p className="text-text-secondary text-sm">
+                                Describe your idea — VEIST agents will plan, code, and deploy it autonomously.
+                            </p>
+                        </motion.div>
 
-                {/* Drag overlay */}
-                {dragOver && (
-                    <div className="absolute inset-0 z-50 bg-v-bg/90 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="material-symbols-outlined text-6xl text-v-accent mb-4 animate-bounce">upload_file</span>
-                        <span className="text-v-accent text-sm font-black tracking-widest uppercase">DROP FILES HERE</span>
-                    </div>
-                )}
-
-                {!activeSession ? (
-                    <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 relative z-10 w-full">
-                        {/* Thin Top Bar for config */}
-                        <div className="absolute top-0 left-0 right-0 py-3 px-4 flex items-center justify-between border-b border-[#2A2F35] bg-[#0E1318]/90 backdrop-blur-md">
-                            <button 
-                                className="text-slate-400 hover:text-white flex items-center gap-2 transition-colors"
-                                onClick={() => setShowSessions(true)}
-                            >
-                                <span className="material-symbols-outlined text-[20px]">menu</span>
-                                <span className="text-[11px] font-bold tracking-widest uppercase hidden md:inline">Historique</span>
-                            </button>
-                            <div className="flex items-center gap-4">
-                                {/* Configuration quick access */}
-                                <div className="flex items-center gap-2 bg-[#1A1F25] px-2 py-1 rounded">
-                                    <span className="material-symbols-outlined text-v-accent text-[14px]">tune</span>
-                                    <select 
-                                        className="bg-transparent border-none text-[11px] text-slate-300 outline-none cursor-pointer focus:ring-0 appearance-none font-bold tracking-wider"
-                                        value={model} 
-                                        onChange={(e) => setModel(e.target.value)}
-                                    >
-                                        {MODEL_OPTIONS.map(m => (
-                                            <option key={m.value} value={m.value} className="bg-v-bg">{m.label}</option>
+                        {/* Input Pill */}
+                        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.4 }} className="w-full">
+                            <div className="input-pill p-2.5 flex flex-col gap-2">
+                                {/* Files preview inside pill */}
+                                {files.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 px-2 pt-1">
+                                        {files.map((f, i) => (
+                                            <div key={i} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-pill text-xs ${f.error ? 'bg-status-error/10 text-status-error border border-status-error/20' : 'bg-surface-4 text-text-secondary border border-surface-6/50'}`}>
+                                                {f.thumbnail ? <img src={f.thumbnail} alt="" className="w-4 h-4 rounded object-cover" /> : <span className="material-symbols-outlined text-[13px]">description</span>}
+                                                <span className="truncate max-w-[100px] text-2xs font-medium">{f.name}</span>
+                                                <button className="hover:text-text-primary ml-0.5" onClick={() => removeFile(i)}><span className="material-symbols-outlined text-[12px]">close</span></button>
+                                            </div>
                                         ))}
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* BIG SPOTLIGHT SEARCH */}
-                        <div className="w-full max-w-2xl flex flex-col items-center justify-center flex-1 -mt-10">
-                            <span className="material-symbols-outlined text-5xl text-v-accent/20 mb-6 font-light">tips_and_updates</span>
-                            <h2 className="text-xl md:text-3xl font-black text-white tracking-tight text-center mb-8 font-sans">Que voulez-vous construire aujourd'hui ?</h2>
-                            
-                            <div className="w-full relative group">
-                                <div className="absolute -inset-1 bg-gradient-to-r from-v-accent/30 to-v-accent/0 rounded-xl blur-lg opacity-25 group-hover:opacity-60 transition duration-1000 group-hover:duration-200"></div>
-                                <div className="relative flex items-center bg-[#0B0F14] border border-[#2A2F35] focus-within:border-v-accent rounded-xl shadow-2xl p-2 gap-2 transition-colors">
-                                    <button
-                                        className="shrink-0 text-slate-500 hover:text-white p-2 self-start transition-colors tooltip mt-1"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        title="Joindre des fichiers"
-                                    >
-                                        <span className="material-symbols-outlined text-[22px]">attach_file</span>
+                                    </div>
+                                )}
+                                <div className="flex items-end gap-2">
+                                    <button className="shrink-0 p-2 text-text-tertiary hover:text-text-primary transition-colors" onClick={() => fileInputRef.current?.click()} title="Attach files">
+                                        <span className="material-symbols-outlined text-[20px]">attach_file</span>
                                     </button>
                                     <textarea
                                         ref={textareaRef}
-                                        className="w-full bg-transparent p-3 text-sm md:text-[15px] text-white placeholder:text-slate-500 focus:outline-none focus:ring-0 resize-none min-h-[48px] max-h-[250px] overflow-y-auto leading-relaxed custom-scrollbar"
+                                        className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted resize-none focus:outline-none py-2 leading-relaxed max-h-[200px] overflow-y-auto custom-scrollbar"
                                         value={input}
                                         onChange={(e) => setInput(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                if (input.trim() || files.length > 0) {
-                                                    handleInitialSearch();
-                                                }
-                                            }
-                                        }}
-                                        placeholder="Décrivez votre idée, collez un lien GitHub ou demandez une modification..."
-                                        disabled={sending || launching}
-                                        spellCheck="false"
+                                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (input.trim() || files.length > 0) handleInitialSearch(); } }}
+                                        onPaste={handlePaste}
+                                        placeholder="Describe your idea, paste a GitHub link, or ask anything..."
+                                        disabled={sending}
+                                        rows={1}
                                     />
-                                    <button
-                                        className={`shrink-0 h-[48px] w-[48px] flex items-center justify-center rounded-lg transition-all self-end mb-[2px] ${
-                                            (input.trim() || files.length > 0)
-                                            ? 'bg-v-accent text-v-bg hover:opacity-90 shadow-lg'
-                                            : 'bg-transparent text-slate-600 cursor-not-allowed opacity-50'
-                                        }`}
-                                        onClick={handleInitialSearch}
-                                        disabled={(!input.trim() && files.length === 0) || sending || launching}
-                                    >
-                                        {(sending || launching) ? (
-                                            <span className="material-symbols-outlined text-[24px] animate-spin">sync</span>
-                                        ) : (
-                                            <span className="material-symbols-outlined text-[24px]">arrow_upward</span>
-                                        )}
-                                    </button>
+                                    {/* Model picker + Send */}
+                                    <div className="flex items-center gap-1.5 shrink-0 pb-0.5">
+                                        <div className="relative">
+                                            <button className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-2xs text-text-tertiary hover:text-text-secondary hover:bg-surface-4 transition-all font-medium" onClick={() => setShowModelPicker(!showModelPicker)}>
+                                                <span className="material-symbols-outlined text-[14px]">smart_toy</span>
+                                                <span className="hidden sm:inline">{selectedModelLabel}</span>
+                                                <span className="material-symbols-outlined text-[14px]">expand_more</span>
+                                            </button>
+                                            {showModelPicker && (
+                                                <div className="absolute bottom-full right-0 mb-2 w-56 bg-surface-3 border border-surface-6 rounded-xl shadow-elevated p-1.5 z-50 animate-fade-in">
+                                                    {MODEL_OPTIONS.map(m => (
+                                                        <button key={m.value} className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all ${model === m.value ? 'bg-accent-muted text-v-accent font-medium' : 'text-text-secondary hover:bg-surface-4 hover:text-text-primary'}`}
+                                                            onClick={() => { setModel(m.value); setShowModelPicker(false); }}>{m.label}</button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <button
+                                            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${(input.trim() || files.length > 0) ? 'bg-v-accent text-surface-0 hover:shadow-glow-sm' : 'bg-surface-4 text-text-muted cursor-not-allowed'}`}
+                                            onClick={() => handleInitialSearch()}
+                                            disabled={(!input.trim() && files.length === 0) || sending}
+                                        >
+                                            {sending ? <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span> : <span className="material-symbols-outlined text-[18px]">arrow_upward</span>}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                            
-                            {/* Attached Files Preview for Spotlight */}
-                            {files.length > 0 && (
-                                <div className="w-full flex justify-start flex-wrap gap-2 mt-4">
-                                    {files.map((f, i) => (
-                                        <div key={i} className={`flex items-center gap-1.5 p-1.5 px-3 bg-[#1A1F25] border ${f.error ? 'border-v-alert' : 'border-[#2A2F35]'} rounded-full shadow-sm`}>
-                                            {f.thumbnail ? (
-                                                <img src={f.thumbnail} alt="preview" className="w-4 h-4 rounded-full object-cover shrink-0" />
-                                            ) : (
-                                                <span className="material-symbols-outlined text-slate-400 text-[14px] shrink-0">description</span>
+                        </motion.div>
+
+                        {/* Quick Actions */}
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="flex flex-wrap gap-2 mt-5 justify-center">
+                            {QUICK_ACTIONS.map(a => (
+                                <button key={a.label} className="action-chip" onClick={() => { setInput(a.desc + ': '); textareaRef.current?.focus(); }}>
+                                    <span className="material-symbols-outlined text-[16px]">{a.icon}</span>
+                                    {a.label}
+                                </button>
+                            ))}
+                        </motion.div>
+                    </div>
+                </div>
+            ) : (
+                /* ════════════ ACTIVE CHAT ════════════ */
+                <>
+                    {/* Messages */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar px-4 md:px-8 py-6 flex flex-col gap-5">
+                        {activeSession.messages.length === 0 && (
+                            <div className="text-center py-8 text-text-tertiary text-sm">
+                                <span className="material-symbols-outlined text-2xl text-text-muted block mb-2">chat</span>
+                                Session ready. Send a message to start.
+                            </div>
+                        )}
+                        <AnimatePresence initial={false}>
+                            {activeSession.messages.map((msg, i) => {
+                                const isUser = msg.role === 'user';
+                                const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : '';
+                                return (
+                                    <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={isUser ? 'msg-user' : 'msg-assistant max-w-[85%]'}>
+                                            {!isUser && (
+                                                <div className="flex items-center gap-2 mb-1.5">
+                                                    <div className="w-5 h-5 rounded-md bg-v-accent/15 flex items-center justify-center"><span className="text-v-accent text-2xs font-bold">V</span></div>
+                                                    <span className="text-2xs text-text-tertiary font-medium">VEIST</span>
+                                                    <span className="text-2xs text-text-muted">{ts}</span>
+                                                </div>
                                             )}
-                                            <span className={`text-[10px] font-bold truncate max-w-[120px] ${f.error ? 'text-v-alert' : 'text-slate-300'}`}>
-                                                {f.name}
-                                            </span>
-                                            <button className="text-slate-500 hover:text-white shrink-0 ml-1 rounded-full p-0.5 hover:bg-white/10" onClick={() => removeFile(i)}>
-                                                <span className="material-symbols-outlined text-[12px] block">close</span>
-                                            </button>
+                                            <div className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${isUser ? 'text-text-primary' : 'text-text-secondary'}`}>
+                                                {msg.content}
+                                            </div>
+                                            {isUser && <div className="text-2xs text-text-muted mt-1.5 text-right">{ts}</div>}
                                         </div>
-                                    ))}
+                                    </motion.div>
+                                );
+                            })}
+                        </AnimatePresence>
+
+                        {/* Typing indicator */}
+                        {sending && (
+                            <div className="flex justify-start">
+                                <div className="msg-assistant flex items-center gap-2 py-3">
+                                    <div className="w-5 h-5 rounded-md bg-v-accent/15 flex items-center justify-center"><span className="text-v-accent text-2xs font-bold">V</span></div>
+                                    <div className="flex gap-1"><div className="typing-dot"/><div className="typing-dot"/><div className="typing-dot"/></div>
                                 </div>
-                            )}
+                            </div>
+                        )}
+                        <div ref={bottomRef} className="h-2" />
+                    </div>
+
+                    {/* Bottom Input Bar */}
+                    <div className="px-3 md:px-6 pb-4 pt-2 shrink-0">
+                        {/* Files */}
+                        {files.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-2 px-1">
+                                {files.map((f, i) => (
+                                    <div key={i} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-pill text-2xs ${f.error ? 'bg-status-error/10 text-status-error' : 'bg-surface-4 text-text-secondary'}`}>
+                                        <span className="material-symbols-outlined text-[12px]">{f.thumbnail ? 'image' : 'description'}</span>
+                                        <span className="truncate max-w-[90px] font-medium">{f.name}</span>
+                                        <button onClick={() => removeFile(i)}><span className="material-symbols-outlined text-[11px]">close</span></button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <div className="input-pill p-2 flex items-end gap-2">
+                            <button className="shrink-0 p-1.5 text-text-tertiary hover:text-text-primary transition-colors" onClick={() => fileInputRef.current?.click()}>
+                                <span className="material-symbols-outlined text-[18px]">attach_file</span>
+                            </button>
+                            <textarea
+                                ref={textareaRef}
+                                className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted resize-none focus:outline-none py-1.5 leading-relaxed max-h-[160px] overflow-y-auto custom-scrollbar"
+                                value={input} onChange={(e) => setInput(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                                onPaste={handlePaste}
+                                placeholder={selectedPipelineId ? "Describe modifications..." : "Send a message..."}
+                                disabled={sending || launching} rows={1}
+                            />
+                            <div className="flex items-center gap-1.5 shrink-0 pb-0.5">
+                                {activeSession.messages.length >= 2 && (
+                                    <button
+                                        className={`px-3 py-1.5 rounded-lg text-2xs font-semibold transition-all flex items-center gap-1.5 ${selectedPipelineId ? 'text-v-alert hover:bg-v-alert/10 border border-v-alert/30' : 'text-v-accent hover:bg-accent-muted border border-v-accent/30'}`}
+                                        onClick={handleAction} disabled={launching || sending}
+                                    >
+                                        <span className={`material-symbols-outlined text-[14px] ${launching ? 'animate-spin' : ''}`}>{launching ? 'progress_activity' : (selectedPipelineId ? 'edit_note' : 'rocket_launch')}</span>
+                                        {launching ? 'Running...' : (selectedPipelineId ? 'Modify' : 'Deploy')}
+                                    </button>
+                                )}
+                                <button
+                                    className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${(input.trim() || files.length > 0) ? 'bg-v-accent text-surface-0 hover:shadow-glow-sm' : 'bg-surface-4 text-text-muted cursor-not-allowed'}`}
+                                    onClick={handleSend} disabled={(!input.trim() && files.length === 0) || sending || launching}
+                                >
+                                    {sending ? <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> : <span className="material-symbols-outlined text-[16px]">arrow_upward</span>}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                ) : (
-                    <>
-                        {/* Minimalist Top Header */}
-                        <div className="flex items-center gap-3 px-3 py-1.5 border-b border-[#2A2F35] bg-[#0E1318] z-10 sticky top-0 backdrop-blur-md">
-                            <button 
-                                className="shrink-0 p-1 hover:bg-white/10 transition-colors rounded text-slate-400 hover:text-v-accent flex items-center justify-center"
-                                onClick={() => setShowSessions(true)}
-                            >
-                                <span className="material-symbols-outlined text-[16px]">menu</span>
-                            </button>
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest shrink-0">~ / COM_LINK /</span>
-                                {selectedPipelineName && (
-                                    <span className="text-[10px] text-v-accent font-bold truncate">
-                                        {selectedPipelineName.replace(/\s+/g, '_').toUpperCase()}
-                                    </span>
-                                )}
-                            </div>
-                            <span className={`text-[8px] uppercase tracking-widest px-1.5 py-0.5 rounded-sm shrink-0 ${selectedPipelineId ? 'bg-v-alert/20 text-v-alert' : 'bg-v-accent/20 text-v-accent'}`}>
-                                {selectedPipelineId ? '[ MODIFY ]' : '[ NEW ]'}
-                            </span>
-                        </div>
-
-                        {/* Messages Area */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 md:p-6 flex flex-col gap-6 relative z-10 text-xs md:text-[13px] leading-relaxed" id="terminal-display">
-                            {activeSession.messages.length === 0 && (
-                                <div className="text-slate-500 text-[10px] uppercase font-bold tracking-widest border-l-2 border-[#2A2F35] pl-3 py-1">
-                                    <span className="text-v-accent">[HANDSHAKE_VERIFIED]</span>{' '}
-                                    {selectedPipelineId 
-                                        ? 'LINK ESTABLISHED. DESCRIBE MODIFICATIONS FOR TARGET NODE...'
-                                        : 'CONNECTION ESTABLISHED. INITIALIZING DATA STREAM... AWAITING INPUT PARAMETERS...'}
-                                </div>
-                            )}
-                            <AnimatePresence initial={false}>
-                                {activeSession.messages.map((msg, i) => {
-                                    const ts = msg.timestamp 
-                                        ? new Date(msg.timestamp).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'})
-                                        : '';
-                                    const isUser = msg.role === 'user';
-                                    return (
-                                        <motion.div
-                                            key={i}
-                                            className={`flex flex-col gap-1 max-w-4xl ${isUser ? 'ml-8' : 'mr-8'}`}
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{ duration: 0.2 }}
-                                        >
-                                            <div className="flex items-center gap-2 text-[10px] uppercase font-bold tracking-wider mb-1">
-                                                {isUser ? (
-                                                    <>
-                                                        <span className="text-v-accent">OPERATOR_01</span>
-                                                        <span className="text-slate-600 font-normal">[{ts}]</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <span className="text-white">SYS_RES</span>
-                                                        <span className="text-slate-600 font-normal">[{ts}]</span>
-                                                    </>
-                                                )}
-                                            </div>
-                                            <div className={`pl-3 py-0.5 ${isUser ? 'border-l-2 border-v-accent text-slate-300' : 'border-l-2 border-slate-600 text-slate-100'}`}>
-                                                <div className="whitespace-pre-wrap font-mono break-words">{msg.content}</div>
-                                            </div>
-                                        </motion.div>
-                                    );
-                                })}
-                            </AnimatePresence>
-                            
-                            {sending && (
-                                <div className="flex flex-col gap-1 max-w-4xl mr-8">
-                                    <div className="flex items-center gap-2 text-[10px] uppercase font-bold tracking-wider mb-1">
-                                        <span className="text-white animate-pulse">SYS_RES</span>
-                                    </div>
-                                    <div className="pl-3 py-0.5 border-l-2 border-slate-600">
-                                        <span className="material-symbols-outlined text-v-accent animate-spin text-[14px] align-middle mr-2">sync</span>
-                                        <span className="text-[11px] text-slate-500 uppercase tracking-widest font-bold align-middle">Processing stream...</span>
-                                    </div>
-                                </div>
-                            )}
-                            <div ref={bottomRef} className="h-4" />
-                        </div>
-
-                        {/* Input Area - Condensed Terminal Style */}
-                        <div className="px-3 pb-3 md:px-4 md:pb-4 pt-2 border-t flex flex-col gap-2 border-[#2A2F35] bg-[#0B0F14] relative z-10 w-full shrink-0">
-                            {/* Attached Files Preview */}
-                            {files.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mb-1 pl-2">
-                                    {files.map((f, i) => (
-                                        <div key={i} className={`flex items-center gap-1.5 p-1 bg-[#11161D] border ${f.error ? 'border-v-alert' : 'border-[#2A2F35]'} max-w-[160px] rounded-sm shadow-sm`}>
-                                            {f.thumbnail ? (
-                                                <img src={f.thumbnail} alt="preview" className="w-5 h-5 object-cover shrink-0" />
-                                            ) : (
-                                                <span className="material-symbols-outlined text-slate-400 text-[14px] shrink-0">description</span>
-                                            )}
-                                            <span className={`text-[9px] font-bold truncate flex-1 ${f.error ? 'text-v-alert' : 'text-slate-400'}`}>
-                                                {f.name}
-                                            </span>
-                                            <button className="text-slate-500 hover:text-white shrink-0 ml-1" onClick={() => removeFile(i)}>
-                                                <span className="material-symbols-outlined text-[12px]">close</span>
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* Streamlined Input Bar */}
-                            <div className="flex items-end gap-2 w-full">
-                                <div className="relative flex-1 group flex items-ends border border-[#2A2F35] focus-within:border-v-accent bg-[#11161D] transition-colors rounded-sm overflow-hidden">
-                                    <div className="shrink-0 flex items-center justify-center p-2 text-v-accent font-bold select-none h-[42px]">
-                                        <span className="material-symbols-outlined text-[16px]">chevron_right</span>
-                                    </div>
-                                    <textarea
-                                        ref={textareaRef}
-                                        className="w-full bg-transparent p-3 pl-0 text-xs md:text-[13px] text-white placeholder:text-slate-600 focus:outline-none focus:ring-0 font-mono resize-none min-h-[42px] max-h-[160px] overflow-y-auto leading-relaxed"
-                                        value={input}
-                                        onChange={(e) => setInput(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                if (input.trim() || files.length > 0) handleSend();
-                                            }
-                                        }}
-                                        placeholder={selectedPipelineId ? "Inject instructions to modify project constraint parameters..." : "Initiate standard communication protocol or project specs..."}
-                                        disabled={sending || launching}
-                                        spellCheck="false"
-                                    />
-                                    <button
-                                        className="shrink-0 text-slate-500 hover:text-v-accent p-2 self-start h-[42px] flex items-center justify-center transition-colors tooltip"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        title="Attach context files"
-                                    >
-                                        <span className="material-symbols-outlined text-[18px]">attach_file</span>
-                                    </button>
-                                </div>
-                                
-                                <button
-                                    className={`shrink-0 h-[42px] px-3 md:px-5 flex items-center justify-center gap-1.5 font-bold text-[10px] md:text-xs uppercase tracking-widest rounded-sm transition-all shadow-md group ${
-                                        (input.trim() || files.length > 0)
-                                        ? 'bg-v-accent text-v-bg hover:bg-white'
-                                        : 'bg-[#2A2F35] text-slate-500 cursor-not-allowed opacity-50'
-                                    }`}
-                                    onClick={handleSend}
-                                    disabled={(!input.trim() && files.length === 0) || sending || launching}
-                                >
-                                    {(sending || launching) ? (
-                                        <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
-                                    ) : (
-                                        <span className="material-symbols-outlined text-[16px] group-hover:translate-x-0.5 transition-transform">send</span>
-                                    )}
-                                    <span className="hidden sm:inline">Commit</span>
-                                </button>
-                                
-                                {activeSession.messages.length >= 2 && (
-                                     <button
-                                         className={`shrink-0 h-[42px] px-3 md:px-5 flex items-center justify-center gap-1.5 font-bold text-[10px] md:text-xs uppercase tracking-widest rounded-sm transition-all shadow-md group opacity-90 hover:opacity-100 ${
-                                             selectedPipelineId
-                                             ? 'border border-v-alert text-v-alert hover:bg-v-alert hover:text-v-bg'
-                                             : 'border border-v-accent text-v-accent hover:bg-v-accent hover:text-v-bg'
-                                         }`}
-                                         onClick={handleAction}
-                                         disabled={launching || sending}
-                                     >
-                                         <span className={`material-symbols-outlined text-[16px] ${launching ? 'animate-bounce' : ''}`}>
-                                             {selectedPipelineId ? 'edit_square' : 'rocket_launch'}
-                                         </span>
-                                         <span className="hidden sm:inline">{launching ? 'EXEC...' : (selectedPipelineId ? 'MODIFY' : 'DEPLOY')}</span>
-                                     </button>
-                                )}
-                            </div>
-                        </div>
-                    </>
-                )}
-            </div>
-        </motion.div>
+                </>
+            )}
+        </div>
     );
 }

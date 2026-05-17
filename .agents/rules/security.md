@@ -40,7 +40,7 @@ Le fichier `scripts/check-secrets.js` scanne automatiquement chaque commit pour 
 ### Configuration actuelle
 | Rule ID | Protocol | Port | Source | Action |
 |---------|----------|------|--------|--------|
-| 780807 | TCP | 22 | any | accept |
+| 780807 | TCP | 22 | `92.184.146.2` (owner IP only) | accept |
 | 780808 | TCP | 80 | any | accept |
 | 780809 | TCP | 443 | any | accept |
 
