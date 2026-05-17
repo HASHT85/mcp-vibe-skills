@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/VEIST-Multi--Agent%20Orchestrator-7c3aed?style=for-the-badge&labelColor=1e1b4b" alt="VEIST" />
+  <img src="assets/logo.png" alt="VEIST Logo" width="120" />
 </p>
 
 <h1 align="center">VEIST</h1>
