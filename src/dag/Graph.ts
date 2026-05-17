@@ -1,4 +1,4 @@
-// @ts-ignore
+// QUAL-27: Clean import (no @ts-ignore needed)
 import { EventEmitter } from "node:events";
 import type { DagNode, NodeContext } from "./Node.js";
 
@@ -133,6 +133,18 @@ export class GraphManager extends (EventEmitter as any) {
                                 checkExecution();
                             });
                         }
+                    }
+                }
+
+                // LOGIC-03: Deadlock detection — if no node is RUNNING and no node is runnable,
+                // but we haven't resolved/rejected yet, then we have a deadlock (orphaned dependency).
+                const anyRunning = Array.from(this.nodes.values()).some(n => n.status === "RUNNING");
+                if (!anyRunning) {
+                    const pendingNodes = Array.from(this.nodes.values()).filter(n => n.status === "PENDING");
+                    if (pendingNodes.length > 0) {
+                        this.running = false;
+                        const stuck = pendingNodes.map(n => `${n.id}(deps: ${n.dependencies.join(',')})`).join(', ');
+                        return reject(new Error(`Pipeline deadlock: nodes stuck in PENDING with unresolvable dependencies: ${stuck}`));
                     }
                 }
             };

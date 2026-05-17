@@ -13,7 +13,8 @@ const SECRETS_PATTERNS = [
     { name: 'GitHub Token', regex: new RegExp('(ghp|gho|ghu|ghs|ghr)_' + '[a-zA-Z0-9]{36}') },
     { name: 'Google API Key', regex: new RegExp('AIza' + '[0-9A-Za-z_-]{35}') },
     { name: 'AWS Access Key', regex: new RegExp('(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)' + '[A-Z0-9]{16}') },
-    { name: 'Generic Secret Prefix', regex: new RegExp('veist' + '_craft85|GPL\\?' + 'root85420|' + 'y-t\\?5FA6' + 'ZLLYYsx/f32P') },
+    // SEC-39: Generic high-entropy token detector (catches long base64-like secrets)
+    { name: 'Generic Long Token', regex: new RegExp('["''][a-zA-Z0-9_/+\\-]{40,}["'']') },
 ];
 
 try {

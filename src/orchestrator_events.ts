@@ -1,6 +1,8 @@
 import type { Pipeline, PipelineEvent, PipelinePhase, AgentStatus } from "./types.js";
 import * as crypto from "node:crypto";
 import { EventEmitter } from "node:events";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 export function addPipelineEvent(
     emitter: EventEmitter,
@@ -9,7 +11,7 @@ export function addPipelineEvent(
     role: string,
     emoji: string,
     action: string,
-    type: "info" | "success" | "warning" | "error" = "info"
+    type: PipelineEvent["type"] = "info"
 ) {
     const p = pipelines.get(id);
     if (!p) return;
@@ -23,7 +25,6 @@ export function addPipelineEvent(
         type
     };
     p.events.push(e);
-    // @ts-ignore
     emitter.emit("event", e);
 }
 
@@ -42,7 +43,6 @@ export function setAgentStatus(
         agent.status = status;
         if (action) agent.currentAction = action;
     }
-    // @ts-ignore
     emitter.emit("agent-status", { pipelineId: id, role, status, action });
 }
 
@@ -58,7 +58,6 @@ export function setPipelinePhase(
     p.phase = phase;
     if (error) p.error = error;
     p.updatedAt = new Date().toISOString();
-    // @ts-ignore
     emitter.emit("phase", { pipelineId: id, phase, error });
 }
 
@@ -98,9 +97,8 @@ export function addAgentTokenUsage(
     } else {
         // Try to load from cache
         try {
-            const fs = require('fs');
-            const path = require('path');
-            const cachePath = path.join(process.cwd(), '.openrouter_cache.json');
+            // SEC-31: Use persistent /data/ volume, matching openrouter_models.ts
+            const cachePath = path.join(path.dirname(process.env.STORE_PATH || '/data/store.json'), '.openrouter_cache.json');
             if (fs.existsSync(cachePath)) {
                 const models = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
                 const m = models.find((mod: any) => model.replace('openrouter/', '').includes(mod.id) || mod.id.includes(model.replace('openrouter/', '')));

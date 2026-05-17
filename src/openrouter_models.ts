@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-const CACHE_FILE = path.join(process.cwd(), '.openrouter_cache.json');
+// SEC-26: Use persistent /data/ volume instead of cwd (read-only in Docker)
+const CACHE_FILE = path.join(path.dirname(process.env.STORE_PATH || '/data/store.json'), '.openrouter_cache.json');
 const CACHE_TTL = 1000 * 60 * 60 * 12; // 12 hours
 
 export interface ModelPricing {
@@ -28,9 +29,14 @@ export async function fetchOpenRouterModels(): Promise<ModelPricing[]> {
     }
 
     try {
-        const response = await fetch("https://openrouter.ai/api/v1/models");
-        const json = await response.json();
-        const models = json.data as any[];
+        // QUAL-39: Add timeout to prevent hanging if OpenRouter is down
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15_000);
+        const response = await fetch("https://openrouter.ai/api/v1/models", { signal: controller.signal });
+        clearTimeout(timeout);
+        const json = await response.json() as Record<string, unknown>;
+        // QUAL-15: Validate response shape before processing
+        const models = Array.isArray(json.data) ? json.data as any[] : [];
 
         const parsedModels: ModelPricing[] = models.map(m => ({
             id: m.id,
@@ -82,8 +88,10 @@ export async function fetchOpenRouterModels(): Promise<ModelPricing[]> {
             .filter(m => m.context_length >= 8000) // Minimum useful context
             .sort((a, b) => a.pricing.prompt - b.pricing.prompt); // Sort by price ascending
 
-        // Save to cache
-        fs.writeFileSync(CACHE_FILE, JSON.stringify(filtered, null, 2));
+        // QUAL-40: Atomic cache write (tmp + rename) to prevent corruption on crash
+        const tmpFile = `${CACHE_FILE}.tmp`;
+        fs.writeFileSync(tmpFile, JSON.stringify(filtered, null, 2));
+        fs.renameSync(tmpFile, CACHE_FILE);
 
         return filtered;
     } catch (e) {

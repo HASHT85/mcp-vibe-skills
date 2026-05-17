@@ -1,5 +1,6 @@
 import express, { type Request, type Response } from "express";
 import cors from "cors";
+import helmet from "helmet";
 import crypto from "node:crypto";
 import { slugify } from "./orchestrator_utils.js";
 
@@ -16,8 +17,12 @@ import { quickDeployRouter } from "./quickDeploy.js";
 import rateLimit from "express-rate-limit";
 
 const app = express();
-const port = process.env.PORT || 3000;
 const storePath = process.env.STORE_PATH || '/data/store.json';
+
+// SEC-46: Security headers (HSTS, X-Frame-Options, CSP, noSniff, etc.)
+app.use(helmet({
+    contentSecurityPolicy: false,  // API-only — no HTML served
+}));
 
 // SEC-03: Restrict CORS to dashboard origin
 app.use(cors({
@@ -94,7 +99,6 @@ const authMiddleware = (req: Request, res: Response, next: Function) => {
     let user = "", pass = "";
     const authHeader = req.headers.authorization;
     const tokenQuery = req.query.token as string | undefined;  // SEC-04: token-based
-    const authQuery = req.query.auth as string | undefined;    // legacy (kept for compat)
 
     if (authHeader) {
         const decoded = Buffer.from(authHeader.split(' ')[1] || '', 'base64').toString();
@@ -102,12 +106,15 @@ const authMiddleware = (req: Request, res: Response, next: Function) => {
     } else if (tokenQuery && verifyToken(tokenQuery)) {
         // SEC-04: Valid ephemeral token — allow access
         return next();
-    } else if (authQuery) {
-        const decoded = Buffer.from(authQuery, 'base64').toString();
-        [user, pass] = decoded.split(':');
     }
 
-    if (user === ADMIN_USER && pass === ADMIN_PASS) {
+    // SEC-21: Timing-safe credential comparison to prevent timing attacks
+    const userMatch = user.length === (ADMIN_USER || '').length &&
+        crypto.timingSafeEqual(Buffer.from(user), Buffer.from(ADMIN_USER || ''));
+    const passMatch = pass.length === (ADMIN_PASS || '').length &&
+        crypto.timingSafeEqual(Buffer.from(pass), Buffer.from(ADMIN_PASS || ''));
+
+    if (userMatch && passMatch) {
         next();
     } else {
         return res.status(401).json({ error: 'Authentication required' });
@@ -123,6 +130,12 @@ app.use('/chat', authMiddleware);
 app.use('/api/quick-deploy', authMiddleware);
 app.use('/vps', authMiddleware);
 app.use('/embeddings', authMiddleware);
+// SEC-20: Protect events route (exposes pipeline activity history)
+app.use('/events', authMiddleware);
+// SEC-24: Protect auxiliary routes
+app.use('/skills', authMiddleware);
+app.use('/profiles', authMiddleware);
+app.use('/templates', authMiddleware);
 // Initialize Stores
 const agentsStore = new AgentsStore(storePath);
 const projectsStore = new ProjectsStore(storePath);
@@ -266,10 +279,10 @@ app.get("/pipeline/events/all", (_req: Request, res: Response) => {
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
-    // Send recent events from all pipelines
+    // PERF-12: Only take last 50 events per pipeline (pre-sorted), then merge
     const pipelines = orchestrator.listPipelines();
     const allEvents = pipelines
-        .flatMap(p => p.events)
+        .flatMap(p => p.events.slice(-50))
         .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
         .slice(-50);
 
@@ -299,6 +312,42 @@ app.post("/pipeline/:id/resume", async (req: Request, res: Response) => {
     res.json({ ok });
 });
 
+// QUAL-53: Shared helper — full cleanup (GitHub + Docker + orchestrator)
+async function cleanupPipelineResources(pipelineId: string): Promise<void> {
+    const pipeline = orchestrator.getPipeline(pipelineId);
+    if (!pipeline) return;
+
+    // 1. Delete GitHub repo (silently ignore errors)
+    if (pipeline.github) {
+        try {
+            const { deleteRepo } = await import('./github_api.js');
+            await deleteRepo(pipeline.github.owner, pipeline.github.repo);
+        } catch { /* Repo may already be deleted */ }
+    }
+
+    // 2. Delete Docker container + image (SEC-15: sanitized names)
+    try {
+        const { execSync } = await import("node:child_process");
+        const rawName = pipeline.name ? `veist-${slugify(pipeline.name)}-app` : `veist-${slugify(pipelineId)}-app`;
+        const containerName = sanitizeName(rawName);
+        let imageName = "";
+        try {
+            imageName = execSync(
+                `docker inspect --format="{{.Config.Image}}" ${containerName}`,
+                { encoding: "utf-8", timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }
+            ).trim();
+            if (imageName) sanitizeName(imageName);
+        } catch {}
+        try { execSync(`docker rm -f ${containerName}`, { timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] }); } catch {}
+        if (imageName) {
+            try { execSync(`docker rmi ${imageName}`, { timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] }); } catch {}
+        }
+    } catch {}
+
+    // 3. Delete from orchestrator
+    await orchestrator.deletePipeline(pipelineId);
+}
+
 // Delete pipeline (with full cleanup: GitHub + Docker + orchestrator)
 app.delete("/pipeline/:id", async (req: Request, res: Response) => {
     try {
@@ -306,38 +355,7 @@ app.delete("/pipeline/:id", async (req: Request, res: Response) => {
         if (!pipeline) {
             return res.status(404).json({ error: "pipeline_not_found" });
         }
-
-        // 1. Delete GitHub repo (silently ignore errors)
-        if (pipeline.github) {
-            try {
-                const { deleteRepo } = await import('./github_api.js');
-                await deleteRepo(pipeline.github.owner, pipeline.github.repo);
-            } catch {
-                // Repo may already be deleted
-            }
-        }
-
-        // 2. Delete Docker container + image (SEC-15: sanitized names)
-        try {
-            const { execSync } = await import("node:child_process");
-            const rawName = pipeline.name ? `veist-${slugify(pipeline.name)}-app` : `veist-${slugify(req.params.id)}-app`;
-            const containerName = sanitizeName(rawName);
-            let imageName = "";
-            try {
-                imageName = execSync(
-                    `docker inspect --format="{{.Config.Image}}" ${containerName}`,
-                    { encoding: "utf-8", timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }
-                ).trim();
-                if (imageName) sanitizeName(imageName);
-            } catch {}
-            try { execSync(`docker rm -f ${containerName}`, { timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] }); } catch {}
-            if (imageName) {
-                try { execSync(`docker rmi ${imageName}`, { timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] }); } catch {}
-            }
-        } catch {}
-
-        // 3. Delete from orchestrator
-        await orchestrator.deletePipeline(req.params.id);
+        await cleanupPipelineResources(req.params.id);
         res.json({ ok: true, id: req.params.id });
     } catch (err: any) {
         console.error("DELETE /pipeline/:id error:", err);
@@ -499,27 +517,20 @@ app.get("/projects", async (_req: Request, res: Response) => {
     }
 });
 
-// Delete project (+ GitHub repo + Dokploy)
+// Delete project (QUAL-53: uses shared cleanup — includes Docker cleanup)
 app.delete("/projects/:id", async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const pipeline = orchestrator.getPipeline(id);
-
-    if (pipeline) {
-        // Delete GitHub repo
-        if (pipeline.github) {
-            try {
-                const { deleteRepo } = await import('./github_api.js');
-                await deleteRepo(pipeline.github.owner, pipeline.github.repo);
-            } catch (err) {
-                console.error("Failed to delete GitHub repo:", err);
-            }
+    try {
+        const { id } = req.params;
+        const pipeline = orchestrator.getPipeline(id);
+        if (!pipeline) {
+            return res.status(404).json({ error: "project_not_found" });
         }
-
-        await orchestrator.deletePipeline(id);
-        return res.json({ success: true, id });
+        await cleanupPipelineResources(id);
+        res.json({ success: true, id });
+    } catch (err: any) {
+        console.error("DELETE /projects/:id error:", err);
+        res.status(500).json({ error: err.message });
     }
-
-    res.status(404).json({ error: "project_not_found" });
 });
 
 // ─────────────────────────────────────
@@ -527,14 +538,15 @@ app.delete("/projects/:id", async (req: Request, res: Response) => {
 // ─────────────────────────────────────
 
 app.get("/skills/trending", async (req: Request, res: Response) => {
-    const limit = req.query.limit ? Number(req.query.limit) : 10;
+    // SEC-48: Clamp limit to prevent abuse
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 200);
     const items = await fetchTrending(limit);
     res.json({ items });
 });
 
 app.get("/skills/search", async (req: Request, res: Response) => {
     const q = String(req.query.q ?? "");
-    const limit = req.query.limit ? Number(req.query.limit) : 10;
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 200);
     const items = await searchSkills(q, limit);
     res.json({ q, items });
 });
@@ -543,6 +555,11 @@ app.get("/skills/get", async (req: Request, res: Response) => {
     const owner = String(req.query.owner ?? "");
     const repo = String(req.query.repo ?? "");
     const skill = String(req.query.skill ?? "");
+    // SEC-47: Validate params to prevent path injection
+    const SKILL_PARAM_RE = /^[a-zA-Z0-9._-]+$/;
+    if (!owner || !repo || !skill || !SKILL_PARAM_RE.test(owner) || !SKILL_PARAM_RE.test(repo) || !SKILL_PARAM_RE.test(skill)) {
+        return res.status(400).json({ error: "Invalid owner/repo/skill parameter" });
+    }
     const detail = await fetchSkillDetail(owner, repo, skill);
     res.json(detail);
 });
@@ -650,12 +667,14 @@ app.delete("/agents/:id/skills", async (req: Request, res: Response) => {
 
 app.get("/containers", async (_req: Request, res: Response) => {
     try {
-        const { execSync } = await import("node:child_process");
-        // List ALL containers (not just veist- ones)
-        const rawAll = execSync(
+        const { exec } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        const execAsync = promisify(exec);
+        // PERF-11: Non-blocking docker ps (was execSync — blocked event loop)
+        const { stdout: rawAll } = await execAsync(
             `docker ps -a --format "{{json .}}"`,
             { encoding: "utf-8", timeout: 10000 }
-        ).trim();
+        );
 
         // Deduplicate by ID
         const seen = new Set<string>();
@@ -713,8 +732,10 @@ app.get("/containers", async (_req: Request, res: Response) => {
 app.post("/containers/:name/stop", async (req: Request, res: Response) => {
     try {
         const name = sanitizeName(req.params.name);
-        const { execSync } = await import("node:child_process");
-        execSync(`docker stop ${name}`, { timeout: 30000 });
+        const { exec } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        const execAsync = promisify(exec);
+        await execAsync(`docker stop ${name}`, { timeout: 30000 });
         res.json({ ok: true });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -724,8 +745,10 @@ app.post("/containers/:name/stop", async (req: Request, res: Response) => {
 app.post("/containers/:name/start", async (req: Request, res: Response) => {
     try {
         const name = sanitizeName(req.params.name);
-        const { execSync } = await import("node:child_process");
-        execSync(`docker start ${name}`, { timeout: 30000 });
+        const { exec } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        const execAsync = promisify(exec);
+        await execAsync(`docker start ${name}`, { timeout: 30000 });
         res.json({ ok: true });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -735,8 +758,10 @@ app.post("/containers/:name/start", async (req: Request, res: Response) => {
 app.post("/containers/:name/restart", async (req: Request, res: Response) => {
     try {
         const name = sanitizeName(req.params.name);
-        const { execSync } = await import("node:child_process");
-        execSync(`docker restart ${name}`, { timeout: 30000 });
+        const { exec } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        const execAsync = promisify(exec);
+        await execAsync(`docker restart ${name}`, { timeout: 30000 });
         res.json({ ok: true });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -746,18 +771,24 @@ app.post("/containers/:name/restart", async (req: Request, res: Response) => {
 app.delete("/containers/:name", async (req: Request, res: Response) => {
     try {
         const name = sanitizeName(req.params.name);
-        const { execSync } = await import("node:child_process");
+        const { exec } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        const execAsync = promisify(exec);
         let imageName = "";
         try {
-            imageName = execSync(
+            const { stdout } = await execAsync(
                 `docker inspect --format="{{.Config.Image}}" ${name}`,
                 { encoding: "utf-8", timeout: 5000 }
-            ).trim();
-            if (imageName) sanitizeName(imageName);
+            );
+            imageName = stdout.trim();
+            // QUAL-02: Validate image name — allow colons for image:tag format
+            if (imageName && !/^[a-zA-Z0-9][a-zA-Z0-9_./:@-]*$/.test(imageName)) {
+                imageName = ""; // reject invalid image name
+            }
         } catch {}
-        execSync(`docker rm -f ${name}`, { timeout: 30000 });
+        await execAsync(`docker rm -f ${name}`, { timeout: 30000 });
         if (imageName) {
-            try { execSync(`docker rmi ${imageName}`, { timeout: 30000 }); } catch {}
+            try { await execAsync(`docker rmi ${imageName}`, { timeout: 30000 }); } catch {}
         }
         res.json({ ok: true });
     } catch (err: any) {
@@ -771,8 +802,10 @@ app.get("/containers/:name/logs", async (req: Request, res: Response) => {
         // SEC-14: Validate lines as positive integer
         const rawLines = Number(req.query.lines);
         const lines = (Number.isInteger(rawLines) && rawLines > 0 && rawLines <= 5000) ? rawLines : 100;
-        const { execSync } = await import("node:child_process");
-        const logs = execSync(
+        const { exec } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        const execAsync = promisify(exec);
+        const { stdout: logs } = await execAsync(
             `docker logs --tail ${lines} ${name} 2>&1`,
             { encoding: "utf-8", timeout: 10000 }
         );
@@ -815,7 +848,8 @@ app.get("/pipeline/:id/secrets", async (req: Request, res: Response) => {
 
 // ─── VPS Monitoring (Hostinger API) ───
 const HOSTINGER_TOKEN = process.env.HOSTINGER_API_TOKEN;
-const VPS_ID = 1287719; // Main VPS
+// SEC-27: VPS_ID now configurable via env (was hardcoded — same fix as QUAL-11)
+const VPS_ID = parseInt(process.env.VPS_VM_ID || "1287719", 10);
 
 app.get("/vps/metrics", async (_req: Request, res: Response) => {
     try {
@@ -830,10 +864,14 @@ app.get("/vps/metrics", async (_req: Request, res: Response) => {
         const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
         const fmt = (d: Date) => d.toISOString().split('T')[0];
 
+        // QUAL-48: Add timeout to Hostinger API fetches
+        const vpsController = new AbortController();
+        const vpsTimeout = setTimeout(() => vpsController.abort(), 10_000);
         const [detailsRes, metricsRes] = await Promise.all([
-            fetch(`https://developers.hostinger.com/api/vps/v1/virtual-machines/${VPS_ID}`, { headers }),
-            fetch(`https://developers.hostinger.com/api/vps/v1/virtual-machines/${VPS_ID}/metrics?date_from=${fmt(yesterday)}&date_to=${fmt(tomorrow)}`, { headers }),
+            fetch(`https://developers.hostinger.com/api/vps/v1/virtual-machines/${VPS_ID}`, { headers, signal: vpsController.signal }),
+            fetch(`https://developers.hostinger.com/api/vps/v1/virtual-machines/${VPS_ID}/metrics?date_from=${fmt(yesterday)}&date_to=${fmt(tomorrow)}`, { headers, signal: vpsController.signal }),
         ]);
+        clearTimeout(vpsTimeout);
 
         if (!detailsRes.ok || !metricsRes.ok) {
             return res.status(502).json({ error: "Hostinger API error", detailsStatus: detailsRes.status, metricsStatus: metricsRes.status });
@@ -1031,7 +1069,8 @@ app.put("/chat/sessions/:id/link", async (req: Request, res: Response) => {
 // ─────────────────────────────────────
 
 app.get("/events", async (req: Request, res: Response) => {
-    const limit = req.query.limit ? Number(req.query.limit) : 200;
+    // SEC-48: Clamp limit to prevent abuse
+    const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 2000);
     const events = await agentsStore.listEvents(limit);
     res.json({ events });
 });
@@ -1050,12 +1089,48 @@ app.use((err: any, _req: any, res: any, _next: any) => {
 
 (async () => {
     await orchestrator.ready;
-    app.listen(PORT, "0.0.0.0", () => {
+    const server = app.listen(PORT, "0.0.0.0", () => {
         console.log(`🚀 VEIST HQ listening on port ${PORT}  [BUILD: v2-test-update]`);
         console.log(`   Docker/Traefik Mode: ✓ Active`);
         console.log(`   GitHub: ${process.env.GITHUB_TOKEN ? "✓ configured" : "✗ not configured"}`);
         console.log(`   AI Model: ${getCurrentModel()}`);
     });
+
+    // QUAL-26: Graceful shutdown — flush memory and close server on SIGTERM/SIGINT
+    const shutdown = async (signal: string) => {
+        console.log(`\n⚡ [Shutdown] Received ${signal}, gracefully shutting down...`);
+        try {
+            // Flush memory service (persist pending extractions)
+            const { getMemoryService } = await import("./memory_service.js");
+            await getMemoryService().flush();
+            console.log("⚡ [Shutdown] Memory flushed ✓");
+        } catch (err) {
+            console.error("⚡ [Shutdown] Memory flush failed:", err);
+        }
+        // QUAL-33: Flush secrets service (debounced saves may be pending)
+        try {
+            const { getSecretsService } = await import("./secrets_service.js");
+            const svc = getSecretsService();
+            // Force immediate save by triggering the internal save
+            (svc as any).saveTimeout && clearTimeout((svc as any).saveTimeout);
+            await (svc as any).saveToDisk();
+            console.log("⚡ [Shutdown] Secrets flushed ✓");
+        } catch (err) {
+            console.error("⚡ [Shutdown] Secrets flush failed:", err);
+        }
+        server.close(() => {
+            console.log("⚡ [Shutdown] Server closed ✓");
+            process.exit(0);
+        });
+        // Force exit after 10s if server doesn't close
+        setTimeout(() => {
+            console.error("⚡ [Shutdown] Forced exit after timeout");
+            process.exit(1);
+        }, 10_000).unref();
+    };
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGINT", () => shutdown("SIGINT"));
 })();
 
 export default app;
+

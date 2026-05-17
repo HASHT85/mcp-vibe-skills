@@ -1,4 +1,4 @@
-// @ts-nocheck
+// QUAL-38: @ts-nocheck removed — type safety restored
 /**
  * Chat Service — Pre-Pipeline Conversational Mode
  * Manages chat sessions where users discuss project ideas
@@ -204,6 +204,18 @@ export class ChatService {
             updatedAt: new Date().toISOString(),
         };
         this.sessions.set(session.id, session);
+
+        // PERF-04: Cap sessions to prevent unbounded memory growth
+        if (this.sessions.size > 500) {
+            let oldestId = "";
+            let oldestTime = Infinity;
+            for (const [id, s] of this.sessions) {
+                const t = new Date(s.updatedAt).getTime();
+                if (t < oldestTime) { oldestTime = t; oldestId = id; }
+            }
+            if (oldestId) this.sessions.delete(oldestId);
+        }
+
         this.scheduleSave();
         return session;
     }
@@ -432,7 +444,7 @@ INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
         // Use the first user message as the base idea, enriched with the conversation
         const baseIdea = userMessages[0];
         const enrichedDetails = assistantSuggestions.length > 0
-            ? `\n\nCoNTEXTE ENRICHI par la discussion pré-pipeline:\n${assistantSuggestions.slice(-2).join("\n\n")}`
+            ? `\n\nCONTEXTE ENRICHI par la discussion pré-pipeline:\n${assistantSuggestions.slice(-2).join("\n\n")}`
             : "";
 
         // Derive a project name: first 4 words of first message

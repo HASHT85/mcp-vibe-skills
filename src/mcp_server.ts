@@ -9,14 +9,15 @@ import { ProjectsStore } from "./projects_store.js";
 import { PROFILES } from "./profiles.js";
 import { TEMPLATES } from "./templates.js";
 
-export function buildMcpServer() {
+export function buildMcpServer(storePath?: string) {
     const server = new McpServer({
         name: "veist",
         version: "1.0.0",
     });
 
-    const store = new AgentsStore();
-    const projects = new ProjectsStore();
+    // QUAL-50: Accept storePath to share the same store location as Express
+    const store = new AgentsStore(storePath);
+    const projects = new ProjectsStore(storePath);
 
     // ------------------------
     // skills.sh

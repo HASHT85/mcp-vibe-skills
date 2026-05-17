@@ -35,9 +35,14 @@ function titleFromSlug(slug: string) {
 }
 
 async function fetchListPage(url: string, limit = 20): Promise<SkillItem[]> {
+    // QUAL-45: Timeout to prevent hangs if skills.sh is down
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
     const res = await fetch(url, {
-        headers: { "user-agent": "veist/1.0" }
+        headers: { "user-agent": "veist/1.0" },
+        signal: controller.signal,
     });
+    clearTimeout(timeout);
     if (!res.ok) throw new Error(`skills.sh http ${res.status}`);
     const html = await res.text();
     const $ = cheerio.load(html);

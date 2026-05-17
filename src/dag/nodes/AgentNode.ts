@@ -1,6 +1,8 @@
 import { DagNode, type NodeContext } from "../Node.js";
 import { runClaudeAgent } from "../../claude_code.js";
 import { getDefaultMiddlewareChain, type AgentCallContext, type AgentCallResult } from "../../middleware.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 export interface AgentNodeOptions {
     id: string;
@@ -114,9 +116,8 @@ export abstract class AgentNode extends DagNode {
         // Calculate cost from OpenRouter pricing cache
         let cost = 0;
         try {
-            const fs = require('fs');
-            const path = require('path');
-            const cachePath = path.join(process.cwd(), '.openrouter_cache.json');
+            // SEC-31: Use persistent /data/ volume, matching openrouter_models.ts
+            const cachePath = path.join(path.dirname(process.env.STORE_PATH || '/data/store.json'), '.openrouter_cache.json');
             if (fs.existsSync(cachePath)) {
                 const models = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
                 const m = models.find((mod: any) => modelName.includes(mod.id) || mod.id.includes(modelName));

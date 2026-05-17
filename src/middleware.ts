@@ -171,6 +171,13 @@ export const TokenTrackingMiddleware: Middleware = {
             prev.input += usage.input_tokens || 0;
             prev.output += usage.output_tokens || 0;
             tokenTotals.set(key, prev);
+
+            // PERF-03: Cap map size to prevent unbounded growth
+            if (tokenTotals.size > 500) {
+                const oldest = tokenTotals.keys().next().value;
+                if (oldest) tokenTotals.delete(oldest);
+            }
+
             console.log(`⚙️ [Middleware:TokenTracking] Pipeline ${key} node ${context.nodeId}: +${usage.input_tokens || 0}in +${usage.output_tokens || 0}out (total: ${prev.input}in/${prev.output}out)`);
         }
         return result;

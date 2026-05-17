@@ -1,7 +1,5 @@
-// @ts-ignore
 import { EventEmitter } from "node:events";
-// @ts-ignore
-import type { Pipeline, PipelineEvent, PipelineAgent } from "../../types.js";
+import type { Pipeline, PipelineEvent, PipelineAgent } from "../types.js";
 
 export type NodeStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "SKIPPED";
 

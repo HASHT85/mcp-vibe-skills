@@ -26,8 +26,8 @@ export class AnalysisNode extends AgentNode {
     }
 
     protected getPrompt(context: NodeContext): string {
-        const research = context.pipeline.artifacts.research;
-        const hasResearch = research && typeof research === "object" && !research.raw;
+        const research = context.pipeline.artifacts.research as Record<string, unknown> | undefined;
+        const hasResearch = research && typeof research === "object" && !("raw" in research);
         const template = getTemplate(context);
 
         let researchSection = "";

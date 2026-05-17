@@ -1,4 +1,4 @@
-// @ts-nocheck
+// QUAL-34: @ts-nocheck removed — type safety restored
 /**
  * Embedding Service — Semantic Code Search (Phase 2.5)
  * 
@@ -392,6 +392,10 @@ export class EmbeddingService {
     // ─── Persistence ───
 
     private indexPath(projectId: string): string {
+        // SEC-23: Prevent path traversal — projectId must be safe for filesystem
+        if (!projectId || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(projectId)) {
+            throw new Error(`Invalid projectId: "${projectId.slice(0, 30)}"`);
+        }
         return path.join(this.baseDir, `${projectId}.json`);
     }
 

@@ -4,13 +4,9 @@
  * Uses Claude Code Agent SDK for actual development work.
  */
 
-// @ts-ignore
 import * as fs from "node:fs/promises";
-// @ts-ignore
 import * as path from "node:path";
-// @ts-ignore
 import * as crypto from "node:crypto";
-// @ts-ignore
 import { EventEmitter } from "node:events";
 
 import { runClaudeAgent, gitPush, gitClone, gitInit, agentEvents, type AgentAction } from "./claude_code.js";
@@ -24,6 +20,7 @@ import { SkillsEnrichmentNode } from "./dag/nodes/SkillsEnrichmentNode.js";
 import { ResearchNode } from "./dag/nodes/ResearchNode.js";
 import { createRepo } from "./github_api.js";
 import { SecretsService, getSecretsService } from "./secrets_service.js";
+import { cleanupMiddlewareState } from "./middleware.js";
 
 
 import type { Pipeline, PipelinePhase, AgentStatus, PipelineAgent, PipelineEvent } from "./orchestrator_types.js";
@@ -90,7 +87,6 @@ export class Orchestrator extends EventEmitter {
         this.ready = this.init();
 
         agentEvents.on("action", (action: AgentAction) => {
-            // @ts-ignore
             this.emit("agent-action", action);
         });
     }
@@ -370,9 +366,7 @@ export class Orchestrator extends EventEmitter {
         this.running.add(id);
 
         const abortController = new AbortController();
-        // @ts-ignore
         if (typeof (abortController.signal as any).setMaxListeners === "function") {
-            // @ts-ignore
             (abortController.signal as any).setMaxListeners(50);
         }
         this.abortControllers.set(id, abortController);
@@ -455,10 +449,8 @@ Analyse la demande et retourne UNIQUEMENT un objet JSON valide avec ce format :
             let modType = "bugfix";
             let modPlan = instructions;
             try {
-                // @ts-ignore
-                const jsonMatch = analystResult.output?.match(/\{[\s\S]*?\}/);
-                // @ts-ignore
-                addTokenUsage(this.pipelines, id, { usage: (analystResult as any).output?.usage ?? {} });
+                // QUAL-52: Fixed — was `analystResult.output` which doesn't exist on AgentResult
+                const jsonMatch = analystResult.finalResult?.match(/\{[\s\S]*?\}/);
                 if (jsonMatch) {
                     const parsed = JSON.parse(jsonMatch[0]);
                     modType = parsed.type === "structural" ? "structural" : "bugfix";
@@ -552,7 +544,7 @@ RÈGLES ABSOLUES:
                 addPipelineEvent(this, this.pipelines, id, "Developer", "⚠️", `Erreur agent: ${result.error}`, "warning");
                 if (p.github) {
                     try {
-                        const { execSync } = await import("child_process");
+                        const { execSync } = await import("node:child_process");
                         execSync("git reset --hard && git clean -fd", { cwd: p.workspace });
                     } catch { }
                 }
@@ -563,7 +555,7 @@ RÈGLES ABSOLUES:
             if (p.github) {
                 let hasChanges = false;
                 try {
-                    const { execSync } = await import("child_process");
+                    const { execSync } = await import("node:child_process");
                     const status = execSync("git status --porcelain", { cwd: p.workspace }).toString().trim();
                     hasChanges = status.length > 0;
                 } catch { hasChanges = false; }
@@ -790,6 +782,8 @@ RÈGLES ABSOLUES:
         } finally {
             this.abortControllers.delete(id);
             this.running.delete(id);
+            // PERF-01: Clean stale middleware state for finished pipeline
+            cleanupMiddlewareState(id);
             await savePipelinesState(this.pipelines);
         }
     }
@@ -801,9 +795,7 @@ RÈGLES ABSOLUES:
         this.running.add(id);
 
         const abortController = new AbortController();
-        // @ts-ignore
         if (typeof (abortController.signal as any).setMaxListeners === "function") {
-            // @ts-ignore
             (abortController.signal as any).setMaxListeners(50);
         }
         this.abortControllers.set(id, abortController);
@@ -1534,6 +1526,8 @@ CMD ["node", "dist/index.js"]`;
         } finally {
             this.abortControllers.delete(id);
             this.running.delete(id);
+            // PERF-01: Clean stale middleware state for finished pipeline
+            cleanupMiddlewareState(id);
             await savePipelinesState(this.pipelines);
         }
     }

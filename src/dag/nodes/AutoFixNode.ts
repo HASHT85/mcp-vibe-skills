@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * AutoFixNode — Phase 3: Self-Healing Corrections
  * 

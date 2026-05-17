@@ -1,4 +1,4 @@
-// @ts-nocheck
+// SEC-32: @ts-nocheck removed — type safety restored
 /**
  * EvalNode — Phase 3: Auto-Evaluation of Deployed Projects
  * 
@@ -15,6 +15,16 @@ import { AgentNode } from "./AgentNode.js";
 import type { NodeContext } from "../Node.js";
 import type { EvalCheck, EvalReport } from "../../types.js";
 import { runClaudeAgent } from "../../claude_code.js";
+import { slugify } from "../../orchestrator_utils.js";
+
+// SEC-17: Validate names before shell interpolation
+const SAFE_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/;
+function sanitizeShellName(name: string): string {
+    if (!name || !SAFE_NAME_RE.test(name) || name.length > 128) {
+        throw new Error(`Invalid resource name: "${name.slice(0, 30)}"`);
+    }
+    return name;
+}
 
 // ─── Constants ───
 
@@ -68,7 +78,7 @@ export class EvalNode extends AgentNode {
 
         // Derive container/project name
         const slug = slugify(context.pipeline.github?.repo || context.pipeline.name);
-        const projectName = `veist-${slug}`;
+        const projectName = sanitizeShellName(`veist-${slug}`);
 
         // 1. Wait for container to become healthy
         context.addEvent(this.role, "🧪", `Attente du container (max ${HEALTH_TIMEOUT_SEC}s)...`, "info");
@@ -180,18 +190,26 @@ export class EvalNode extends AgentNode {
         return false;
     }
 
-    // ─── HTTP Check ───
+    // ─── HTTP Check (SEC-18: Use native fetch instead of curl shell) ───
 
     private async checkHttp(url: string): Promise<EvalCheck> {
-        const { execSync } = await import("node:child_process");
-
         try {
-            const result = execSync(
-                `curl -s -o /dev/null -w '%{http_code}' --max-time 15 --insecure '${url}'`,
-                { timeout: 20000, stdio: ["pipe", "pipe", "pipe"] }
-            ).toString().trim();
+            // SEC-18: Validate URL format before use
+            const parsed = new URL(url);
+            if (!['http:', 'https:'].includes(parsed.protocol)) {
+                throw new Error(`Invalid protocol: ${parsed.protocol}`);
+            }
 
-            const code = parseInt(result, 10);
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 15000);
+            const res = await fetch(parsed.href, {
+                method: 'GET',
+                signal: controller.signal,
+                redirect: 'follow',
+            });
+            clearTimeout(timeout);
+
+            const code = res.status;
             const pass = code >= 200 && code < 400;
 
             return {
@@ -227,7 +245,8 @@ export class EvalNode extends AgentNode {
             const matches = logs.match(errorPatterns) || [];
 
             // Filter out false positives (common in build logs)
-            const falsePositives = /error-handler|error\.ts|errorBoundary|console\.error|error_page|no errors/gi;
+            // LOGIC-02: Use /i only (no /g) — global flag makes .test() stateful, causing unreliable filtering
+            const falsePositives = /error-handler|error\.ts|errorBoundary|console\.error|error_page|no errors/i;
             const realErrors = matches.filter(m => !falsePositives.test(m));
 
             const errorCount = realErrors.length;
@@ -408,9 +427,7 @@ Format: liste numérotée d'actions concrètes (max 5 actions).`,
 
 // ─── Utils ───
 
-function slugify(str: string): string {
-    return str.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-}
+// QUAL-03: slugify removed — now imported from orchestrator_utils.ts
 
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));

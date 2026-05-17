@@ -2,14 +2,12 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { Pipeline } from "./types.js";
 
-// @ts-ignore
 export const STORE_PATH = process.env.PIPELINES_STORE || "/data/pipelines.json";
 
-let saveLock = false;
+// QUAL-17: Promise-chain ensures saves are queued, not silently dropped
+let saveQueue: Promise<void> = Promise.resolve();
 
-export async function savePipelinesState(pipelines: Map<string, Pipeline>) {
-    if (saveLock) return; // Prevent concurrent saves
-    saveLock = true;
+async function doSave(pipelines: Map<string, Pipeline>) {
     try {
         const dir = path.dirname(STORE_PATH);
         await fs.mkdir(dir, { recursive: true });
@@ -27,9 +25,12 @@ export async function savePipelinesState(pipelines: Map<string, Pipeline>) {
         }
     } catch (err) {
         console.warn("[Orchestrator] Failed to save state:", err);
-    } finally {
-        saveLock = false;
     }
+}
+
+export async function savePipelinesState(pipelines: Map<string, Pipeline>) {
+    saveQueue = saveQueue.then(() => doSave(pipelines)).catch(() => {});
+    return saveQueue;
 }
 
 export async function loadPipelinesState(pipelines: Map<string, Pipeline>) {

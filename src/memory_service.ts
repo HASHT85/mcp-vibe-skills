@@ -162,6 +162,12 @@ export class MemoryService {
             timestamp: Date.now(),
         });
 
+        // PERF-05: Cap queue size to prevent unbounded growth
+        if (this.pendingQueue.size > 50) {
+            const oldest = this.pendingQueue.keys().next().value;
+            if (oldest) this.pendingQueue.delete(oldest);
+        }
+
         // Debounce: wait DEBOUNCE_MS after last queue before processing
         if (this.debounceTimer) clearTimeout(this.debounceTimer);
         this.debounceTimer = setTimeout(() => this.processQueue(), DEBOUNCE_MS);

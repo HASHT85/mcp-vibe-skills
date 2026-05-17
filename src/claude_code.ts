@@ -1,4 +1,4 @@
-// @ts-nocheck
+// SEC-41: @ts-nocheck removed — type safety restored on agent engine
 /**
  * VEIST Agent Engine — OpenRouter (OpenAI-compatible)
  * Uses OpenAI SDK pointed at OpenRouter for multi-model agentic coding.
@@ -7,7 +7,7 @@
 
 import OpenAI from "openai";
 import { spawn } from "node:child_process";
-import { promises as fs } from "node:fs";
+import { promises as fs, realpathSync } from "node:fs";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import * as cheerio from "cheerio";
@@ -159,7 +159,7 @@ const TOOLS: any[] = [
     }
 ];
 
-// ─── Security: Path Traversal Guard (SEC-01) ───
+// ─── Security: Path Traversal Guard (SEC-01 + QUAL-42) ───
 
 function safePath(cwd: string, userPath: string): string {
     const resolved = path.resolve(cwd, userPath);
@@ -167,7 +167,18 @@ function safePath(cwd: string, userPath: string): string {
     if (!resolved.startsWith(cwd)) {
         throw new Error(`🚫 Path traversal blocked: "${userPath}" resolves outside workspace.`);
     }
-    return resolved;
+    // QUAL-42: Resolve symlinks to prevent symlink-based traversal
+    try {
+        const real = realpathSync(resolved);
+        if (!real.startsWith(cwd)) {
+            throw new Error(`🚫 Symlink traversal blocked: "${userPath}" resolves outside workspace via symlink.`);
+        }
+        return real;
+    } catch (e: any) {
+        // File doesn't exist yet (write_file) — allow if path itself is safe
+        if (e.code === 'ENOENT') return resolved;
+        throw e;
+    }
 }
 
 // ─── Tool Executor ───
@@ -247,9 +258,12 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
                     if (!TAVILY_API_KEY) {
                         return "Error: TAVILY_API_KEY is not set in environment or .env. Web search is disabled.";
                     }
+                    const searchController = new AbortController();
+                    const searchTimeout = setTimeout(() => searchController.abort(), 15_000);
                     const res = await fetch("https://api.tavily.com/search", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
+                        signal: searchController.signal,
                         body: JSON.stringify({
                             api_key: TAVILY_API_KEY,
                             query: query,
@@ -258,6 +272,7 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
                             max_results: 5
                         })
                     });
+                    clearTimeout(searchTimeout);
                     if (!res.ok) {
                         return `Error: Web search failed with API status ${res.status}`;
                     }
@@ -280,10 +295,40 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
             }
             case "fetch_url": {
                 try {
-                    const res = await fetch(input.url, {
-                        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+                    // SEC-42: SSRF protection — block dangerous URLs
+                    const urlStr = String(input.url || "");
+                    try {
+                        const parsed = new URL(urlStr);
+                        // Block non-HTTP protocols
+                        if (!['http:', 'https:'].includes(parsed.protocol)) {
+                            return `🚫 Blocked: only http/https URLs are allowed (got ${parsed.protocol})`;
+                        }
+                        // Block private/internal IPs and metadata endpoints
+                        const host = parsed.hostname.toLowerCase();
+                        const BLOCKED_HOSTS = [
+                            'localhost', '127.0.0.1', '0.0.0.0', '::1',
+                            '169.254.169.254', // AWS/GCP metadata
+                            'metadata.google.internal',
+                        ];
+                        if (BLOCKED_HOSTS.includes(host) ||
+                            host.endsWith('.internal') ||
+                            host.startsWith('10.') ||
+                            host.startsWith('192.168.') ||
+                            /^172\.(1[6-9]|2\d|3[01])\./.test(host)) {
+                            return `🚫 Blocked: cannot fetch internal/private URLs (${host})`;
+                        }
+                    } catch {
+                        return `Error: Invalid URL "${urlStr}"`;
+                    }
+
+                    const fetchController = new AbortController();
+                    const fetchTimeout = setTimeout(() => fetchController.abort(), 15_000);
+                    const res = await fetch(urlStr, {
+                        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                        signal: fetchController.signal,
                     });
-                    if (!res.ok) return `HTTP Error ${res.status} fetching ${input.url}`;
+                    clearTimeout(fetchTimeout);
+                    if (!res.ok) return `HTTP Error ${res.status} fetching ${urlStr}`;
                     const text = await res.text();
 
                     const $ = cheerio.load(text);
@@ -296,7 +341,7 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
                         cleanText = $.text().replace(/\s+/g, ' ').trim();
                     }
 
-                    return cleanText.slice(0, 10000); // 10k chars max to save tokens but read plenty of context
+                    return cleanText.slice(0, 10000);
                 } catch (e: any) {
                     return `Fetch failed: ${e.message} `;
                 }
@@ -322,7 +367,10 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
                     try { memStr = await fs.readFile(memPath, "utf-8"); } catch { }
                     const mem = JSON.parse(memStr);
                     mem[input.key] = input.value;
-                    await fs.writeFile(memPath, JSON.stringify(mem, null, 2), "utf-8");
+                    // QUAL-43: Atomic write to prevent corruption on crash
+                    const memTmp = `${memPath}.tmp`;
+                    await fs.writeFile(memTmp, JSON.stringify(mem, null, 2), "utf-8");
+                    await fs.rename(memTmp, memPath);
                     return `Saved "${input.key}" to shared memory.`;
                 } catch (err: any) {
                     return `Memory write error: ${err.message}`;
@@ -371,17 +419,32 @@ function runBash(command: string, cwd: string): Promise<string> {
         }
     }
 
+    // SEC-16: Only propagate safe env vars to agent sandbox — never leak secrets
+    const SAFE_ENV_KEYS = new Set([
+        "PATH", "HOME", "LANG", "LC_ALL", "TERM", "SHELL", "USER", "LOGNAME",
+        "NODE_PATH", "NODE_ENV", "NPM_CONFIG_PREFIX", "NPM_CONFIG_CACHE",
+        "TMPDIR", "TMP", "TEMP", "HOSTNAME", "SHLVL", "PWD",
+    ]);
+    const safeEnv: Record<string, string> = { HOME: "/root" };
+    for (const [k, v] of Object.entries(process.env)) {
+        if (v !== undefined && (SAFE_ENV_KEYS.has(k) || k.startsWith("npm_"))) {
+            safeEnv[k] = v;
+        }
+    }
+
     return new Promise((resolve) => {
         const proc = spawn("bash", ["-c", command], {
             cwd,
-            env: { ...process.env, HOME: "/root" },
+            env: safeEnv,
             stdio: ["pipe", "pipe", "pipe"],
         });
 
         let stdout = "";
         let stderr = "";
-        proc.stdout.on("data", (d) => { stdout += d.toString(); });
-        proc.stderr.on("data", (d) => { stderr += d.toString(); });
+        // PERF-07: Cap output buffers at 256KB to prevent OOM on large outputs
+        const MAX_OUTPUT = 256 * 1024;
+        proc.stdout.on("data", (d) => { if (stdout.length < MAX_OUTPUT) stdout += d.toString(); });
+        proc.stderr.on("data", (d) => { if (stderr.length < MAX_OUTPUT) stderr += d.toString(); });
 
         // Timeout for bash commands: 180s (npm install on heavy projects can take 2-3 min)
         const timeout = setTimeout(() => {
@@ -876,11 +939,18 @@ export async function invokeModel(
 
     if (msg.tool_calls) {
         for (const tc of msg.tool_calls) {
+            // SEC-44: Safe parse of tool arguments to prevent crash on malformed response
+            let parsedArgs: Record<string, unknown> = {};
+            try {
+                parsedArgs = JSON.parse(tc.function.arguments);
+            } catch {
+                console.warn(`[Agent] ⚠️ Malformed tool arguments for ${tc.function.name}, using empty object`);
+            }
             contentBlocks.push({
                 type: "tool_use",
                 id: tc.id,
                 name: tc.function.name,
-                input: JSON.parse(tc.function.arguments)
+                input: parsedArgs
             });
         }
     }

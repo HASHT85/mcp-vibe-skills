@@ -196,9 +196,19 @@ export const MODEL_BENCHMARKS: ModelBenchmark[] = [
  * Get benchmark info for a model by its ID (partial match).
  */
 export function getBenchmarkForModel(modelId: string): ModelBenchmark | undefined {
-    return MODEL_BENCHMARKS.find(b => 
-        modelId.includes(b.id) || b.id.includes(modelId)
-    );
+    // QUAL-35: Normalized matching — exact match first, then segment-based fallback
+    const normalized = modelId.replace(/^openrouter\//, '').toLowerCase();
+    return MODEL_BENCHMARKS.find(b => {
+        const benchId = b.id.toLowerCase();
+        // Exact match
+        if (benchId === normalized) return true;
+        // Segment match: "anthropic/claude-sonnet-4" matches "claude-sonnet-4"
+        const benchSegments = benchId.split('/');
+        const inputSegments = normalized.split('/');
+        const benchModel = benchSegments[benchSegments.length - 1];
+        const inputModel = inputSegments[inputSegments.length - 1];
+        return benchModel === inputModel;
+    });
 }
 
 /**

@@ -12,11 +12,15 @@ const router = express.Router();
 
 const HOSTINGER_API = "https://api.hostinger.com";
 const HOSTINGER_TOKEN = process.env.HOSTINGER_API_TOKEN || "";
-const VM_ID = 1287719; // Hardcoded VPS ID
+// QUAL-11: VM_ID now configurable via env (was hardcoded)
+const VM_ID = parseInt(process.env.VPS_VM_ID || "1287719", 10);
 
 // ─── Hostinger API Helper ───
 
 async function hostinger<T = unknown>(method: string, endpoint: string, body?: unknown): Promise<T> {
+    // QUAL-54: Add timeout to prevent hanging deployments
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
     const res = await fetch(`${HOSTINGER_API}${endpoint}`, {
         method,
         headers: {
@@ -24,7 +28,9 @@ async function hostinger<T = unknown>(method: string, endpoint: string, body?: u
             "Authorization": `Bearer ${HOSTINGER_TOKEN}`,
         },
         body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
     });
+    clearTimeout(timeout);
     if (!res.ok) {
         const text = await res.text();
         throw new Error(`Hostinger API ${res.status}: ${text}`);
@@ -176,6 +182,10 @@ router.post("/analyze", async (req, res) => {
     if (!githubUrl || typeof githubUrl !== "string") {
         return res.status(400).json({ error: "githubUrl is required" });
     }
+    // SEC-35: Validate URL is a real GitHub URL to prevent SSRF
+    if (!githubUrl.startsWith("https://github.com/")) {
+        return res.status(400).json({ error: "Only https://github.com/ URLs are supported" });
+    }
 
     // Extract repo name for temp dir
     const repoMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/\.\?\#]+)/);
@@ -245,6 +255,15 @@ router.post("/launch", async (req, res) => {
         return res.status(400).json({ error: "projectName and subdomain are required" });
     }
 
+    // SEC-22: Validate projectName and subdomain to prevent injection
+    const SAFE_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/;
+    if (!SAFE_NAME_RE.test(projectName)) {
+        return res.status(400).json({ error: "Invalid projectName: only alphanumeric, dash, dot, underscore allowed" });
+    }
+    if (!SAFE_NAME_RE.test(subdomain)) {
+        return res.status(400).json({ error: "Invalid subdomain: only alphanumeric, dash, dot, underscore allowed" });
+    }
+
     if (!HOSTINGER_TOKEN) {
         return res.status(500).json({ error: "HOSTINGER_API_TOKEN is not configured" });
     }
@@ -312,6 +331,11 @@ router.get("/status/:actionId", async (req, res) => {
 
 // GET /api/quick-deploy/containers/:projectName
 router.get("/containers/:projectName", async (req, res) => {
+    // SEC-33: Validate projectName to prevent URL injection
+    const SAFE_NAME = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/;
+    if (!SAFE_NAME.test(req.params.projectName)) {
+        return res.status(400).json({ error: "Invalid projectName" });
+    }
     if (!HOSTINGER_TOKEN) {
         return res.status(500).json({ error: "HOSTINGER_API_TOKEN is not configured" });
     }

@@ -86,8 +86,8 @@ export class SecretsService {
         this.filePath = path.join(baseDir, "secrets.json");
         // Synchronous load to prevent race conditions
         this.loadFromDiskSync();
-        // Also schedule async reload for any concurrent writes
-        this.ready = this.loadFromDiskAsync();
+        // QUAL-12: ready resolves immediately (sync load already done)
+        this.ready = Promise.resolve();
     }
 
     // ─── Persistence ───
@@ -117,12 +117,6 @@ export class SecretsService {
         } catch {
             console.log("🔐 SecretsService: No saved secrets found, starting fresh");
         }
-    }
-
-    /** Async reload — for completeness  */
-    private async loadFromDiskAsync() {
-        // Already loaded sync, this is a no-op safety net
-        return;
     }
 
     private scheduleSave() {

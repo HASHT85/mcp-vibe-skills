@@ -21,7 +21,14 @@ function titleFromSlug(slug: string) {
 export async function fetchSkillDetail(owner: string, repo: string, skill: string): Promise<SkillDetail> {
     const href = `https://skills.sh/${owner}/${repo}/${skill}`;
 
-    const res = await fetch(href, { headers: { "user-agent": "veist/1.0" } });
+    // QUAL-45: Timeout to prevent hangs if skills.sh is down
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    const res = await fetch(href, {
+        headers: { "user-agent": "veist/1.0" },
+        signal: controller.signal,
+    });
+    clearTimeout(timeout);
     if (!res.ok) throw new Error(`skills.sh http ${res.status}`);
 
     const html = await res.text();

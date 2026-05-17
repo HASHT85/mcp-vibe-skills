@@ -1,21 +1,24 @@
 // import fetch from 'node-fetch'; // Using global fetch
 import crypto from 'node:crypto';
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GITHUB_API = "https://api.github.com";
 
-if (!GITHUB_TOKEN) {
-    console.error("Missing GITHUB_TOKEN in environment variables");
+// SEC-25: Read token at call-time (not module-level) so hot-reloads work
+// Returns fresh headers on each call to prevent stale/shared state
+function getHeaders() {
+    const token = process.env.GITHUB_TOKEN;
+    if (!token) {
+        console.warn("⚠️ Missing GITHUB_TOKEN in environment variables");
+    }
+    return {
+        "Authorization": `token ${token || ""}`,
+        "Content-Type": "application/json",
+        "Accept": "application/vnd.github.v3+json"
+    };
 }
 
-const headers = {
-    "Authorization": `token ${GITHUB_TOKEN}`,
-    "Content-Type": "application/json",
-    "Accept": "application/vnd.github.v3+json"
-};
-
 export async function getUser() {
-    const res = await fetch(`${GITHUB_API}/user`, { headers });
+    const res = await fetch(`${GITHUB_API}/user`, { headers: getHeaders() });
     if (!res.ok) throw new Error(`Failed to get user: ${res.statusText}`);
     return res.json();
 }
@@ -35,7 +38,7 @@ export async function createRepo(name: string, description: string) {
     // 3. Create repo
     const res = await fetch(`${GITHUB_API}/user/repos`, {
         method: 'POST',
-        headers,
+        headers: getHeaders(),
         body: JSON.stringify({
             name,
             description: safeDesc,
@@ -56,7 +59,7 @@ export async function createRepo(name: string, description: string) {
 export async function deleteRepo(owner: string, repo: string) {
     const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}`, {
         method: 'DELETE',
-        headers
+        headers: getHeaders()
     });
     if (!res.ok && res.status !== 404) {
         const err = await res.json();
@@ -65,13 +68,20 @@ export async function deleteRepo(owner: string, repo: string) {
     return true;
 }
 
-// SEC-08: Generate deterministic webhook secret from ADMIN_PASS
-const WEBHOOK_SECRET = process.env.ADMIN_PASS
-    ? crypto.createHmac('sha256', process.env.ADMIN_PASS).update('veist-webhook').digest('hex').slice(0, 32)
-    : undefined;
+// SEC-34: JIT computation — avoids stale value if ADMIN_PASS isn't set at import time
+// (same pattern as SEC-25 for GITHUB_TOKEN → call-time reads)
+let _webhookSecretCache: { pass: string; secret: string } | null = null;
 
 export function getWebhookSecret(): string | undefined {
-    return WEBHOOK_SECRET;
+    const pass = process.env.ADMIN_PASS;
+    if (!pass) return undefined;
+    // Cache: only recompute if ADMIN_PASS changes
+    if (_webhookSecretCache && _webhookSecretCache.pass === pass) {
+        return _webhookSecretCache.secret;
+    }
+    const secret = crypto.createHmac('sha256', pass).update('veist-webhook').digest('hex').slice(0, 32);
+    _webhookSecretCache = { pass, secret };
+    return secret;
 }
 
 export async function createWebhook(owner: string, repo: string, webhookUrl: string) {
@@ -80,14 +90,15 @@ export async function createWebhook(owner: string, repo: string, webhookUrl: str
         content_type: "json",
         insecure_ssl: "0",
     };
-    // SEC-08: Attach webhook secret if available
-    if (WEBHOOK_SECRET) {
-        config.secret = WEBHOOK_SECRET;
+    // SEC-08/SEC-34: Attach webhook secret if available (now JIT-computed)
+    const webhookSecret = getWebhookSecret();
+    if (webhookSecret) {
+        config.secret = webhookSecret;
     }
 
     const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/hooks`, {
         method: 'POST',
-        headers,
+        headers: getHeaders(),
         body: JSON.stringify({
             name: "web",
             active: true,
@@ -107,13 +118,13 @@ export async function pushFiles(owner: string, repo: string, files: { path: stri
     const baseUrl = `${GITHUB_API}/repos/${owner}/${repo}`;
 
     // 1. Get latest commit SHA of main branch
-    const refRes = await fetch(`${baseUrl}/git/ref/heads/main`, { headers });
+    const refRes = await fetch(`${baseUrl}/git/ref/heads/main`, { headers: getHeaders() });
     if (!refRes.ok) throw new Error("Failed to get main branch ref");
     const refData: any = await refRes.json();
     const latestCommitSha = refData.object.sha;
 
     // 2. Get tree SHA of latest commit
-    const commitRes = await fetch(`${baseUrl}/git/commits/${latestCommitSha}`, { headers });
+    const commitRes = await fetch(`${baseUrl}/git/commits/${latestCommitSha}`, { headers: getHeaders() });
     const commitData: any = await commitRes.json();
     const baseTreeSha = commitData.tree.sha;
 
@@ -133,7 +144,7 @@ export async function pushFiles(owner: string, repo: string, files: { path: stri
 
     const treeRes = await fetch(`${baseUrl}/git/trees`, {
         method: 'POST',
-        headers,
+        headers: getHeaders(),
         body: JSON.stringify(treePayload)
     });
     if (!treeRes.ok) {
@@ -147,7 +158,7 @@ export async function pushFiles(owner: string, repo: string, files: { path: stri
     // 4. Create commit
     const newCommitRes = await fetch(`${baseUrl}/git/commits`, {
         method: 'POST',
-        headers,
+        headers: getHeaders(),
         body: JSON.stringify({
             message,
             tree: newTreeSha,
@@ -161,7 +172,7 @@ export async function pushFiles(owner: string, repo: string, files: { path: stri
     // 5. Update reference (push)
     const updateRes = await fetch(`${baseUrl}/git/refs/heads/main`, {
         method: 'PATCH',
-        headers,
+        headers: getHeaders(),
         body: JSON.stringify({
             sha: newCommitSha
         })
@@ -186,7 +197,7 @@ export async function getRepoContext(owner: string, repo: string): Promise<strin
 
     // 1. Fetch file tree
     try {
-        const treeRes = await fetch(`${baseUrl}/git/trees/main?recursive=1`, { headers });
+        const treeRes = await fetch(`${baseUrl}/git/trees/main?recursive=1`, { headers: getHeaders() });
         if (treeRes.ok) {
             const treeData: any = await treeRes.json();
             const filePaths = (treeData.tree || [])
@@ -202,7 +213,7 @@ export async function getRepoContext(owner: string, repo: string): Promise<strin
     // 2. Fetch key files content
     for (const filePath of KEY_FILES) {
         try {
-            const res = await fetch(`${baseUrl}/contents/${filePath}`, { headers });
+            const res = await fetch(`${baseUrl}/contents/${filePath}`, { headers: getHeaders() });
             if (res.ok) {
                 const data: any = await res.json();
                 if (data.content && data.encoding === "base64") {
