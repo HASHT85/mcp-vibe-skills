@@ -1,4 +1,5 @@
 // import fetch from 'node-fetch'; // Using global fetch
+import crypto from 'node:crypto';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GITHUB_API = "https://api.github.com";
@@ -66,7 +67,7 @@ export async function deleteRepo(owner: string, repo: string) {
 
 // SEC-08: Generate deterministic webhook secret from ADMIN_PASS
 const WEBHOOK_SECRET = process.env.ADMIN_PASS
-    ? require('node:crypto').createHmac('sha256', process.env.ADMIN_PASS).update('veist-webhook').digest('hex').slice(0, 32)
+    ? crypto.createHmac('sha256', process.env.ADMIN_PASS).update('veist-webhook').digest('hex').slice(0, 32)
     : undefined;
 
 export function getWebhookSecret(): string | undefined {

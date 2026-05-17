@@ -3,7 +3,7 @@
  * Secrets are stored on disk (encrypted), never sent to AI, and injected into project .env files.
  */
 
-import { promises as fs, readFileSync, existsSync, mkdirSync } from "node:fs";
+import { promises as fs, readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
@@ -22,7 +22,6 @@ function getOrCreateSalt(): string {
         const salt = crypto.randomBytes(32).toString('hex');
         const dir = path.dirname(SALT_PATH);
         if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-        const { writeFileSync } = require('node:fs');
         writeFileSync(SALT_PATH, salt, "utf-8");
         console.log("🔑 SecretsService: Generated new encryption salt");
         return salt;

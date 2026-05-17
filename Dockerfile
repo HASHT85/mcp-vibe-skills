@@ -27,9 +27,10 @@ RUN git config --global user.email "veist@auto.dev" && \
 # SEC-11: Non-root user with docker group access
 RUN addgroup -g 999 docker 2>/dev/null || true && \
     adduser -D -u 1001 veist && \
-    addgroup veist docker 2>/dev/null || true
+    addgroup veist docker 2>/dev/null || true && \
+    apk add --no-cache su-exec
 
-RUN mkdir -p /data /workspace && chown -R veist:veist /data /workspace
+RUN mkdir -p /data /workspace
 
 COPY package*.json ./
 RUN npm install --omit=dev --ignore-scripts
@@ -40,6 +41,5 @@ EXPOSE 8080
 
 VOLUME ["/data", "/workspace"]
 
-USER veist
-
-CMD ["sh", "-c", "git config --global user.email veist@auto.dev && git config --global user.name veist && exec node dist/index.js"]
+# SEC-11: Start as root to fix volume permissions, then drop to veist user
+CMD ["sh", "-c", "chown -R veist:veist /data /workspace 2>/dev/null; git config --global user.email veist@auto.dev && git config --global user.name veist && exec su-exec veist node dist/index.js"]
