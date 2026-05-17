@@ -1,5 +1,6 @@
 import express, { type Request, type Response } from "express";
 import cors from "cors";
+import crypto from "node:crypto";
 import { slugify } from "./orchestrator_utils.js";
 
 import { AgentsStore } from "./agents_store.js";
@@ -12,12 +13,40 @@ import { TEMPLATES } from "./templates.js";
 import { getOrchestrator, type PipelineEvent } from "./orchestrator.js";
 import { getCurrentModel } from "./claude_code.js";
 import { quickDeployRouter } from "./quickDeploy.js";
+import rateLimit from "express-rate-limit";
 
 const app = express();
 const port = process.env.PORT || 3000;
 const storePath = process.env.STORE_PATH || '/data/store.json';
-app.use(cors()); // Enable CORS for all routes
-app.use(express.json({ limit: "50mb" }));
+
+// SEC-03: Restrict CORS to dashboard origin
+app.use(cors({
+    origin: [
+        "https://veist.hach.dev",
+        "http://localhost:5173",  // dev mode
+        "http://localhost:3000",
+    ],
+    credentials: true,
+}));
+
+// SEC-10: Reduce default body limit (50mb only on launch route)
+app.use(express.json({ limit: "5mb" }));
+
+// SEC-12: Rate limiting
+const launchLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: { error: "Too many pipeline launches. Max 10/min." },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+const chatLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: { error: "Too many chat messages. Max 30/min." },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
 // Basic Auth Middleware
 const ADMIN_USER = process.env.ADMIN_USER;
@@ -27,15 +56,43 @@ if (!ADMIN_USER || !ADMIN_PASS) {
     console.warn("⚠️ WARNING: ADMIN_USER or ADMIN_PASS is not set. API is secure but might be inaccessible.");
 }
 
+// SEC-04: Ephemeral Token System (for SSE which can't send headers)
+const TOKEN_SECRET = ADMIN_PASS || crypto.randomBytes(32).toString('hex');
+const TOKEN_TTL = 5 * 60 * 1000; // 5 minutes
+
+function generateToken(): string {
+    const expires = Date.now() + TOKEN_TTL;
+    const payload = `${ADMIN_USER}:${expires}`;
+    const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('hex');
+    return Buffer.from(`${payload}:${sig}`).toString('base64');
+}
+
+function verifyToken(token: string): boolean {
+    try {
+        const decoded = Buffer.from(token, 'base64').toString();
+        const [user, expiresStr, sig] = decoded.split(':');
+        const expires = parseInt(expiresStr);
+        if (Date.now() > expires) return false; // expired
+        const expectedSig = crypto.createHmac('sha256', TOKEN_SECRET)
+            .update(`${user}:${expiresStr}`).digest('hex');
+        return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig));
+    } catch {
+        return false;
+    }
+}
+
 const authMiddleware = (req: Request, res: Response, next: Function) => {
-    // Support auth via header OR query param (needed for SSE/EventSource)
     let user = "", pass = "";
     const authHeader = req.headers.authorization;
-    const authQuery = req.query.auth as string | undefined;
+    const tokenQuery = req.query.token as string | undefined;  // SEC-04: token-based
+    const authQuery = req.query.auth as string | undefined;    // legacy (kept for compat)
 
     if (authHeader) {
         const decoded = Buffer.from(authHeader.split(' ')[1] || '', 'base64').toString();
         [user, pass] = decoded.split(':');
+    } else if (tokenQuery && verifyToken(tokenQuery)) {
+        // SEC-04: Valid ephemeral token — allow access
+        return next();
     } else if (authQuery) {
         const decoded = Buffer.from(authQuery, 'base64').toString();
         [user, pass] = decoded.split(':');
@@ -44,8 +101,6 @@ const authMiddleware = (req: Request, res: Response, next: Function) => {
     if (user === ADMIN_USER && pass === ADMIN_PASS) {
         next();
     } else {
-        // No WWW-Authenticate header — prevents browser's native auth popup
-        // The dashboard has its own login page that handles auth
         return res.status(401).json({ error: 'Authentication required' });
     }
 };
@@ -70,22 +125,49 @@ const orchestrator = getOrchestrator();
 app.get("/", (_req: Request, res: Response) => res.json({ service: "veist", status: "running" }));
 app.get("/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
+// SEC-04: Token endpoint — returns ephemeral token for SSE connections
+app.post("/auth/token", authMiddleware, (_req: Request, res: Response) => {
+    res.json({ token: generateToken(), expiresIn: TOKEN_TTL / 1000 });
+});
+
 // ─────────────────────────────────────
 // Pipeline (New Orchestrator)
 // ─────────────────────────────────────
 
 // Launch a new idea → creates full pipeline
-app.post("/pipeline/launch", async (req: Request, res: Response) => {
+// SEC-10: Higher body limit for file uploads on this route only
+// SEC-12: Rate limited to 10/min
+app.post("/pipeline/launch", launchLimiter, express.json({ limit: "50mb" }), async (req: Request, res: Response) => {
     try {
         const description = String(req.body?.description ?? "").trim();
         const name = req.body?.name ? String(req.body.name).trim() : undefined;
         const model = req.body?.model ? String(req.body.model).trim() : undefined;
-        const files = req.body?.files as { base64: string; type: string }[] | undefined;
+        let files = req.body?.files as { base64: string; type: string }[] | undefined;
         const templateId = req.body?.templateId ? String(req.body.templateId).trim() : undefined;
         const githubUrl = req.body?.githubUrl ? String(req.body.githubUrl).trim() : undefined;
 
         if (!description) {
             return res.status(400).json({ error: "missing_description" });
+        }
+
+        // SEC-07: Validate uploaded files
+        if (files && Array.isArray(files)) {
+            const MAX_FILES = 5;
+            const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB decoded
+            const ALLOWED_MIMES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]);
+
+            if (files.length > MAX_FILES) {
+                return res.status(400).json({ error: `Too many files. Max ${MAX_FILES}.` });
+            }
+            for (const file of files) {
+                if (!ALLOWED_MIMES.has(file.type)) {
+                    return res.status(400).json({ error: `File type not allowed: ${file.type}` });
+                }
+                const sizeBytes = Buffer.byteLength(file.base64, 'base64');
+                if (sizeBytes > MAX_FILE_SIZE) {
+                    return res.status(400).json({ error: `File too large (${(sizeBytes / 1024 / 1024).toFixed(1)}MB). Max 5MB.` });
+                }
+            }
         }
 
         const pipeline = await orchestrator.launchIdea(description, name, model, files, templateId, githubUrl);
@@ -811,8 +893,8 @@ app.post("/chat/sessions", async (req: Request, res: Response) => {
     }
 });
 
-// Send message in chat session
-app.post("/chat/sessions/:id/message", async (req: Request, res: Response) => {
+// Send message in chat session (SEC-12: Rate limited to 30/min)
+app.post("/chat/sessions/:id/message", chatLimiter, async (req: Request, res: Response) => {
     try {
         const content = String(req.body?.content ?? "").trim();
         const files = req.body?.files as { base64: string; type: string }[] | undefined;

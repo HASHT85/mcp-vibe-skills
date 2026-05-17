@@ -159,13 +159,24 @@ const TOOLS: any[] = [
     }
 ];
 
+// ─── Security: Path Traversal Guard (SEC-01) ───
+
+function safePath(cwd: string, userPath: string): string {
+    const resolved = path.resolve(cwd, userPath);
+    // Ensure the resolved path stays within the workspace
+    if (!resolved.startsWith(cwd)) {
+        throw new Error(`🚫 Path traversal blocked: "${userPath}" resolves outside workspace.`);
+    }
+    return resolved;
+}
+
 // ─── Tool Executor ───
 
 async function executeTool(name: string, input: Record<string, any>, cwd: string): Promise<string> {
     try {
         switch (name) {
             case "read_file": {
-                const filePath = path.resolve(cwd, input.path);
+                const filePath = safePath(cwd, input.path);
                 const content = await fs.readFile(filePath, "utf-8");
                 const lines = content.split("\n");
                 const MAX_LINES = 500;
@@ -176,13 +187,13 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
                 return content;
             }
             case "write_file": {
-                const filePath = path.resolve(cwd, input.path);
+                const filePath = safePath(cwd, input.path);
                 await fs.mkdir(path.dirname(filePath), { recursive: true });
                 await fs.writeFile(filePath, input.content, "utf-8");
                 return `File written: ${input.path}`;
             }
             case "list_dir": {
-                const dirPath = path.resolve(cwd, input.path || ".");
+                const dirPath = safePath(cwd, input.path || ".");
                 const entries = await fs.readdir(dirPath, { withFileTypes: true });
                 return entries
                     .map(e => `${e.isDirectory() ? "📁" : "📄"} ${e.name}`)
@@ -192,7 +203,7 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
                 return await runBash(input.command, cwd);
             }
             case "replace_in_file": {
-                const filePath = path.resolve(cwd, input.path);
+                const filePath = safePath(cwd, input.path);
                 let content = await fs.readFile(filePath, "utf-8");
                 if (content.includes(input.targetStr)) {
                     content = content.replace(input.targetStr, input.replacementStr);
@@ -328,14 +339,30 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
 function runBash(command: string, cwd: string): Promise<string> {
     // ─── Phase 3: Sandbox — block dangerous commands ───
     const BLOCKED_PATTERNS = [
+        // Filesystem destruction
         { pattern: /rm\s+(-rf?|--recursive)\s+\/(?!\w)/, label: "rm -rf /" },
         { pattern: /mkfs\./, label: "mkfs (format disk)" },
         { pattern: /dd\s+if=\/dev/, label: "dd raw device write" },
         { pattern: /:\(\)\s*\{\s*:\|:&\s*\}\s*;/, label: "fork bomb" },
         { pattern: /chmod\s+777\s+\/(?!\w)/, label: "chmod 777 /" },
         { pattern: />\s*\/dev\/sd/, label: "write to raw device" },
-        { pattern: /curl\s+.*\|\s*(?:sudo\s+)?bash/, label: "curl pipe to bash" },
-        { pattern: /wget\s+.*\|\s*(?:sudo\s+)?bash/, label: "wget pipe to bash" },
+        // Remote code execution
+        { pattern: /curl\s+.*\|\s*(?:sudo\s+)?(?:ba)?sh/, label: "curl pipe to shell" },
+        { pattern: /wget\s+.*\|\s*(?:sudo\s+)?(?:ba)?sh/, label: "wget pipe to shell" },
+        { pattern: /base64\s+.*\|\s*(?:ba)?sh/, label: "base64 pipe to shell" },
+        // Container escape (SEC-02)
+        { pattern: /\bdocker\s+run\b/, label: "docker run (container escape)" },
+        { pattern: /\bdocker\s+exec\b.*\bveist\b/, label: "docker exec on veist" },
+        // Data exfiltration
+        { pattern: /\benv\b.*\bcurl\b/, label: "env exfiltration via curl" },
+        { pattern: /\benv\b.*\bwget\b/, label: "env exfiltration via wget" },
+        { pattern: /\/proc\/self\/environ/, label: "process env read" },
+        // Secrets access
+        { pattern: /cat\s+\/data\/secrets/, label: "secrets file read" },
+        { pattern: /cat\s+\/data\/store/, label: "store file read" },
+        // Interpreter escapes
+        { pattern: /python[3]?\s+-c\s+.*(?:shutil|subprocess|os\.system)/, label: "python destructive command" },
+        { pattern: /node\s+-e\s+.*(?:child_process|fs\.rm|fs\.unlink)/, label: "node destructive command" },
     ];
 
     for (const { pattern, label } of BLOCKED_PATTERNS) {

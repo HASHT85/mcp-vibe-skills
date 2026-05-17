@@ -12,11 +12,30 @@ export interface SecretEntry {
     value: string;
 }
 
-// ─── Simple encryption layer (AES-256-GCM) ───
+// SEC-06: Dynamic salt — persisted to disk on first run
+const SALT_PATH = path.join(path.dirname(process.env.STORE_PATH || "/data/store.json"), ".salt");
+function getOrCreateSalt(): string {
+    try {
+        if (existsSync(SALT_PATH)) {
+            return readFileSync(SALT_PATH, "utf-8").trim();
+        }
+        const salt = crypto.randomBytes(32).toString('hex');
+        const dir = path.dirname(SALT_PATH);
+        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+        const { writeFileSync } = require('node:fs');
+        writeFileSync(SALT_PATH, salt, "utf-8");
+        console.log("🔑 SecretsService: Generated new encryption salt");
+        return salt;
+    } catch (err) {
+        console.error("🔑 SecretsService: Salt error, using fallback", err);
+        return "veist-fallback-salt-change-me";
+    }
+}
+
 const ALGO = "aes-256-gcm";
 function deriveKey(): Buffer {
     const passphrase = process.env.ADMIN_PASS || process.env.SECRET_KEY || "veist-default-key-change-me";
-    return crypto.scryptSync(passphrase, "veist-salt", 32);
+    return crypto.scryptSync(passphrase, getOrCreateSalt(), 32);
 }
 
 function encrypt(plaintext: string): string {
@@ -38,9 +57,10 @@ function decrypt(ciphertext: string): string {
         let decrypted = decipher.update(data, "hex", "utf8");
         decrypted += decipher.final("utf8");
         return decrypted;
-    } catch {
-        // If decryption fails (e.g. old unencrypted data), return as-is
-        return ciphertext;
+    } catch (err) {
+        // SEC-09: Never return ciphertext as fallback — log error and return empty
+        console.error("🔐 Decryption failed (key may have changed):", (err as Error).message);
+        return "";
     }
 }
 

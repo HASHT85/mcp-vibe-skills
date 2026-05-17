@@ -64,7 +64,26 @@ export async function deleteRepo(owner: string, repo: string) {
     return true;
 }
 
+// SEC-08: Generate deterministic webhook secret from ADMIN_PASS
+const WEBHOOK_SECRET = process.env.ADMIN_PASS
+    ? require('node:crypto').createHmac('sha256', process.env.ADMIN_PASS).update('veist-webhook').digest('hex').slice(0, 32)
+    : undefined;
+
+export function getWebhookSecret(): string | undefined {
+    return WEBHOOK_SECRET;
+}
+
 export async function createWebhook(owner: string, repo: string, webhookUrl: string) {
+    const config: Record<string, string> = {
+        url: webhookUrl,
+        content_type: "json",
+        insecure_ssl: "0",
+    };
+    // SEC-08: Attach webhook secret if available
+    if (WEBHOOK_SECRET) {
+        config.secret = WEBHOOK_SECRET;
+    }
+
     const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/hooks`, {
         method: 'POST',
         headers,
@@ -72,16 +91,11 @@ export async function createWebhook(owner: string, repo: string, webhookUrl: str
             name: "web",
             active: true,
             events: ["push"],
-            config: {
-                url: webhookUrl,
-                content_type: "json",
-                insecure_ssl: "0"
-            }
+            config,
         })
     });
 
     if (!res.ok) {
-        // Ignore if already exists or other non-critical error for now, but helpful to log
         console.error(`Failed to create webhook: ${res.statusText}`);
         return null;
     }

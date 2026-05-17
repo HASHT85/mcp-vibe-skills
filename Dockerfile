@@ -24,7 +24,12 @@ RUN apk add --no-cache git curl bash docker-cli docker-cli-compose
 RUN git config --global user.email "veist@auto.dev" && \
     git config --global user.name "veist"
 
-RUN mkdir -p /data /workspace
+# SEC-11: Non-root user with docker group access
+RUN addgroup -g 999 docker 2>/dev/null || true && \
+    adduser -D -u 1001 veist && \
+    addgroup veist docker 2>/dev/null || true
+
+RUN mkdir -p /data /workspace && chown -R veist:veist /data /workspace
 
 COPY package*.json ./
 RUN npm install --omit=dev --ignore-scripts
@@ -34,5 +39,7 @@ COPY --from=build /app/dist ./dist
 EXPOSE 8080
 
 VOLUME ["/data", "/workspace"]
+
+USER veist
 
 CMD ["sh", "-c", "git config --global user.email veist@auto.dev && git config --global user.name veist && exec node dist/index.js"]
