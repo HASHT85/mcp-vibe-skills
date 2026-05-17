@@ -326,6 +326,24 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
 }
 
 function runBash(command: string, cwd: string): Promise<string> {
+    // ─── Phase 3: Sandbox — block dangerous commands ───
+    const BLOCKED_PATTERNS = [
+        { pattern: /rm\s+(-rf?|--recursive)\s+\/(?!\w)/, label: "rm -rf /" },
+        { pattern: /mkfs\./, label: "mkfs (format disk)" },
+        { pattern: /dd\s+if=\/dev/, label: "dd raw device write" },
+        { pattern: /:\(\)\s*\{\s*:\|:&\s*\}\s*;/, label: "fork bomb" },
+        { pattern: /chmod\s+777\s+\/(?!\w)/, label: "chmod 777 /" },
+        { pattern: />\s*\/dev\/sd/, label: "write to raw device" },
+        { pattern: /curl\s+.*\|\s*(?:sudo\s+)?bash/, label: "curl pipe to bash" },
+        { pattern: /wget\s+.*\|\s*(?:sudo\s+)?bash/, label: "wget pipe to bash" },
+    ];
+
+    for (const { pattern, label } of BLOCKED_PATTERNS) {
+        if (pattern.test(command)) {
+            return Promise.resolve(`🚫 BLOCKED: Command not allowed in sandbox mode (${label}). Use safer alternatives.`);
+        }
+    }
+
     return new Promise((resolve) => {
         const proc = spawn("bash", ["-c", command], {
             cwd,

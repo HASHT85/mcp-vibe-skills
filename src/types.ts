@@ -7,7 +7,9 @@ export type PipelinePhase =
     | "DEVELOPMENT"
     | "DEBUGGING"
     | "QA"
+    | "EVALUATING"
     | "COMPLETED"
+    | "COMPLETED_WITH_ISSUES"
     | "FAILED"
     | "PAUSED";
 
@@ -72,6 +74,24 @@ export type AgentTokenRecord = {
     outputTokens: number;
     cost: number;
     timestamp: string;
+};
+
+// ─── Phase 3: Auto-Evaluation Types ───
+
+export type EvalCheck = {
+    name: string;           // "http_200", "no_console_errors", "build_success", "file_structure"
+    pass: boolean;
+    detail: string;
+    weight: number;         // 0-100, importance of this check
+};
+
+export type EvalReport = {
+    score: number;          // 0-100 weighted
+    checks: EvalCheck[];
+    recommendation: "SHIP" | "FIX" | "SHIP_WITH_ISSUES";
+    fixInstructions?: string;
+    timestamp: string;
+    cycle: number;          // which eval cycle (1, 2, 3)
 };
 
 export type Pipeline = {

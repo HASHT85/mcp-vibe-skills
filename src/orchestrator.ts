@@ -63,6 +63,47 @@ export class Orchestrator extends EventEmitter {
         } catch (err) {
             console.error("[Orchestrator] FAILED to load pipelines state:", err);
         }
+
+        // Phase 3: Auto-cleanup old workspaces
+        this.startCleanupTimer();
+    }
+
+    // ─── Phase 3: Workspace Cleanup ───
+
+    private startCleanupTimer() {
+        const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000;   // every 6h
+        const MAX_WORKSPACE_AGE = 48 * 60 * 60 * 1000;  // 48h
+
+        setInterval(async () => {
+            let cleaned = 0;
+            for (const [id, p] of this.pipelines) {
+                const isTerminal = p.phase === "COMPLETED" || p.phase === "COMPLETED_WITH_ISSUES" || p.phase === "FAILED";
+                if (!isTerminal) continue;
+
+                const age = Date.now() - new Date(p.updatedAt).getTime();
+                if (age < MAX_WORKSPACE_AGE) continue;
+
+                try {
+                    // Check if workspace still exists
+                    await fs.access(p.workspace);
+
+                    // Remove workspace contents (keep the directory for reference)
+                    const entries = await fs.readdir(p.workspace);
+                    for (const entry of entries) {
+                        await fs.rm(path.join(p.workspace, entry), { recursive: true, force: true });
+                    }
+                    cleaned++;
+                } catch {
+                    // Workspace already gone — skip
+                }
+            }
+
+            if (cleaned > 0) {
+                console.log(`🧹 [Cleanup] Cleaned ${cleaned} workspace(s) older than 48h`);
+            }
+        }, CLEANUP_INTERVAL);
+
+        console.log("🧹 [Cleanup] Workspace cleanup timer started (every 6h, max age: 48h)");
     }
 
     // ─── Pipeline Management ───
@@ -845,7 +886,7 @@ RÈGLES ABSOLUES:
             let dynamicNodes: import("./types.js").NodeTopology[] = [];
             let dynamicIds: string[] = [];
 
-            const baseNodeIds = ["research", "analysis", "skills_enrichment", "architecture", "scaffold", "supervisor_for_scaffold", "qa", "deploy"];
+            const baseNodeIds = ["research", "analysis", "skills_enrichment", "architecture", "scaffold", "supervisor_for_scaffold", "qa", "deploy", "eval", "autofix"];
 
             if (isResume && p.topology && p.topology.length > 0) {
                 // Resume mode: reuse existing topology, extract dynamic nodes
@@ -1030,6 +1071,12 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
             // End nodes
             manager.addNode(new QANode(dynamicIds, topo("qa")?.model, topo("qa")?.provider)); 
             manager.addNode(new DeployNode(topo("deploy")?.model, topo("deploy")?.provider));
+
+            // Phase 3: Auto-Evaluation & Self-Healing
+            const { EvalNode } = await import("./dag/nodes/EvalNode.js");
+            const { AutoFixNode } = await import("./dag/nodes/AutoFixNode.js");
+            manager.addNode(new EvalNode(topo("eval")?.model || p.model));
+            manager.addNode(new AutoFixNode(topo("autofix")?.model || p.model));
 
             // ─── Smart Resume: skip already-completed nodes ───
             if (p.nodeStatuses) {
@@ -1486,12 +1533,21 @@ CMD ["node", "dist/index.js"]`;
                 // Don't throw — the project is still generated successfully
             }
 
-            setPipelinePhase(this, this.pipelines, id, "COMPLETED");
+            // Check if eval reported issues
+            const evalReport = p.artifacts.evalReport as any;
+            const finalPhase = (evalReport?.recommendation === "SHIP_WITH_ISSUES")
+                ? "COMPLETED_WITH_ISSUES"
+                : "COMPLETED";
+            setPipelinePhase(this, this.pipelines, id, finalPhase);
             setAgentStatus(this, this.pipelines, id, "QA", "done");
+            const statusEmoji = finalPhase === "COMPLETED_WITH_ISSUES" ? "⚠️" : "🎉";
+            const statusText = finalPhase === "COMPLETED_WITH_ISSUES" 
+                ? `Projet terminé avec réserves (score eval: ${evalReport?.score}/100)` 
+                : "Projet terminé!";
             const completedMsg = p.github
-                ? `Projet terminé! Repo GitHub: ${p.github.url}${p.artifacts.deployed ? ` | Live: ${p.artifacts.deployedUrl}` : ""}`
-                : `Projet terminé!${p.artifacts.deployed ? ` Live: ${p.artifacts.deployedUrl}` : ""}`;
-            addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🎉", completedMsg, "success");
+                ? `${statusText} Repo GitHub: ${p.github.url}${p.artifacts.deployed ? ` | Live: ${p.artifacts.deployedUrl}` : ""}`
+                : `${statusText}${p.artifacts.deployed ? ` Live: ${p.artifacts.deployedUrl}` : ""}`;
+            addPipelineEvent(this, this.pipelines, id, "Orchestrator", statusEmoji, completedMsg, "success");
 
         } catch (err: any) {
             if (err.name === 'AbortError' || err.message === 'Pipeline Aborted') {

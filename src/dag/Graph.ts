@@ -93,6 +93,34 @@ export class GraphManager extends (EventEmitter as any) {
                                     return;
                                 }
 
+                                // Phase 3: Support for eval feedback loop (Eval → AutoFix → QA → Deploy → Eval)
+                                if (res && res._action === "FIX_AND_REEVAL" && res.report) {
+                                    const evalCycle = res.report.cycle || 1;
+
+                                    this.emit("node-feedback", {
+                                        node,
+                                        target: "autofix",
+                                        feedback: `Eval cycle ${evalCycle}: score ${res.report.score}/100`
+                                    });
+
+                                    // Mark eval as completed (it produced a result)
+                                    node.status = "COMPLETED";
+                                    node.result = res.report;
+
+                                    // Reset the fix chain: autofix → qa → deploy → eval
+                                    for (const resetId of ["autofix", "qa", "deploy", "eval"]) {
+                                        const resetNode = this.nodes.get(resetId);
+                                        if (resetNode && resetId !== node.id) {
+                                            resetNode.reset();
+                                        }
+                                    }
+                                    // Reset eval itself (so it re-runs after deploy)
+                                    node.reset();
+
+                                    checkExecution();
+                                    return;
+                                }
+
                                 node.status = "COMPLETED";
                                 node.result = res;
                                 this.emit("node-complete", { node, result: res });
