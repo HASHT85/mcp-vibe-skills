@@ -41,6 +41,44 @@ const DEFAULT_AGENTS: Omit<PipelineAgent, "status">[] = [
     { role: "QA", emoji: "🧪" },
 ];
 
+// ─── Shared helper: inject vault secrets into workspace .env ───
+async function injectSecretsToEnv(pipelineId: string, workspace: string): Promise<number> {
+    const secretsSvc = getSecretsService();
+    const envContent = secretsSvc.toEnvString(pipelineId);
+    if (!envContent) return 0;
+
+    const envPath = path.join(workspace, ".env");
+    const hasExisting = await fs.access(envPath).then(() => true).catch(() => false);
+
+    if (hasExisting) {
+        const existing = await fs.readFile(envPath, "utf-8");
+        const vaultKeys = new Map<string, string>();
+        for (const line of envContent.split("\n").filter(Boolean)) {
+            const eqIdx = line.indexOf("=");
+            if (eqIdx > 0) vaultKeys.set(line.slice(0, eqIdx), line.slice(eqIdx + 1));
+        }
+        const updatedLines = existing.split("\n").map(line => {
+            const eqIdx = line.indexOf("=");
+            if (eqIdx > 0) {
+                const key = line.slice(0, eqIdx);
+                if (vaultKeys.has(key)) {
+                    const val = vaultKeys.get(key)!;
+                    vaultKeys.delete(key);
+                    return `${key}=${val}`;
+                }
+            }
+            return line;
+        });
+        for (const [key, val] of vaultKeys) {
+            updatedLines.push(`${key}=${val}`);
+        }
+        await fs.writeFile(envPath, updatedLines.join("\n"));
+    } else {
+        await fs.writeFile(envPath, "# ─── Injected by Secrets Vault ───\n" + envContent);
+    }
+    return envContent.split("\n").filter(Boolean).length;
+}
+
 export class Orchestrator extends EventEmitter {
     private pipelines: Map<string, Pipeline> = new Map();
     private running: Set<string> = new Set();
@@ -152,6 +190,9 @@ export class Orchestrator extends EventEmitter {
         this.pipelines.set(id, pipeline);
         addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🚀", `Pipeline créé: "${description}" [Template: ${template?.emoji || "🌐"} ${template?.name || resolvedTemplateId}]`, "info");
         await savePipelinesState(this.pipelines);
+
+        // Race-condition fix: Reserve the slot immediately, before fire-and-forget
+        this.running.add(id);
 
         this.executePipeline(id).catch(err => {
             console.error(`[Orchestrator] Pipeline ${id} failed:`, err);
@@ -611,43 +652,10 @@ RÈGLES ABSOLUES:
                     const repoSlug = p.github?.repo ? slugify(p.github.repo) : slug;
                     const hostDomain = `${repoSlug}.hach.dev`;
 
-                    // Re-inject secrets into .env before rebuild (#10)
-                    // Vault secrets OVERWRITE existing keys (fixes placeholder bug)
+                    // Re-inject secrets into .env before rebuild
                     try {
-                        const secretsSvc = getSecretsService();
-                        const envContent = secretsSvc.toEnvString(id);
-                        if (envContent) {
-                            const envPath = path.join(p.workspace, ".env");
-                            const hasExisting = await fs.access(envPath).then(() => true).catch(() => false);
-                            if (hasExisting) {
-                                const existing = await fs.readFile(envPath, "utf-8");
-                                const vaultKeys = new Map<string, string>();
-                                for (const line of envContent.split("\n").filter(Boolean)) {
-                                    const eqIdx = line.indexOf("=");
-                                    if (eqIdx > 0) vaultKeys.set(line.slice(0, eqIdx), line.slice(eqIdx + 1));
-                                }
-                                // Replace existing keys with vault values, keep non-vault keys
-                                const updatedLines = existing.split("\n").map(line => {
-                                    const eqIdx = line.indexOf("=");
-                                    if (eqIdx > 0) {
-                                        const key = line.slice(0, eqIdx);
-                                        if (vaultKeys.has(key)) {
-                                            const val = vaultKeys.get(key)!;
-                                            vaultKeys.delete(key);
-                                            return `${key}=${val}`;
-                                        }
-                                    }
-                                    return line;
-                                });
-                                // Append any vault keys not already in file
-                                for (const [key, val] of vaultKeys) {
-                                    updatedLines.push(`${key}=${val}`);
-                                }
-                                await fs.writeFile(envPath, updatedLines.join("\n"));
-                            } else {
-                                await fs.writeFile(envPath, envContent);
-                            }
-                        }
+                        const injected = await injectSecretsToEnv(id, p.workspace);
+                        if (injected > 0) addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔐", `${injected} secret(s) ré-injectés`, "info");
                     } catch { /* secrets injection optional */ }
 
                     // Check for multi-container (docker-compose.prod.yml) first
@@ -1089,43 +1097,10 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
             }
 
             // ─── Inject Secrets into .env (never passed to AI) ───
-            // Vault secrets OVERWRITE existing keys (fixes placeholder bug)
             try {
-                const secretsSvc = getSecretsService();
-                const envContent = secretsSvc.toEnvString(id);
-                if (envContent) {
-                    const envPath = path.join(p.workspace, ".env");
-                    const hasExisting = await fs.access(envPath).then(() => true).catch(() => false);
-                    if (hasExisting) {
-                        const existing = await fs.readFile(envPath, "utf-8");
-                        const vaultKeys = new Map<string, string>();
-                        for (const line of envContent.split("\n").filter(Boolean)) {
-                            const eqIdx = line.indexOf("=");
-                            if (eqIdx > 0) vaultKeys.set(line.slice(0, eqIdx), line.slice(eqIdx + 1));
-                        }
-                        // Replace existing keys with vault values, keep non-vault keys
-                        const updatedLines = existing.split("\n").map(line => {
-                            const eqIdx = line.indexOf("=");
-                            if (eqIdx > 0) {
-                                const key = line.slice(0, eqIdx);
-                                if (vaultKeys.has(key)) {
-                                    const val = vaultKeys.get(key)!;
-                                    vaultKeys.delete(key);
-                                    return `${key}=${val}`;
-                                }
-                            }
-                            return line;
-                        });
-                        // Append any vault keys not already in file
-                        for (const [key, val] of vaultKeys) {
-                            updatedLines.push(`${key}=${val}`);
-                        }
-                        await fs.writeFile(envPath, updatedLines.join("\n"));
-                    } else {
-                        await fs.writeFile(envPath, "# ─── Injected by Secrets Vault ───\n" + envContent);
-                    }
-                    const keyCount = envContent.split("\n").filter(Boolean).length;
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔐", `${keyCount} secret(s) injecté(s) dans .env`, "info");
+                const injected = await injectSecretsToEnv(id, p.workspace);
+                if (injected > 0) {
+                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔐", `${injected} secret(s) injecté(s) dans .env`, "info");
                 }
             } catch (secretsErr: any) {
                 console.error("[Orchestrator] Failed to inject secrets:", secretsErr);

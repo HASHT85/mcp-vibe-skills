@@ -137,6 +137,12 @@ export const LoopDetectionMiddleware: Middleware = {
         if (history.length > 5) history.shift();
         loopHistories.set(key, history);
 
+        // Cap map size to prevent unbounded growth
+        if (loopHistories.size > 500) {
+            const oldest = loopHistories.keys().next().value;
+            if (oldest) loopHistories.delete(oldest);
+        }
+
         // Detect: same fingerprint 3+ times in a row
         if (history.length >= 3) {
             const last3 = history.slice(-3);
@@ -223,4 +229,16 @@ export function getDefaultMiddlewareChain(): MiddlewareChain {
 
 export function getTokenTotals(pipelineId: string): { input: number; output: number } | undefined {
     return tokenTotals.get(pipelineId);
+}
+
+/** Cleanup stale middleware state for a completed pipeline */
+export function cleanupMiddlewareState(pipelineId: string): void {
+    // Clean loop histories for all nodes of this pipeline
+    for (const key of loopHistories.keys()) {
+        if (key.startsWith(`${pipelineId}:`)) {
+            loopHistories.delete(key);
+        }
+    }
+    // Clean token totals
+    tokenTotals.delete(pipelineId);
 }

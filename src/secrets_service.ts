@@ -32,9 +32,21 @@ function getOrCreateSalt(): string {
 }
 
 const ALGO = "aes-256-gcm";
+let _cachedKey: Buffer | null = null;
+let _cachedPassphrase: string = "";
+let _cachedSalt: string = "";
+
 function deriveKey(): Buffer {
     const passphrase = process.env.ADMIN_PASS || process.env.SECRET_KEY || "veist-default-key-change-me";
-    return crypto.scryptSync(passphrase, getOrCreateSalt(), 32);
+    const salt = getOrCreateSalt();
+    // Cache: scryptSync is intentionally slow (~100ms), avoid re-deriving on every call
+    if (_cachedKey && _cachedPassphrase === passphrase && _cachedSalt === salt) {
+        return _cachedKey;
+    }
+    _cachedKey = crypto.scryptSync(passphrase, salt, 32);
+    _cachedPassphrase = passphrase;
+    _cachedSalt = salt;
+    return _cachedKey;
 }
 
 function encrypt(plaintext: string): string {

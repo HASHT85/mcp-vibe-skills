@@ -48,6 +48,15 @@ const chatLimiter = rateLimit({
     legacyHeaders: false,
 });
 
+// SEC-13: Sanitize container/resource names before shell use
+const SAFE_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/;
+function sanitizeName(name: string): string {
+    if (!name || !SAFE_NAME_RE.test(name) || name.length > 128) {
+        throw new Error(`Invalid resource name: "${name.slice(0, 30)}"`);
+    }
+    return name;
+}
+
 // Basic Auth Middleware
 const ADMIN_USER = process.env.ADMIN_USER;
 const ADMIN_PASS = process.env.ADMIN_PASS;
@@ -178,15 +187,19 @@ app.post("/pipeline/launch", launchLimiter, express.json({ limit: "50mb" }), asy
     }
 });
 
-// Get available project templates
-app.get("/templates", (_req: Request, res: Response) => {
-    const { TEMPLATE_REGISTRY, suggestTemplates } = require("./templates/registry.js");
-    const query = _req.query.q ? String(_req.query.q) : undefined;
-    if (query) {
-        const suggestions = suggestTemplates(query);
-        res.json({ templates: suggestions.map((t: any) => ({ id: t.id, name: t.name, emoji: t.emoji, description: t.description, defaultStack: t.defaultStack })) });
-    } else {
-        res.json({ templates: TEMPLATE_REGISTRY.map((t: any) => ({ id: t.id, name: t.name, emoji: t.emoji, description: t.description, defaultStack: t.defaultStack })) });
+// Get available project templates (dynamic import for ESM compat)
+app.get("/templates", async (_req: Request, res: Response) => {
+    try {
+        const { TEMPLATE_REGISTRY, suggestTemplates } = await import("./templates/registry.js");
+        const query = _req.query.q ? String(_req.query.q) : undefined;
+        if (query) {
+            const suggestions = suggestTemplates(query);
+            res.json({ templates: suggestions.map((t: any) => ({ id: t.id, name: t.name, emoji: t.emoji, description: t.description, defaultStack: t.defaultStack })) });
+        } else {
+            res.json({ templates: TEMPLATE_REGISTRY.map((t: any) => ({ id: t.id, name: t.name, emoji: t.emoji, description: t.description, defaultStack: t.defaultStack })) });
+        }
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -219,6 +232,9 @@ app.get("/pipeline/:id/events", (req: Request, res: Response) => {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
     }
 
+    // SSE heartbeat to prevent proxy timeouts (Traefik, Cloudflare)
+    const heartbeat = setInterval(() => { res.write(":\n\n"); }, 30000);
+
     // Listen for new events
     const onEvent = (event: PipelineEvent) => {
         if (event.pipelineId === req.params.id) {
@@ -236,6 +252,7 @@ app.get("/pipeline/:id/events", (req: Request, res: Response) => {
     orchestrator.on("phase-change", onPhaseChange);
 
     req.on("close", () => {
+        clearInterval(heartbeat);
         orchestrator.off("event", onEvent);
         orchestrator.off("phase-change", onPhaseChange);
     });
@@ -260,12 +277,15 @@ app.get("/pipeline/events/all", (_req: Request, res: Response) => {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
     }
 
+    // SSE heartbeat
+    const heartbeat = setInterval(() => { res.write(":\n\n"); }, 30000);
+
     const onEvent = (event: PipelineEvent) => {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
     };
 
     orchestrator.on("event", onEvent);
-    _req.on("close", () => orchestrator.off("event", onEvent));
+    _req.on("close", () => { clearInterval(heartbeat); orchestrator.off("event", onEvent); });
 });
 
 // Pause/Resume pipeline
@@ -297,16 +317,18 @@ app.delete("/pipeline/:id", async (req: Request, res: Response) => {
             }
         }
 
-        // 2. Delete Docker container + image (silently ignore errors)
+        // 2. Delete Docker container + image (SEC-15: sanitized names)
         try {
             const { execSync } = await import("node:child_process");
-            const containerName = pipeline.name ? `veist-${slugify(pipeline.name)}-app` : `veist-${req.params.id}-app`;
+            const rawName = pipeline.name ? `veist-${slugify(pipeline.name)}-app` : `veist-${slugify(req.params.id)}-app`;
+            const containerName = sanitizeName(rawName);
             let imageName = "";
             try {
                 imageName = execSync(
                     `docker inspect --format="{{.Config.Image}}" ${containerName}`,
                     { encoding: "utf-8", timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }
                 ).trim();
+                if (imageName) sanitizeName(imageName);
             } catch {}
             try { execSync(`docker rm -f ${containerName}`, { timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] }); } catch {}
             if (imageName) {
@@ -328,11 +350,25 @@ app.post("/pipeline/:id/modify", async (req: Request, res: Response) => {
     try {
         const instructions = String(req.body?.instructions ?? "").trim();
         const model = req.body?.model ? String(req.body.model).trim() : undefined;
-        const files = req.body?.files as { base64: string; type: string }[] | undefined;
+        let files = req.body?.files as { base64: string; type: string }[] | undefined;
 
         if (!instructions && (!files || files.length === 0)) {
             return res.status(400).json({ error: "instructions_or_files_required" });
         }
+
+        // SEC-07 (bis): Validate uploaded files on modify too
+        if (files && Array.isArray(files)) {
+            const MAX_FILES = 5;
+            const MAX_FILE_SIZE = 5 * 1024 * 1024;
+            const ALLOWED_MIMES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]);
+            if (files.length > MAX_FILES) return res.status(400).json({ error: `Too many files. Max ${MAX_FILES}.` });
+            for (const file of files) {
+                if (!ALLOWED_MIMES.has(file.type)) return res.status(400).json({ error: `File type not allowed: ${file.type}` });
+                const sizeBytes = Buffer.byteLength(file.base64, 'base64');
+                if (sizeBytes > MAX_FILE_SIZE) return res.status(400).json({ error: `File too large. Max 5MB.` });
+            }
+        }
+
         const pipeline = await orchestrator.modifyPipeline(req.params.id, instructions, model, files);
         if (!pipeline) {
             return res.status(404).json({ error: "pipeline_not_found" });
@@ -512,16 +548,14 @@ app.get("/skills/get", async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────
-// Profiles + Templates
+// Profiles
 // ─────────────────────────────────────
 
 app.get("/profiles", (_req: Request, res: Response) => {
     res.json({ profiles: PROFILES });
 });
 
-app.get("/templates", (_req: Request, res: Response) => {
-    res.json({ templates: TEMPLATES });
-});
+// NOTE: /templates route defined above (L181) with dynamic registry + search support
 
 // ─────────────────────────────────────
 // Agents
@@ -675,10 +709,12 @@ app.get("/containers", async (_req: Request, res: Response) => {
     }
 });
 
+// SEC-13: All container routes sanitize :name to prevent command injection
 app.post("/containers/:name/stop", async (req: Request, res: Response) => {
     try {
+        const name = sanitizeName(req.params.name);
         const { execSync } = await import("node:child_process");
-        execSync(`docker stop ${req.params.name}`, { timeout: 30000 });
+        execSync(`docker stop ${name}`, { timeout: 30000 });
         res.json({ ok: true });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -687,8 +723,9 @@ app.post("/containers/:name/stop", async (req: Request, res: Response) => {
 
 app.post("/containers/:name/start", async (req: Request, res: Response) => {
     try {
+        const name = sanitizeName(req.params.name);
         const { execSync } = await import("node:child_process");
-        execSync(`docker start ${req.params.name}`, { timeout: 30000 });
+        execSync(`docker start ${name}`, { timeout: 30000 });
         res.json({ ok: true });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -697,8 +734,9 @@ app.post("/containers/:name/start", async (req: Request, res: Response) => {
 
 app.post("/containers/:name/restart", async (req: Request, res: Response) => {
     try {
+        const name = sanitizeName(req.params.name);
         const { execSync } = await import("node:child_process");
-        execSync(`docker restart ${req.params.name}`, { timeout: 30000 });
+        execSync(`docker restart ${name}`, { timeout: 30000 });
         res.json({ ok: true });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -707,17 +745,17 @@ app.post("/containers/:name/restart", async (req: Request, res: Response) => {
 
 app.delete("/containers/:name", async (req: Request, res: Response) => {
     try {
+        const name = sanitizeName(req.params.name);
         const { execSync } = await import("node:child_process");
-        // Get image name before removing
         let imageName = "";
         try {
             imageName = execSync(
-                `docker inspect --format="{{.Config.Image}}" ${req.params.name}`,
+                `docker inspect --format="{{.Config.Image}}" ${name}`,
                 { encoding: "utf-8", timeout: 5000 }
             ).trim();
+            if (imageName) sanitizeName(imageName);
         } catch {}
-        execSync(`docker rm -f ${req.params.name}`, { timeout: 30000 });
-        // Also remove image
+        execSync(`docker rm -f ${name}`, { timeout: 30000 });
         if (imageName) {
             try { execSync(`docker rmi ${imageName}`, { timeout: 30000 }); } catch {}
         }
@@ -729,10 +767,13 @@ app.delete("/containers/:name", async (req: Request, res: Response) => {
 
 app.get("/containers/:name/logs", async (req: Request, res: Response) => {
     try {
+        const name = sanitizeName(req.params.name);
+        // SEC-14: Validate lines as positive integer
+        const rawLines = Number(req.query.lines);
+        const lines = (Number.isInteger(rawLines) && rawLines > 0 && rawLines <= 5000) ? rawLines : 100;
         const { execSync } = await import("node:child_process");
-        const lines = req.query.lines ? Number(req.query.lines) : 100;
         const logs = execSync(
-            `docker logs --tail ${lines} ${req.params.name} 2>&1`,
+            `docker logs --tail ${lines} ${name} 2>&1`,
             { encoding: "utf-8", timeout: 10000 }
         );
         res.json({ logs });
