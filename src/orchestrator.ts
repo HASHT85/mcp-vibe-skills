@@ -719,6 +719,16 @@ RÈGLES ABSOLUES:
             setPipelinePhase(this, this.pipelines, id, "COMPLETED");
             addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🎉", "Modification terminée et déployée!", "success");
 
+            // ─── Phase 2.5: Re-index embeddings after modification (incremental) ───
+            import("./embedding_service.js").then(({ getEmbeddingService }) => {
+                getEmbeddingService().indexRepository(id, p.workspace)
+                    .then((idx) => {
+                        p.artifacts.embeddingsReady = true;
+                        console.log(`🔮 [Embedding] Re-indexed after modify: ${idx.chunkCount} chunks`);
+                    })
+                    .catch((err: any) => console.warn(`[Embedding] Re-index failed:`, err.message));
+            }).catch(() => {});
+
         } catch (err: any) {
             if (err.name === 'AbortError') {
                 addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🛑", "Modification annulée.", "error");
@@ -787,6 +797,22 @@ RÈGLES ABSOLUES:
                     if (fileList) {
                         addPipelineEvent(this, this.pipelines, id, "Orchestrator", "📖", `Fichiers clés lus: ${fileList}`, "info");
                     }
+
+                    // ─── Phase 2.5: Background embedding indexation (non-blocking) ───
+                    import("./embedding_service.js").then(({ getEmbeddingService }) => {
+                        const embeddingService = getEmbeddingService();
+                        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔮", "Indexation sémantique en cours (background)...", "info");
+                        embeddingService.indexRepository(id, p.workspace)
+                            .then((idx) => {
+                                p.artifacts.embeddingsReady = true;
+                                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔮", `Embeddings prêts: ${idx.fileCount} fichiers, ${idx.chunkCount} chunks indexés`, "success");
+                                savePipelinesState(this.pipelines);
+                            })
+                            .catch((err: any) => {
+                                console.warn(`[Embedding] Background indexation failed for ${id}:`, err.message);
+                                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔮", `Indexation échouée (non-bloquant): ${err.message}`, "warning");
+                            });
+                    }).catch(() => { /* embedding service not available */ });
 
                     await savePipelinesState(this.pipelines);
                 } else {

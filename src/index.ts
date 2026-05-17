@@ -58,6 +58,7 @@ app.use('/containers', authMiddleware);
 app.use('/chat', authMiddleware);
 app.use('/api/quick-deploy', authMiddleware);
 app.use('/vps', authMiddleware);
+app.use('/embeddings', authMiddleware);
 // Initialize Stores
 const agentsStore = new AgentsStore(storePath);
 const projectsStore = new ProjectsStore(storePath);
@@ -296,6 +297,54 @@ app.post("/pipeline/:id/retry", async (req: Request, res: Response) => {
         res.json({ pipeline: result });
     } catch (err: any) {
         console.error("Retry pipeline error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─────────────────────────────────────
+// 🔮 Embeddings (Phase 2.5 — Semantic Search)
+// ─────────────────────────────────────
+
+app.get("/embeddings/:pipelineId/status", async (req: Request, res: Response) => {
+    try {
+        const { getEmbeddingService } = await import("./embedding_service.js");
+        const status = await getEmbeddingService().getStatus(req.params.pipelineId);
+        res.json(status);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post("/embeddings/:pipelineId/search", async (req: Request, res: Response) => {
+    try {
+        const query = String(req.body?.query ?? "").trim();
+        const topK = req.body?.topK ? Number(req.body.topK) : 5;
+        if (!query) return res.status(400).json({ error: "missing_query" });
+
+        const { getEmbeddingService } = await import("./embedding_service.js");
+        const results = await getEmbeddingService().search(req.params.pipelineId, query, topK);
+        res.json({ query, results });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post("/embeddings/:pipelineId/reindex", async (req: Request, res: Response) => {
+    try {
+        const pipeline = orchestrator.getPipeline(req.params.pipelineId);
+        if (!pipeline) return res.status(404).json({ error: "pipeline_not_found" });
+
+        const { getEmbeddingService } = await import("./embedding_service.js");
+        // Non-blocking — return immediately
+        getEmbeddingService().indexRepository(req.params.pipelineId, pipeline.workspace)
+            .then((idx) => {
+                console.log(`🔮 [Embedding] Manual reindex done: ${idx.chunkCount} chunks`);
+            })
+            .catch((err: any) => {
+                console.error(`[Embedding] Reindex failed:`, err.message);
+            });
+        res.json({ ok: true, message: "Reindexation started in background" });
+    } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
 });

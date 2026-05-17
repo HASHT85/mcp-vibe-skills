@@ -171,6 +171,41 @@ export const TokenTrackingMiddleware: Middleware = {
     },
 };
 
+// ─── Built-in: Embedding Context Middleware (Phase 2.5) ───
+
+export const EmbeddingMiddleware: Middleware = {
+    name: "Embedding",
+
+    async beforeAgent(context: AgentCallContext): Promise<AgentCallContext> {
+        try {
+            const { getEmbeddingService } = await import("./embedding_service.js");
+            const embeddingService = getEmbeddingService();
+
+            // Check if embeddings exist for this pipeline
+            const status = await embeddingService.getStatus(context.pipelineId);
+            if (!status.indexed) return context;
+
+            // Build search query from the agent's prompt (first 500 chars)
+            const searchQuery = context.prompt.slice(0, 500);
+
+            // Search for relevant code
+            const contextBlock = await embeddingService.buildContextBlock(
+                context.pipelineId,
+                searchQuery,
+                5 // top 5 relevant chunks
+            );
+
+            if (contextBlock) {
+                context.systemPrompt = context.systemPrompt + contextBlock;
+                console.log(`⚙️ [Middleware:Embedding] Injected code context (${contextBlock.length} chars) for pipeline ${context.pipelineId}`);
+            }
+        } catch (err) {
+            console.warn("⚙️ [Middleware:Embedding] Failed to inject code context:", err);
+        }
+        return context;
+    },
+};
+
 // ─── Default Chain ───
 
 let _defaultChain: MiddlewareChain | null = null;
@@ -179,6 +214,7 @@ export function getDefaultMiddlewareChain(): MiddlewareChain {
     if (!_defaultChain) {
         _defaultChain = new MiddlewareChain()
             .use(MemoryMiddleware)
+            .use(EmbeddingMiddleware)
             .use(LoopDetectionMiddleware)
             .use(TokenTrackingMiddleware);
     }
