@@ -57,6 +57,11 @@ export async function createRepo(name: string, description: string) {
 }
 
 export async function deleteRepo(owner: string, repo: string) {
+    // SEC-52: Validate owner/repo to prevent URL injection
+    const SAFE_GH_NAME = /^[a-zA-Z0-9._-]+$/;
+    if (!SAFE_GH_NAME.test(owner) || !SAFE_GH_NAME.test(repo)) {
+        throw new Error(`Invalid owner/repo name: "${owner}/${repo}"`);
+    }
     const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}`, {
         method: 'DELETE',
         headers: getHeaders()

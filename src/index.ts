@@ -327,22 +327,25 @@ async function cleanupPipelineResources(pipelineId: string): Promise<void> {
 
     // 2. Delete Docker container + image (SEC-15: sanitized names)
     try {
-        const { execSync } = await import("node:child_process");
+        const { exec } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        const execAsync = promisify(exec);
         const rawName = pipeline.name ? `veist-${slugify(pipeline.name)}-app` : `veist-${slugify(pipelineId)}-app`;
         const containerName = sanitizeName(rawName);
         let imageName = "";
         try {
-            imageName = execSync(
+            const { stdout } = await execAsync(
                 `docker inspect --format="{{.Config.Image}}" ${containerName}`,
-                { encoding: "utf-8", timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }
-            ).trim();
+                { encoding: "utf-8", timeout: 5000 }
+            );
+            imageName = stdout.trim();
             if (imageName) sanitizeName(imageName);
-        } catch {}
-        try { execSync(`docker rm -f ${containerName}`, { timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] }); } catch {}
+        } catch { /* container may not exist */ }
+        try { await execAsync(`docker rm -f ${containerName}`, { timeout: 15000 }); } catch { /* expected */ }
         if (imageName) {
-            try { execSync(`docker rmi ${imageName}`, { timeout: 15000, stdio: ['pipe', 'pipe', 'pipe'] }); } catch {}
+            try { await execAsync(`docker rmi ${imageName}`, { timeout: 15000 }); } catch { /* expected */ }
         }
-    } catch {}
+    } catch { /* Docker not available */ }
 
     // 3. Delete from orchestrator
     await orchestrator.deletePipeline(pipelineId);
@@ -1090,7 +1093,7 @@ app.use((err: any, _req: any, res: any, _next: any) => {
 (async () => {
     await orchestrator.ready;
     const server = app.listen(PORT, "0.0.0.0", () => {
-        console.log(`🚀 VEIST HQ listening on port ${PORT}  [BUILD: v2-test-update]`);
+        console.log(`🚀 VEIST HQ listening on port ${PORT}  [BUILD: ${process.env.BUILD_TAG || "dev"}]`);
         console.log(`   Docker/Traefik Mode: ✓ Active`);
         console.log(`   GitHub: ${process.env.GITHUB_TOKEN ? "✓ configured" : "✗ not configured"}`);
         console.log(`   AI Model: ${getCurrentModel()}`);

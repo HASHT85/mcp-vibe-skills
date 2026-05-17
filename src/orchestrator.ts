@@ -1001,7 +1001,7 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
                 // Dynamic agents: keep Planner's model choice, fallback to userModel
                 dynamicNodes = dynamicTopology.map(t => ({
                     ...t,
-                    provider: t.provider || "anthropic",
+                    provider: t.provider || "openrouter",
                     model: t.model || userModel,
                     dependencies: t.dependencies.length > 0 ? t.dependencies : ["supervisor_for_scaffold"]
                 }));
@@ -1048,7 +1048,7 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
                 p.nodeStatuses[node.id] = "COMPLETED";
                 // Let's just do a simple linear progression calculation
                 const totalNodes = p.topology!.length;
-                const completedNodes = Array.from((manager as any).nodes.values()).filter((n: any) => n.status === "COMPLETED" || n.status === "SKIPPED").length;
+                const completedNodes = manager.getCompletedCount();
                 p.progress = Math.floor((completedNodes / totalNodes) * 100);
                 savePipelinesState(this.pipelines).catch(() => {});
             });

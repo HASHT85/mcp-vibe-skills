@@ -19,6 +19,11 @@ export class GraphManager extends (EventEmitter as any) {
         this.nodes.set(node.id, node);
     }
 
+    /** QUAL-55: Public getter for progress tracking — avoids (manager as any).nodes */
+    getCompletedCount(): number {
+        return Array.from(this.nodes.values()).filter(n => n.status === "COMPLETED" || n.status === "SKIPPED").length;
+    }
+
     /** Pre-mark a node as completed (for resume/retry — skips execution) */
     markCompleted(nodeId: string) {
         const node = this.nodes.get(nodeId);
