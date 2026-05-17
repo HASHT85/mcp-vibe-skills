@@ -79,9 +79,7 @@ export function Sidebar({
             {/* ── Header ── */}
             <div className="px-4 pt-5 pb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-v-accent flex items-center justify-center">
-                        <span className="text-surface-0 font-headline font-bold text-xs">V</span>
-                    </div>
+                    <img src="/logo.png" alt="VEIST" className="w-7 h-7" />
                     <span className="font-headline font-bold text-base text-text-primary tracking-tight">VEIST</span>
                 </div>
                 <button

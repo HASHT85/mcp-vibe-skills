@@ -48,9 +48,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       >
         {/* Brand */}
         <div className="flex flex-col items-center gap-3">
-          <div className="w-14 h-14 rounded-2xl bg-v-accent flex items-center justify-center shadow-glow-md">
-            <span className="font-headline font-bold text-2xl text-surface-0">V</span>
-          </div>
+          <img src="/logo.png" alt="VEIST" className="w-14 h-14 drop-shadow-[0_0_12px_rgba(215,255,47,0.3)]" />
           <h1 className="font-headline text-2xl font-bold tracking-tight">Welcome to VEIST</h1>
           <p className="text-text-secondary text-sm">Sign in to your workspace</p>
         </div>
