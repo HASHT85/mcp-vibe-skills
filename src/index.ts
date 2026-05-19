@@ -12,7 +12,7 @@ import { fetchSkillDetail } from "./skills_get.js";
 import { PROFILES, getProfile } from "./profiles.js";
 import { TEMPLATES } from "./templates.js";
 import { getOrchestrator, type PipelineEvent } from "./orchestrator.js";
-import { getCurrentModel } from "./claude_code.js";
+import { getCurrentModel } from "./agent_engine.js";
 import { quickDeployRouter } from "./quickDeploy.js";
 import rateLimit from "express-rate-limit";
 

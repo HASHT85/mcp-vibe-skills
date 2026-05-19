@@ -1,7 +1,7 @@
 /**
  * Middleware Chain — Agent Execution Hooks (DeerFlow Pattern)
  * 
- * Provides modular pre/post processing around Claude agent calls.
+ * Provides modular pre/post processing around VEIST agent calls.
  * Inspired by DeerFlow's agents/middlewares/ system.
  * 
  * Built-in middlewares:

@@ -14,7 +14,7 @@
 import { AgentNode } from "./AgentNode.js";
 import type { NodeContext } from "../Node.js";
 import type { EvalCheck, EvalReport } from "../../types.js";
-import { runClaudeAgent } from "../../claude_code.js";
+import { runVeistAgent } from "../../agent_engine.js";
 import { slugify } from "../../orchestrator_utils.js";
 
 // SEC-17: Validate names before shell interpolation
@@ -389,7 +389,7 @@ export class EvalNode extends AgentNode {
         if (failedChecks.length === 0) return "";
 
         try {
-            const result = await runClaudeAgent({
+            const result = await runVeistAgent({
                 model: context.pipeline.model || "anthropic/claude-sonnet-4",
                 prompt: `Analyse ces résultats de tests automatiques et produis des instructions de correction PRÉCISES.
 

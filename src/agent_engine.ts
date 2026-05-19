@@ -3,6 +3,9 @@
  * VEIST Agent Engine — OpenRouter (OpenAI-compatible)
  * Uses OpenAI SDK pointed at OpenRouter for multi-model agentic coding.
  * Supports all models available on OpenRouter (Claude, GPT, Gemini, DeepSeek, etc.)
+ * 
+ * NOTE: This file was renamed from claude_code.ts to agent_engine.ts
+ * to reflect the multi-model architecture of VEIST.
  */
 
 import OpenAI from "openai";
@@ -222,34 +225,8 @@ async function executeTool(name: string, input: Record<string, any>, cwd: string
                     return `Successfully replaced content in ${input.path}`;
                 }
 
-                // Fallback: Fuzzy matching ignoring exact whitespace/newlines
-                const normalize = (str: string) => str.replace(/\s+/g, ' ').trim();
-                const normTarget = normalize(input.targetStr);
-
-                // Extremely simple fuzzy replace for agent convenience
-                const lines = content.split('\n');
-                let found = false;
-
-                // Try to find a window of lines that matches the normalized target
-                for (let windowSize = 1; windowSize <= 20; windowSize++) {
-                    for (let i = 0; i <= lines.length - windowSize; i++) {
-                        const windowContent = lines.slice(i, i + windowSize).join('\n');
-                        if (normalize(windowContent) === normTarget) {
-                            lines.splice(i, windowSize, input.replacementStr);
-                            content = lines.join('\n');
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (found) break;
-                }
-
-                if (found) {
-                    await fs.writeFile(filePath, content, "utf-8");
-                    return `Successfully replaced content in ${input.path} (using secondary fuzzy whitespace match).`;
-                }
-
-                return `Error: Target string not found in file. Ensure exact match including whitespaces or use sed via bash.`;
+                // SEC-HARDENED: No fuzzy matching — agent must provide exact target string
+                return `Error: Target string not found in file. Ensure EXACT match including all whitespace and newlines. No fuzzy fallback is available.`;
             }
             case "web_search": {
                 try {
@@ -473,7 +450,7 @@ export function getCurrentModel(): string {
     return DEFAULT_MODEL;
 }
 
-export async function runClaudeAgent(options: AgentOptions): Promise<AgentResult> {
+export async function runVeistAgent(options: AgentOptions): Promise<AgentResult> {
     const startTime = Date.now();
     const actions: AgentAction[] = [];
     const maxTurns = options.maxTurns || 50;

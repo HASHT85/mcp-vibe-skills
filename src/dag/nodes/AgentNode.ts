@@ -1,5 +1,5 @@
 import { DagNode, type NodeContext } from "../Node.js";
-import { runClaudeAgent } from "../../claude_code.js";
+import { runVeistAgent } from "../../agent_engine.js";
 import { getDefaultMiddlewareChain, type AgentCallContext, type AgentCallResult } from "../../middleware.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -59,7 +59,7 @@ export abstract class AgentNode extends DagNode {
             console.warn(`⚙️ [AgentNode:${this.id}] Middleware beforeAgent failed, continuing:`, err);
         }
 
-        const result = await runClaudeAgent({
+        const result = await runVeistAgent({
             model: this.model || context.pipeline.model,
             prompt,
             systemPrompt,

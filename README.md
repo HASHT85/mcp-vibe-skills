@@ -95,7 +95,7 @@ src/
 ├── memory_service.ts        # Long-term memory — fact extraction & dedup
 ├── embedding_service.ts     # Semantic code search — vector embeddings
 ├── middleware.ts             # Agent hooks — memory, loop detection, token tracking
-├── claude_code.ts           # Agent runtime — OpenRouter multi-model execution
+├── agent_engine.ts          # Agent runtime — OpenRouter multi-model execution
 ├── secrets_service.ts       # Encrypted secrets vault (salted, derived keys)
 ├── github_api.ts            # GitHub repo creation, push, webhooks
 ├── quickDeploy.ts           # One-click deploy from existing GitHub repos

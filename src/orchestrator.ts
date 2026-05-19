@@ -1,7 +1,7 @@
 /**
  * Orchestrator — Multi-Pipeline Manager
  * Manages N project pipelines in parallel, each going through BMAD phases.
- * Uses Claude Code Agent SDK for actual development work.
+ * Uses VEIST Agent Engine for actual development work via OpenRouter.
  */
 
 import * as fs from "node:fs/promises";
@@ -9,7 +9,7 @@ import * as path from "node:path";
 import * as crypto from "node:crypto";
 import { EventEmitter } from "node:events";
 
-import { runClaudeAgent, gitPush, gitClone, gitInit, agentEvents, type AgentAction } from "./claude_code.js";
+import { runVeistAgent, gitPush, gitClone, gitInit, agentEvents, type AgentAction } from "./agent_engine.js";
 import type { ModifyRun } from "./types.js";
 import { GraphManager } from "./dag/Graph.js";
 import type { NodeContext } from "./dag/Node.js";
@@ -418,7 +418,7 @@ export class Orchestrator extends EventEmitter {
             addPipelineEvent(this, this.pipelines, id, "Analyst", "🧠", "Analyse de la demande de modification...", "info");
             setAgentStatus(this, this.pipelines, id, "Analyst", "active", "Analyse de la modification...");
 
-            const analystResult = await runClaudeAgent({
+            const analystResult = await runVeistAgent({
                 model: p.model,
                 prompt: `Un utilisateur veut modifier ce projet existant.
 Voici ses instructions :
@@ -466,7 +466,7 @@ Analyse la demande et retourne UNIQUEMENT un objet JSON valide avec ce format :
             if (modType === "structural") {
                 setPipelinePhase(this, this.pipelines, id, "ARCHITECTURE");
                 setAgentStatus(this, this.pipelines, id, "Architect", "active", "Restructuration (Architecture)...");
-                const archResult = await runClaudeAgent({
+                const archResult = await runVeistAgent({
                     model: p.model,
                     prompt: `L'utilisateur a demandé une modification structurelle majeure : "${instructions}".
 Le plan de l'Analyste est :
@@ -514,7 +514,7 @@ Ne boucle pas indéfiniment. Arrête-toi dès que le Scaffolding est prêt.`,
                 }
             }
 
-            const result = await runClaudeAgent({
+            const result = await runVeistAgent({
                 model: p.model,
                 prompt: `Tu dois implémenter ces modifications dans le projet :
 Demande originale: "${instructions}"
@@ -580,7 +580,7 @@ RÈGLES ABSOLUES:
                 modRun.phase = 'QA';
                 setModNode('qa', 'PENDING', 'active');
 
-                const qaResult = await runClaudeAgent({
+                const qaResult = await runVeistAgent({
                     model: p.model,
                     prompt: `Vérifie que le projet fonctionne correctement après les modifications:
 "${instructions}"
@@ -953,7 +953,7 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
 
                 let dynamicTopology: import("./types.js").NodeTopology[] = [];
                 try {
-                    const plannerResult = await runClaudeAgent({
+                    const plannerResult = await runVeistAgent({
                         model: userModel,
                         prompt: plannerPrompt,
                         systemPrompt: "You are the VEIST Planner. Output ONLY a valid JSON array of agent objects. No text, no markdown, no explanation. Just the JSON array.",
@@ -1108,7 +1108,7 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
                 const architecture = p.artifacts.architecture || {};
                 const topology = p.topology || [];
                 
-                const readmeResult = await runClaudeAgent({
+                const readmeResult = await runVeistAgent({
                     model: p.model,
                     prompt: `Generate a professional, comprehensive README.md for this project.
 

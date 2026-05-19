@@ -3,7 +3,7 @@
  * Bypasses the full AI pipeline for existing projects.
  */
 import express from "express";
-import { gitClone } from "./claude_code.js";
+import { gitClone } from "./agent_engine.js";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
