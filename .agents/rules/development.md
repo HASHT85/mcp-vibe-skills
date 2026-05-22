@@ -10,22 +10,29 @@ description: Conventions de développement TypeScript/Node.js pour le projet VEI
 |-----------|-------------|
 | **Runtime** | Node.js 20.x LTS (Alpine 3.21) |
 | **Language** | TypeScript 5.5+ (strict mode) |
-| **Module system** | ESM (`import`/`export`) — PAS de CommonJS |
+| **Module system** | ESM (`import`/`export`) — **JAMAIS CommonJS** |
 | **Framework** | Express 4.x |
 | **LLM** | Multi-model via OpenRouter (Claude, Gemini, DeepSeek, GPT) |
 | **Dashboard** | React + Vite + TailwindCSS |
-| **Package manager** | npm (lockfile committed) |
+| **Package manager** | npm (lockfile commité) |
+| **Tests** | Vitest (`npm run test`) |
+| **Linting** | ESLint + Prettier (`npm run lint`, `npm run format`) |
+| **Config** | Zod — validation env vars au démarrage (`src/config.ts`) |
 
 ## 2. TypeScript
 
 ### Obligatoire
 ```typescript
-// ✅ ESM imports
+// ✅ ESM imports avec extension .js (résolution Node ESM)
 import { Router } from "express";
 import path from "node:path";
+import { runVeistAgent } from "./agent/index.js";
 
 // ❌ CommonJS INTERDIT
 const express = require("express");
+
+// ❌ @ts-nocheck INTERDIT (depuis audit QUAL-34)
+// @ts-nocheck
 ```
 
 ### tsconfig.json strict
@@ -38,38 +45,51 @@ const express = require("express");
 - Toujours typer les paramètres de fonction et les retours
 - Utiliser `interface` pour les structures de données
 - Éviter `any` — utiliser `unknown` si le type est inconnu
-- Les types partagés sont dans `src/types.ts`
+- Types partagés agent : `src/agent/types.ts`
+- Types globaux : `src/types.ts`
 
 ## 3. Architecture & modularité
 
-### Structure du projet
+### Structure du projet (à jour — Mai 2026)
 ```
 src/
-├── index.ts              # Serveur Express + routes
-├── orchestrator.ts       # Pipeline manager (DAG orchestration)
-├── chat_service.ts       # Chat sessions + memory
-├── memory_service.ts     # Long-term memory
-├── middleware.ts          # Middleware chain (memory, loop detection)
-├── skills.ts             # Skills lookup + TF-IDF scoring
-├── claude_code.ts        # Agent execution (OpenRouter API)
-├── secrets_service.ts    # Encrypted secrets (AES-256-GCM)
-├── quickDeploy.ts        # Quick deploy via Hostinger API
-├── github_api.ts         # GitHub repo management
-├── profiles.ts           # User profiles
+├── agent/
+│   ├── types.ts          ← Types partagés (AgentAction, AgentResult, AgentOptions)
+│   ├── openrouter.ts     ← Adaptateur OpenAI/OpenRouter
+│   └── index.ts          ← Boucle principale runVeistAgent
+├── tools/
+│   ├── system.ts         ← safePath() + bash sandbox
+│   ├── file.ts           ← read/write/replace_in_file + mémoire partagée
+│   ├── web.ts            ← webSearch (Tavily) + fetchUrl (SSRF protégé)
+│   └── executor.ts       ← Dispatcher central + définitions TOOLS[]
 ├── dag/
-│   ├── Graph.ts          # DAG execution engine
-│   ├── Node.ts           # Base node class
-│   └── nodes/            # Specialized agent nodes
-└── templates/
-    └── registry.ts       # Project templates (7 types)
+│   ├── Graph.ts          ← Moteur d'exécution DAG
+│   ├── Node.ts           ← Classe de base
+│   └── nodes/            ← Agents spécialisés (PlannerNode, AgentNode, EvalNode…)
+├── __tests__/
+│   └── security.test.ts  ← 27 tests non-régression sécurité
+├── agent_engine.ts       ← Pont de compat (re-exports vers src/agent/)
+├── orchestrator.ts       ← Pipeline manager DAG ⚠️ (1544 lignes — candidat refactoring)
+├── chat_service.ts       ← Sessions chat + context summarization
+├── memory_service.ts     ← Long-term memory
+├── embedding_service.ts  ← Semantic code search (gemini-embedding-2-preview)
+├── middleware.ts         ← Hooks pre/post agents (Memory, LoopDetection, Tokens)
+├── skills.ts             ← TF-IDF cosine similarity skills lookup
+├── model_benchmarks.ts   ← Benchmarks modèles pour routing Planner
+├── config.ts             ← Validation Zod des env vars ← LIRE AU DÉMARRAGE
+├── secrets_service.ts    ← AES-256-GCM secrets
+├── github_api.ts         ← API GitHub
+├── quickDeploy.ts        ← Déploiement rapide Hostinger
+└── index.ts              ← Serveur Express + routes
 ```
 
 ### Règles d'architecture
-- **Max ~500 lignes par fichier** — refactorer si ça dépasse
+- **Max ~500 lignes par fichier** — refactorer si dépassé (`orchestrator.ts` est le prochain candidat)
 - **Singleton pattern** pour les services : `SecretsService`, `MemoryService`
 - **Separation of concerns** : routes dans `index.ts`, logique dans les services
 - **Pas de state global** mutable en dehors des services dédiés
 - Chaque agent node est un module autonome dans `src/dag/nodes/`
+- Nouveaux outils → créer dans `src/tools/` et enregistrer dans `executor.ts`
 
 ## 4. Asynchronie
 
@@ -87,8 +107,8 @@ const result = await fetch(url);
 // ❌ Callbacks interdits
 fetch(url, (err, res) => { ... });
 
-// ❌ Promise non-gérée
-someAsyncFunction(); // manque await
+// ❌ Promise non-gérée — ESLint @typescript-eslint/no-floating-promises bloquera
+someAsyncFunction();
 ```
 
 ### Error handling
@@ -98,7 +118,6 @@ try {
   const response = await openRouterCall(prompt);
 } catch (err) {
   console.error("🤖 Agent failed:", err.message);
-  // Retry logic ou fallback
 }
 
 // ✅ Retry avec backoff exponentiel pour les APIs
@@ -121,28 +140,42 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
 - **Classes** : `PascalCase` (ex: `SecretsService`)
 - **Fonctions/variables** : `camelCase` (ex: `getSecrets`)
 - **Constantes** : `UPPER_SNAKE_CASE` (ex: `HOSTINGER_API`)
-- **Interfaces** : `PascalCase` avec préfixe si nécessaire (ex: `SecretEntry`)
+- **Interfaces** : `PascalCase` (ex: `SecretEntry`)
 
 ### Logging
-- Utiliser des emojis pour la lisibilité dans les logs :
-  - 🤖 Agent actions
-  - 🔐 Security/secrets
-  - 📦 Docker/deploy
-  - 🧠 Memory/AI
-  - ⚡ Performance
-  - ❌ Errors
-  - ✅ Success
+Utiliser des emojis pour la lisibilité dans les logs :
+- 🤖 Agent actions
+- 🔐 Security/secrets
+- 📦 Docker/deploy
+- 🧠 Memory/AI
+- ⚡ Performance
+- ❌ Errors
+- ✅ Success
+- 🚫 Blocage sécurité
 
-### Imports
-- Ordre : Node.js built-ins → packages externes → modules internes
-- Toujours utiliser l'extension `.js` dans les imports internes (ESM resolution)
+### Imports — ordre obligatoire
 ```typescript
-import path from "node:path";           // Built-in
-import express from "express";          // External
-import { SecretsService } from "./secrets_service.js";  // Internal
+import path from "node:path";                              // 1. Node.js built-ins
+import express from "express";                             // 2. Packages externes
+import { runVeistAgent } from "./agent/index.js";          // 3. Modules internes (.js)
 ```
 
-## 6. Dashboard (React)
+## 6. Scripts npm disponibles
+
+```bash
+npm run build         # Compilation TypeScript
+npm run start         # Démarrer le serveur
+npm run lint          # Vérifier le style (ESLint)
+npm run lint:fix      # Corriger automatiquement
+npm run format        # Appliquer Prettier sur src/
+npm run format:check  # Vérifier formatage (CI)
+npm run test          # Run tests (27 tests sécurité)
+npm run test:watch    # Mode développement
+npm run test:coverage # Rapport couverture HTML
+npm run mcp           # Démarrer en mode MCP stdio
+```
+
+## 7. Dashboard (React)
 
 ### Stack
 - React 18+ avec TypeScript
@@ -162,13 +195,19 @@ import { SecretsService } from "./secrets_service.js";  // Internal
 - Toujours indiquer l'état des containers (running/stopped/error)
 - Les coûts et tokens doivent être visibles dans l'agent details panel
 
-## 7. Pre-commit & qualité
+## 8. Pre-commit & qualité
 
 ### Hooks actifs (Husky)
 1. `scripts/check-secrets.js` — Scanne les secrets dans le code
-2. `npm run build` — Compilation TypeScript doit passer
+
+### Checklist avant commit
+```bash
+npm run test          # 27/27 requis ✅
+npx tsc --noEmit      # 0 erreur requise ✅
+npm run lint          # 0 warning si possible
+```
 
 ### Règles
-- Ne JAMAIS utiliser `--no-verify` sauf en urgence absolue
+- Ne JAMAIS utiliser `--no-verify` sauf urgence absolue
 - `package-lock.json` DOIT être commité
 - Les dépendances `devDependencies` ne doivent pas être en production (`--omit=dev`)
