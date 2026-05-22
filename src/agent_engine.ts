@@ -365,7 +365,7 @@ function runBash(command: string, cwd: string): Promise<string> {
     // ─── Phase 3: Sandbox — block dangerous commands ───
     const BLOCKED_PATTERNS = [
         // Filesystem destruction
-        { pattern: /rm\s+(-rf?|--recursive)\s+\/(?!\w)/, label: "rm -rf /" },
+        { pattern: /rm\s+(-rf?|--recursive)\s+(\/(?!\w)|\/(etc|usr|var|bin|sbin|lib|boot|sys|proc|root|home|tmp|data|opt))/, label: "rm -rf system paths" },
         { pattern: /mkfs\./, label: "mkfs (format disk)" },
         { pattern: /dd\s+if=\/dev/, label: "dd raw device write" },
         { pattern: /:\(\)\s*\{\s*:\|:&\s*\}\s*;/, label: "fork bomb" },
