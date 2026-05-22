@@ -3,6 +3,12 @@ import cors from "cors";
 import helmet from "helmet";
 import crypto from "node:crypto";
 import { slugify } from "./orchestrator_utils.js";
+import { loadConfig } from "./config.js";
+
+// ─── Validate environment at startup — fail fast with clear error ───
+loadConfig();
+
+
 
 import { AgentsStore } from "./agents_store.js";
 import { ProjectsStore } from "./projects_store.js";
