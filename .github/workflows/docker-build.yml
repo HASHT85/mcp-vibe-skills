@@ -5,8 +5,37 @@ on:
     branches: [main]
 
 jobs:
-  build-and-push:
+  # ─── Étape 1 : Quality Gate (bloque le déploiement si cassé) ───
+  quality:
+    name: Quality Gate
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --omit=dev=false
+
+      - name: 🔷 TypeScript check
+        run: npx tsc --noEmit
+
+      - name: 🧪 Run security tests
+        run: npm run test
+
+      - name: 🎨 ESLint check
+        run: npm run lint
+
+  # ─── Étape 2 : Build & Push Docker (seulement si quality passe) ───
+  build-and-push:
+    name: Build & Push Docker
+    runs-on: ubuntu-latest
+    needs: quality
     permissions:
       contents: read
 
@@ -70,3 +99,4 @@ jobs:
           data = json.load(sys.stdin)
           for c in data:
               print(f\"{c['name']}: {c['state']} ({c.get('health', 'n/a')})\")" || echo "$STATUS"
+

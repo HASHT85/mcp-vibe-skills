@@ -1,1 +1,31 @@
-npm run pre-commit
+#!/usr/bin/env sh
+
+echo "🔐 [1/4] Scanning secrets..."
+node scripts/check-secrets.js
+if [ $? -ne 0 ]; then
+  echo "❌ Secret leak detected — commit blocked."
+  exit 1
+fi
+
+echo "🔷 [2/4] TypeScript type check..."
+npx tsc --noEmit
+if [ $? -ne 0 ]; then
+  echo "❌ TypeScript errors — commit blocked. Run 'npx tsc --noEmit' to see details."
+  exit 1
+fi
+
+echo "🧪 [3/4] Running security tests..."
+npm run test
+if [ $? -ne 0 ]; then
+  echo "❌ Tests failed — commit blocked. Run 'npm run test' to see details."
+  exit 1
+fi
+
+echo "🎨 [4/4] ESLint check..."
+npm run lint
+if [ $? -ne 0 ]; then
+  echo "❌ Lint errors — commit blocked. Run 'npm run lint:fix' to auto-fix."
+  exit 1
+fi
+
+echo "✅ All pre-commit checks passed!"
