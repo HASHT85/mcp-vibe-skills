@@ -409,3 +409,32 @@ export async function getDeployStatus(actionId: number) {
 export async function getDeployContainers(projectName: string) {
     return api<{ id: string; name: string; status: string; state: string; health: string }[]>(`/api/quick-deploy/containers/${projectName}`);
 }
+
+// ─── 🔍 Eval Report (Phase 3B) ───
+
+export type EvalCheckName = 'http_200' | 'no_console_errors' | 'build_artifacts' | 'file_structure';
+
+export type EvalCheck = {
+    name: EvalCheckName;
+    pass: boolean;
+    detail: string;
+    weight: number;
+};
+
+export type EvalReport = {
+    score: number;
+    checks: EvalCheck[];
+    recommendation: 'SHIP' | 'FIX' | 'SHIP_WITH_ISSUES';
+    fixInstructions?: string;
+    cycle: number;
+    timestamp: string;
+};
+
+export async function getEvalReport(pipelineId: string): Promise<EvalReport | null> {
+    try {
+        const data = await api<{ evalReport: EvalReport }>(`/pipeline/${pipelineId}/eval-report`);
+        return data.evalReport;
+    } catch {
+        return null;
+    }
+}

@@ -421,6 +421,15 @@ app.get("/pipeline/:id/repo-context", async (req: Request, res: Response) => {
     }
 });
 
+// Phase 3B — Eval report: returns pipeline.artifacts.evalReport or 404
+app.get("/pipeline/:id/eval-report", (req: Request, res: Response) => {
+    const pipeline = orchestrator.getPipeline(req.params.id);
+    if (!pipeline) return res.status(404).json({ error: "pipeline_not_found" });
+    const evalReport = pipeline.artifacts?.evalReport;
+    if (!evalReport) return res.status(404).json({ error: "eval_report_not_found" });
+    res.json({ evalReport });
+});
+
 app.post("/pipeline/:id/kill", async (req: Request, res: Response) => {
     try {
         const success = await orchestrator.killPipeline(req.params.id);

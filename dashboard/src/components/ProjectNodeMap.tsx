@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import type { PipelineEvent } from '../api/client';
+import type { EvalReport } from '../api/client';
 
 export interface NodeTopology {
     id: string;
@@ -30,6 +31,7 @@ export interface ProjectNodeMapProps {
     nodeStatuses?: Record<string, 'COMPLETED' | 'FAILED' | 'PENDING'>;
     pipelinePhase?: string;
     modifyRuns?: ModifyRunData[];
+    evalReport?: EvalReport;
 }
 
 type NodeStatus = 'waiting' | 'active' | 'done' | 'error';
@@ -69,7 +71,7 @@ const NODE_H = 52;
 const H_SPACING = 260;
 const V_SPACING = 90;
 
-export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode, nodeStatuses, pipelinePhase, modifyRuns }: ProjectNodeMapProps) {
+export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode, nodeStatuses, pipelinePhase, modifyRuns, evalReport }: ProjectNodeMapProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
     const [isPanning, setIsPanning] = useState(false);
@@ -450,6 +452,41 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
                                         ▶ {agent.currentAction}
                                     </div>
                                 )}
+                                {/* Eval score badge */}
+                                {ln.id === 'eval' && evalReport && (() => {
+                                    const sc = evalReport.score >= 70 ? '#34d399' : evalReport.score >= 50 ? '#F59E0B' : '#FF6A3D';
+                                    return (
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 4,
+                                            marginLeft: 14,
+                                            marginTop: 4,
+                                        }}>
+                                            <span style={{
+                                                fontSize: '0.55rem',
+                                                fontWeight: 900,
+                                                color: sc,
+                                                textShadow: `0 0 8px ${sc}66`,
+                                                letterSpacing: '0.05em',
+                                            }}>
+                                                SCORE {evalReport.score}/100
+                                            </span>
+                                            <span style={{
+                                                fontSize: '0.45rem',
+                                                fontWeight: 700,
+                                                color: sc,
+                                                opacity: 0.7,
+                                                padding: '0 3px',
+                                                background: `${sc}18`,
+                                                border: `1px solid ${sc}44`,
+                                                letterSpacing: '0.08em',
+                                            }}>
+                                                {evalReport.recommendation}
+                                            </span>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     );

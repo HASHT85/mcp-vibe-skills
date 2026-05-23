@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { killPipeline, deletePipeline, retryPipeline, getSecrets, saveSecrets, type Pipeline } from '../api/client';
+import { killPipeline, deletePipeline, retryPipeline, getSecrets, saveSecrets, type Pipeline, type EvalReport } from '../api/client';
 import { Terminal } from './Terminal';
 import { ProjectNodeMap } from './ProjectNodeMap';
+import { EvalReportPanel } from './EvalReportPanel';
 import { formatTokenCount } from '../utils';
 
 interface ProjectDetailProps {
@@ -266,6 +267,7 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
                                     nodeStatuses={p.nodeStatuses}
                                     pipelinePhase={p.phase}
                                     modifyRuns={(p as any).modifyRuns}
+                                    evalReport={(p.artifacts?.evalReport as EvalReport | undefined)}
                                 />
                             </div>
                         )}
@@ -499,6 +501,16 @@ export function ProjectDetail({ pipeline: p, onBack, onRefresh }: ProjectDetailP
                                                         {selectedTopo.systemPrompt}
                                                     </div>
                                                 </details>
+                                            )}
+
+                                            {/* Eval Report — shown when eval node is selected */}
+                                            {selectedNodeId === 'eval' && p.artifacts?.evalReport && (
+                                                <div className="mt-1">
+                                                    <EvalReportPanel
+                                                        report={p.artifacts.evalReport as EvalReport}
+                                                        deployedUrl={(p.artifacts?.deployedUrl as string | undefined)}
+                                                    />
+                                                </div>
                                             )}
                                         </div>
                                     );
