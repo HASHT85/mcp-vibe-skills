@@ -320,6 +320,51 @@ export class MemoryService {
         };
     }
 
+    // ─── Eval Lesson (Phase 3A — Feedback Loop) ───
+
+    /**
+     * Stores an evaluation lesson from a failed deployment check.
+     * These lessons are injected into future pipeline agents to avoid repeating mistakes.
+     *
+     * @param checkName   - Which check failed (http_200, no_console_errors, etc.)
+     * @param detail      - Human-readable description of what failed
+     * @param projectType - Tech stack hint (e.g. "React+Node", "Python API")
+     * @param fix         - What fixed or should fix the issue
+     */
+    async addEvalLesson(
+        checkName: string,
+        detail: string,
+        projectType: string,
+        fix?: string,
+    ): Promise<void> {
+        const content = fix
+            ? `EVAL_LESSON [${checkName}] pour projet ${projectType}: "${detail}" — Fix appliqué: ${fix}`
+            : `EVAL_LESSON [${checkName}] pour projet ${projectType}: "${detail}" — À corriger dans les prochains projets similaires`;
+
+        if (this.isDuplicate(content)) {
+            console.log(`🧠 [Memory] Eval lesson already known: ${checkName}`);
+            return;
+        }
+
+        this.data.facts.push({
+            id: randomUUID().slice(0, 8),
+            content,
+            category: "knowledge",
+            confidence: 0.92,
+            createdAt: new Date().toISOString(),
+            source: "eval_pipeline",
+        });
+
+        // Cap facts
+        if (this.data.facts.length > MAX_FACTS) {
+            this.data.facts.sort((a, b) => b.confidence - a.confidence);
+            this.data.facts = this.data.facts.slice(0, MAX_FACTS);
+        }
+
+        await this.saveToDisk();
+        console.log(`🧠 [Memory] Eval lesson stored: ${checkName} — ${detail.slice(0, 80)}`);
+    }
+
     // ─── Force flush (for testing / shutdown) ───
 
     async flush(): Promise<void> {

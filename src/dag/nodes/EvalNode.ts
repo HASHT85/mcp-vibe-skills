@@ -16,6 +16,7 @@ import type { NodeContext } from "../Node.js";
 import type { EvalCheck, EvalReport } from "../../types.js";
 import { runVeistAgent } from "../../agent_engine.js";
 import { slugify } from "../../orchestrator_utils.js";
+import { getMemoryService } from "../../memory_service.js";
 
 // SEC-17: Validate names before shell interpolation
 const SAFE_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/;
@@ -150,6 +151,21 @@ export class EvalNode extends AgentNode {
             recommendation === "SHIP" ? "success" : "warning"
         );
         context.updateAgentStatus(this.role, "done", `Score: ${score}/100 → ${recommendation}`);
+
+        // ─── Phase 3A: Feedback Loop — store failed checks as eval lessons ───
+        const failedChecks = checks.filter(c => !c.pass);
+        if (failedChecks.length > 0) {
+            const projectType = context.pipeline.description?.slice(0, 60) || "projet VEIST";
+            const memSvc = getMemoryService();
+            for (const check of failedChecks) {
+                // Only store lesson when we have a fix (after AutoFix ran) or on final cycle
+                const fix = recommendation !== "FIX" ? report.fixInstructions : undefined;
+                memSvc.addEvalLesson(check.name, check.detail, projectType, fix).catch(() => {
+                    // Non-fatal — memory failure must never block the pipeline
+                });
+            }
+            context.addEvent(this.role, "🧠", `${failedChecks.length} leçon(s) mémorisée(s) pour les prochains pipelines`, "info");
+        }
 
         // Emit control signal for fix cycle
         if (recommendation === "FIX") {
