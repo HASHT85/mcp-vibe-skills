@@ -115,8 +115,10 @@ function Dashboard() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Main view: 'chat' shows ChatView, 'project' shows DetailPanel full-width
+  const [view, setView] = useState<'chat' | 'project'>('chat');
   const [detailPipeline, setDetailPipeline] = useState<Pipeline | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
 
   // Load pipelines
   const loadPipelines = useCallback(async () => {
@@ -153,6 +155,7 @@ function Dashboard() {
 
   const handleSelectSession = async (s: ChatSession) => {
     setActiveSession(s);
+    setView('chat');
     try {
       const data = await getChatSession(s.id);
       setActiveSession(data.session);
@@ -161,11 +164,12 @@ function Dashboard() {
 
   const handleNewChat = () => {
     setActiveSession(null);
+    setView('chat');
   };
 
   const handleSelectProject = (p: Pipeline) => {
     setDetailPipeline(p);
-    setDetailOpen(true);
+    setView('project');
   };
 
   return (
@@ -174,6 +178,7 @@ function Dashboard() {
       {/* ─── Sidebar ─── */}
       <Sidebar
         activeSessionId={activeSession?.id || null}
+        activePipelineId={view === 'project' ? detailPipeline?.id || null : null}
         onSelectSession={handleSelectSession}
         onNewChat={handleNewChat}
         onSelectProject={handleSelectProject}
@@ -194,29 +199,31 @@ function Dashboard() {
         </button>
       )}
 
-      {/* ─── Main Chat Area ─── */}
+      {/* ─── Main Area ─── */}
       <main className={`flex-1 flex flex-col h-screen transition-all duration-300 ${
         sidebarCollapsed ? 'md:ml-0' : 'md:ml-[280px]'
-      } ${detailOpen ? 'md:mr-[380px]' : ''}`}>
-        <ChatView
-          pipelines={pipelines}
-          onPipelineLaunched={() => { loadPipelines(); loadSessions(); }}
-          onRefresh={loadPipelines}
-          activeSession={activeSession}
-          setActiveSession={setActiveSession}
-          sessions={sessions}
-          setSessions={setSessions}
-          onOpenDetail={handleSelectProject}
-        />
+      }`}>
+        {view === 'chat' ? (
+          <ChatView
+            pipelines={pipelines}
+            onPipelineLaunched={() => { loadPipelines(); loadSessions(); }}
+            onRefresh={loadPipelines}
+            activeSession={activeSession}
+            setActiveSession={setActiveSession}
+            sessions={sessions}
+            setSessions={setSessions}
+            onOpenDetail={handleSelectProject}
+          />
+        ) : (
+          <DetailPanel
+            pipeline={detailPipeline}
+            liveEvents={liveEvents}
+            open={true}
+            onClose={() => setView('chat')}
+            fullscreen={true}
+          />
+        )}
       </main>
-
-      {/* ─── Detail Panel (Right) ─── */}
-      <DetailPanel
-        pipeline={detailPipeline}
-        liveEvents={liveEvents}
-        open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-      />
     </div>
   );
 }

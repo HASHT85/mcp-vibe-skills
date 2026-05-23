@@ -9,9 +9,10 @@ interface DetailPanelProps {
     liveEvents: PipelineEvent[];
     open: boolean;
     onClose: () => void;
+    fullscreen?: boolean;
 }
 
-export function DetailPanel({ pipeline, liveEvents, open, onClose }: DetailPanelProps) {
+export function DetailPanel({ pipeline, liveEvents, open, onClose, fullscreen = false }: DetailPanelProps) {
     const [tab, setTab] = useState<DetailTab>("agents");
 
     if (!pipeline) return null;
@@ -66,11 +67,14 @@ export function DetailPanel({ pipeline, liveEvents, open, onClose }: DetailPanel
         <AnimatePresence>
             {open && (
                 <motion.div
-                    className="hidden md:flex fixed right-0 top-0 h-screen w-[380px] bg-surface-2 border-l border-surface-6/50 flex-col z-30"
-                    initial={{ x: "100%" }}
-                    animate={{ x: 0 }}
-                    exit={{ x: "100%" }}
-                    transition={{ type: "spring", damping: 28, stiffness: 300 }}
+                    className={fullscreen
+                        ? "flex flex-col h-full w-full bg-surface-1 overflow-hidden"
+                        : "hidden md:flex fixed right-0 top-0 h-screen w-[380px] bg-surface-2 border-l border-surface-6/50 flex-col z-30"
+                    }
+                    initial={fullscreen ? { opacity: 0 } : { x: "100%" }}
+                    animate={fullscreen ? { opacity: 1 } : { x: 0 }}
+                    exit={fullscreen ? { opacity: 0 } : { x: "100%" }}
+                    transition={fullscreen ? { duration: 0.15 } : { type: "spring", damping: 28, stiffness: 300 }}
                 >
                     {/* ── Header ── */}
                     <div className="px-4 py-4 border-b border-surface-6/50 flex items-center justify-between">
@@ -94,10 +98,13 @@ export function DetailPanel({ pipeline, liveEvents, open, onClose }: DetailPanel
                             </div>
                         </div>
                         <button
-                            className="p-1.5 rounded-lg hover:bg-surface-4 text-text-tertiary hover:text-text-primary transition-all"
+                            className="p-1.5 rounded-lg hover:bg-surface-4 text-text-tertiary hover:text-text-primary transition-all flex items-center gap-1.5"
                             onClick={onClose}
                         >
-                            <span className="material-symbols-outlined text-[18px]">close</span>
+                            <span className="material-symbols-outlined text-[18px]">
+                                {fullscreen ? "arrow_back" : "close"}
+                            </span>
+                            {fullscreen && <span className="text-xs">Back</span>}
                         </button>
                     </div>
 
