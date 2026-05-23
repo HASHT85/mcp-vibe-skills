@@ -68,7 +68,7 @@ export function DetailPanel({ pipeline, liveEvents, open, onClose, fullscreen = 
             {open && (
                 <motion.div
                     className={fullscreen
-                        ? "flex flex-col h-full w-full bg-surface-1 overflow-hidden"
+                        ? "flex flex-col h-screen w-full bg-surface-1 overflow-hidden"
                         : "hidden md:flex fixed right-0 top-0 h-screen w-[380px] bg-surface-2 border-l border-surface-6/50 flex-col z-30"
                     }
                     initial={fullscreen ? { opacity: 0 } : { x: "100%" }}

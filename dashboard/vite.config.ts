@@ -92,4 +92,13 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://api.veist.hach.dev',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
+  },
 })

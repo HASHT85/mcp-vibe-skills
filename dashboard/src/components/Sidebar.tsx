@@ -406,11 +406,7 @@ export function Sidebar({
     return (
         <>
             {/* ── Desktop Sidebar ── */}
-            <aside
-                className={`hidden md:flex fixed left-0 top-0 h-screen z-40 transition-all duration-300 ease-in-out ${
-                    collapsed ? "w-0 overflow-hidden" : "w-[280px]"
-                }`}
-            >
+            <aside className="hidden md:flex flex-col w-full h-full">
                 {sidebarContent}
             </aside>
 
