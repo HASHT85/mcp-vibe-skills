@@ -33,11 +33,18 @@ export async function deployProject(ctx: DeployContext): Promise<void> {
         artifacts.deployedUrl = `https://${hostDomain}`;
 
         // Ensure 'web' network exists (for Traefik)
-        try { execSync(`docker network create web`, { stdio: "pipe" }); } catch { /* already exists */ }
+        try {
+            execSync(`docker network create web`, { stdio: "pipe" });
+        } catch {
+            /* already exists */
+        }
 
         // ─── Multi-Container Path: use docker-compose.prod.yml if it exists ───
         const composeProdPath = path.join(workspace, "docker-compose.prod.yml");
-        const hasComposeProd = await fs.access(composeProdPath).then(() => true).catch(() => false);
+        const hasComposeProd = await fs
+            .access(composeProdPath)
+            .then(() => true)
+            .catch(() => false);
 
         if (hasComposeProd) {
             console.log(`[Deploy] Found docker-compose.prod.yml — using multi-container deploy`);
@@ -52,10 +59,10 @@ export async function deployProject(ctx: DeployContext): Promise<void> {
                     // Already has networks, ensure web is external
                     composeContent = composeContent.replace(
                         /networks:\s*\n(\s+web:\s*\n)/,
-                        'networks:\n$1    external: true\n'
+                        "networks:\n$1    external: true\n"
                     );
                 } else {
-                    composeContent += '\n\nnetworks:\n  web:\n    external: true\n';
+                    composeContent += "\n\nnetworks:\n  web:\n    external: true\n";
                 }
                 await fs.writeFile(composeProdPath, composeContent, "utf-8");
             }
@@ -63,15 +70,21 @@ export async function deployProject(ctx: DeployContext): Promise<void> {
             // Stop old deployment if exists
             try {
                 execSync(`docker compose -p ${projectName} -f ${composeProdPath} down --remove-orphans`, {
-                    cwd: workspace, stdio: "pipe", timeout: 30000
+                    cwd: workspace,
+                    stdio: "pipe",
+                    timeout: 30000,
                 });
-            } catch { /* didn't exist */ }
+            } catch {
+                /* didn't exist */
+            }
 
             // Build all images defined in the compose
             addEvent("Orchestrator", "🔨", "Build des images multi-container...", "info");
             try {
                 execSync(`docker compose -p ${projectName} -f ${composeProdPath} build --no-cache`, {
-                    cwd: workspace, stdio: "pipe", timeout: 600000 // 10 minutes for multi-container builds
+                    cwd: workspace,
+                    stdio: "pipe",
+                    timeout: 600000, // 10 minutes for multi-container builds
                 });
             } catch (buildErr: any) {
                 const buildStdErr = buildErr.stderr?.toString()?.slice(-500) || buildErr.message;
@@ -90,10 +103,17 @@ export async function deployProject(ctx: DeployContext): Promise<void> {
             // Count running services
             try {
                 const psOutput = execSync(`docker compose -p ${projectName} ps --format json`, {
-                    cwd: workspace, stdio: "pipe", timeout: 10000
+                    cwd: workspace,
+                    stdio: "pipe",
+                    timeout: 10000,
                 }).toString();
-                const runningServices = psOutput.split('\n').filter(Boolean).length;
-                addEvent("Orchestrator", "🐳", `${runningServices} container(s) déployé(s) ! URL: https://${hostDomain}`, "success");
+                const runningServices = psOutput.split("\n").filter(Boolean).length;
+                addEvent(
+                    "Orchestrator",
+                    "🐳",
+                    `${runningServices} container(s) déployé(s) ! URL: https://${hostDomain}`,
+                    "success"
+                );
             } catch {
                 addEvent("Orchestrator", "🐳", `Multi-container déployé ! URL: https://${hostDomain}`, "success");
             }
@@ -110,25 +130,48 @@ export async function deployProject(ctx: DeployContext): Promise<void> {
             // 1) Check root Dockerfile (and Dockerfile.prod) — always takes priority
             const rootDockerfile = path.join(workspace, "Dockerfile");
             const rootDockerfileProd = path.join(workspace, "Dockerfile.prod");
-            if (await fs.access(rootDockerfile).then(() => true).catch(() => false)) {
+            if (
+                await fs
+                    .access(rootDockerfile)
+                    .then(() => true)
+                    .catch(() => false)
+            ) {
                 dockerfilePath = rootDockerfile;
                 buildContext = workspace;
                 console.log(`[Deploy] Found Dockerfile at root`);
-            } else if (await fs.access(rootDockerfileProd).then(() => true).catch(() => false)) {
+            } else if (
+                await fs
+                    .access(rootDockerfileProd)
+                    .then(() => true)
+                    .catch(() => false)
+            ) {
                 dockerfilePath = rootDockerfileProd;
                 buildContext = workspace;
                 console.log(`[Deploy] Found Dockerfile.prod at root`);
             } else {
                 // 2) Detect monorepo BEFORE scanning subdirs — a monorepo with only
                 //    partial Dockerfiles (e.g. backend/Dockerfile) would deploy incorrectly
-                const hasFrontendDir = await fs.access(path.join(workspace, "frontend")).then(() => true).catch(() => false);
-                const hasBackendDir = await fs.access(path.join(workspace, "backend")).then(() => true).catch(() => false);
+                const hasFrontendDir = await fs
+                    .access(path.join(workspace, "frontend"))
+                    .then(() => true)
+                    .catch(() => false);
+                const hasBackendDir = await fs
+                    .access(path.join(workspace, "backend"))
+                    .then(() => true)
+                    .catch(() => false);
 
                 if (hasFrontendDir && hasBackendDir) {
                     // Check for docker-compose.prod.yml first (ideal monorepo setup)
                     const composeProd = path.join(workspace, "docker-compose.prod.yml");
-                    if (await fs.access(composeProd).then(() => true).catch(() => false)) {
-                        console.log(`[Deploy] Monorepo detected with docker-compose.prod.yml — skipping to combined Dockerfile generation (single-container deploy)`);
+                    if (
+                        await fs
+                            .access(composeProd)
+                            .then(() => true)
+                            .catch(() => false)
+                    ) {
+                        console.log(
+                            `[Deploy] Monorepo detected with docker-compose.prod.yml — skipping to combined Dockerfile generation (single-container deploy)`
+                        );
                     }
                     // For single-container deploy: generate a combined root Dockerfile
                     // This ensures both frontend AND backend are served together
@@ -141,15 +184,27 @@ export async function deployProject(ctx: DeployContext): Promise<void> {
                         if (entry.isDirectory() && entry.name !== "node_modules" && entry.name !== ".git") {
                             const subDockerfile = path.join(workspace, entry.name, "Dockerfile");
                             const subDockerfileProd = path.join(workspace, entry.name, "Dockerfile.prod");
-                            if (await fs.access(subDockerfile).then(() => true).catch(() => false)) {
+                            if (
+                                await fs
+                                    .access(subDockerfile)
+                                    .then(() => true)
+                                    .catch(() => false)
+                            ) {
                                 dockerfilePath = subDockerfile;
                                 buildContext = path.join(workspace, entry.name);
                                 console.log(`[Deploy] Found Dockerfile in ${entry.name}/, context: ${buildContext}`);
                                 break;
-                            } else if (await fs.access(subDockerfileProd).then(() => true).catch(() => false)) {
+                            } else if (
+                                await fs
+                                    .access(subDockerfileProd)
+                                    .then(() => true)
+                                    .catch(() => false)
+                            ) {
                                 dockerfilePath = subDockerfileProd;
                                 buildContext = path.join(workspace, entry.name);
-                                console.log(`[Deploy] Found Dockerfile.prod in ${entry.name}/, context: ${buildContext}`);
+                                console.log(
+                                    `[Deploy] Found Dockerfile.prod in ${entry.name}/, context: ${buildContext}`
+                                );
                                 break;
                             }
                         }
@@ -162,10 +217,22 @@ export async function deployProject(ctx: DeployContext): Promise<void> {
                 dockerfilePath = path.join(workspace, "Dockerfile");
 
                 // Detect project type: monorepo (frontend/ + backend/) or flat SPA/API
-                const hasFrontend = await fs.access(path.join(workspace, "frontend")).then(() => true).catch(() => false);
-                const hasBackend = await fs.access(path.join(workspace, "backend")).then(() => true).catch(() => false);
-                const hasSrc = await fs.access(path.join(workspace, "src")).then(() => true).catch(() => false);
-                const hasRootPkg = await fs.access(path.join(workspace, "package.json")).then(() => true).catch(() => false);
+                const hasFrontend = await fs
+                    .access(path.join(workspace, "frontend"))
+                    .then(() => true)
+                    .catch(() => false);
+                const hasBackend = await fs
+                    .access(path.join(workspace, "backend"))
+                    .then(() => true)
+                    .catch(() => false);
+                const hasSrc = await fs
+                    .access(path.join(workspace, "src"))
+                    .then(() => true)
+                    .catch(() => false);
+                const hasRootPkg = await fs
+                    .access(path.join(workspace, "package.json"))
+                    .then(() => true)
+                    .catch(() => false);
 
                 let defaultDockerfile: string;
 
@@ -248,15 +315,24 @@ CMD ["node", "dist/index.js"]`;
             // Ensure .env exists for build args
             const envPath = path.join(buildContext, ".env");
             const envExamplePath = path.join(buildContext, ".env.example");
-            const hasEnv = await fs.access(envPath).then(() => true).catch(() => false);
+            const hasEnv = await fs
+                .access(envPath)
+                .then(() => true)
+                .catch(() => false);
             if (!hasEnv) {
                 // Also check root .env
                 const rootEnvPath = path.join(workspace, ".env");
-                const hasRootEnv = await fs.access(rootEnvPath).then(() => true).catch(() => false);
+                const hasRootEnv = await fs
+                    .access(rootEnvPath)
+                    .then(() => true)
+                    .catch(() => false);
                 if (hasRootEnv && buildContext !== workspace) {
                     await fs.copyFile(rootEnvPath, envPath);
                 } else {
-                    const hasEnvExample = await fs.access(envExamplePath).then(() => true).catch(() => false);
+                    const hasEnvExample = await fs
+                        .access(envExamplePath)
+                        .then(() => true)
+                        .catch(() => false);
                     if (hasEnvExample) {
                         await fs.copyFile(envExamplePath, envPath);
                     } else {
@@ -287,25 +363,25 @@ CMD ["node", "dist/index.js"]`;
             // so it appears as a "project" in Hostinger Docker Manager
             const deployComposeContent = [
                 'version: "3.8"',
-                '',
-                'services:',
-                '  app:',
+                "",
+                "services:",
+                "  app:",
                 `    image: ${imageName}`,
                 `    container_name: ${containerName}`,
-                '    restart: unless-stopped',
-                '    networks:',
-                '      - web',
-                '    labels:',
+                "    restart: unless-stopped",
+                "    networks:",
+                "      - web",
+                "    labels:",
                 '      - "traefik.enable=true"',
                 `      - "traefik.http.routers.${projectName}.rule=Host(\`${hostDomain}\`)"`,
                 `      - "traefik.http.routers.${projectName}.entrypoints=websecure"`,
                 `      - "traefik.http.routers.${projectName}.tls.certresolver=letsencrypt"`,
                 `      - "traefik.http.services.${projectName}.loadbalancer.server.port=80"`,
-                '',
-                'networks:',
-                '  web:',
-                '    external: true',
-            ].join('\n');
+                "",
+                "networks:",
+                "  web:",
+                "    external: true",
+            ].join("\n");
             const deployComposePath = path.join(workspace, "docker-compose.deploy.yml");
             await fs.writeFile(deployComposePath, deployComposeContent, "utf-8");
             console.log(`[Deploy] Generated ${deployComposePath}`);
@@ -313,9 +389,13 @@ CMD ["node", "dist/index.js"]`;
             // Stop old deployment if exists
             try {
                 execSync(`docker compose -p ${projectName} -f ${deployComposePath} down`, {
-                    cwd: workspace, stdio: "pipe", timeout: 30000
+                    cwd: workspace,
+                    stdio: "pipe",
+                    timeout: 30000,
                 });
-            } catch { /* didn't exist */ }
+            } catch {
+                /* didn't exist */
+            }
 
             // Deploy using docker compose (creates a "project" visible in Hostinger)
             execSync(`docker compose -p ${projectName} -f ${deployComposePath} up -d`, {

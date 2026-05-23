@@ -33,7 +33,11 @@ function safePath(cwd: string, userPath: string): string {
 }
 
 const BLOCKED_BASH_PATTERNS = [
-    { pattern: /rm\s+(-rf?|--recursive)\s+(\/(?!\w)|\/(etc|usr|var|bin|sbin|lib|boot|sys|proc|root|home|tmp|data|opt))/, label: "rm -rf system paths" },
+    {
+        pattern:
+            /rm\s+(-rf?|--recursive)\s+(\/(?!\w)|\/(etc|usr|var|bin|sbin|lib|boot|sys|proc|root|home|tmp|data|opt))/,
+        label: "rm -rf system paths",
+    },
     { pattern: /mkfs\./, label: "mkfs" },
     { pattern: /:\(\)\s*\{\s*:\|:&\s*\}\s*;/, label: "fork bomb" },
     { pattern: /curl\s+.*\|\s*(?:sudo\s+)?(?:ba)?sh/, label: "curl pipe to shell" },

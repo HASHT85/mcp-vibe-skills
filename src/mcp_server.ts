@@ -79,14 +79,10 @@ export function buildMcpServer(storePath?: string) {
     // agents
     // ------------------------
 
-    server.registerTool(
-        "agents_list",
-        { description: "List registered agents.", inputSchema: {} },
-        async () => {
-            const agents = await store.listAgents();
-            return { content: [{ type: "text", text: JSON.stringify({ agents }, null, 2) }] };
-        }
-    );
+    server.registerTool("agents_list", { description: "List registered agents.", inputSchema: {} }, async () => {
+        const agents = await store.listAgents();
+        return { content: [{ type: "text", text: JSON.stringify({ agents }, null, 2) }] };
+    });
 
     server.registerTool(
         "agent_list_skills",
@@ -96,7 +92,11 @@ export function buildMcpServer(storePath?: string) {
                 const skills = await store.listSkills(agentId);
                 return { content: [{ type: "text", text: JSON.stringify({ agentId, skills }, null, 2) }] };
             } catch (e: any) {
-                return { content: [{ type: "text", text: JSON.stringify({ error: String(e?.message || "error") }, null, 2) }] };
+                return {
+                    content: [
+                        { type: "text", text: JSON.stringify({ error: String(e?.message || "error") }, null, 2) },
+                    ],
+                };
             }
         }
     );
@@ -118,10 +118,22 @@ export function buildMcpServer(storePath?: string) {
         },
         async ({ agentId, owner, repo, skill, href, title, installs, installs_display }) => {
             try {
-                const assigned = await store.assignSkill(agentId, { owner, repo, skill, href, title, installs, installs_display });
+                const assigned = await store.assignSkill(agentId, {
+                    owner,
+                    repo,
+                    skill,
+                    href,
+                    title,
+                    installs,
+                    installs_display,
+                });
                 return { content: [{ type: "text", text: JSON.stringify({ agentId, assigned }, null, 2) }] };
             } catch (e: any) {
-                return { content: [{ type: "text", text: JSON.stringify({ error: String(e?.message || "error") }, null, 2) }] };
+                return {
+                    content: [
+                        { type: "text", text: JSON.stringify({ error: String(e?.message || "error") }, null, 2) },
+                    ],
+                };
             }
         }
     );
@@ -137,7 +149,11 @@ export function buildMcpServer(storePath?: string) {
                 const ok = await store.unassignSkill(agentId, href);
                 return { content: [{ type: "text", text: JSON.stringify({ ok }, null, 2) }] };
             } catch (e: any) {
-                return { content: [{ type: "text", text: JSON.stringify({ error: String(e?.message || "error") }, null, 2) }] };
+                return {
+                    content: [
+                        { type: "text", text: JSON.stringify({ error: String(e?.message || "error") }, null, 2) },
+                    ],
+                };
             }
         }
     );
@@ -146,14 +162,10 @@ export function buildMcpServer(storePath?: string) {
     // projects
     // ------------------------
 
-    server.registerTool(
-        "projects_list",
-        { description: "List projects.", inputSchema: {} },
-        async () => {
-            const items = await projects.listProjects();
-            return { content: [{ type: "text", text: JSON.stringify({ projects: items }, null, 2) }] };
-        }
-    );
+    server.registerTool("projects_list", { description: "List projects.", inputSchema: {} }, async () => {
+        const items = await projects.listProjects();
+        return { content: [{ type: "text", text: JSON.stringify({ projects: items }, null, 2) }] };
+    });
 
     server.registerTool(
         "project_create",
@@ -171,7 +183,9 @@ export function buildMcpServer(storePath?: string) {
                 return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] };
             } catch (e: any) {
                 return {
-                    content: [{ type: "text", text: JSON.stringify({ error: String(e?.message || "error") }, null, 2) }],
+                    content: [
+                        { type: "text", text: JSON.stringify({ error: String(e?.message || "error") }, null, 2) },
+                    ],
                 };
             }
         }
@@ -186,12 +200,19 @@ export function buildMcpServer(storePath?: string) {
         async ({ projectId }) => {
             try {
                 const project = await projects.getProject(projectId);
-                if (!project) return { content: [{ type: "text", text: JSON.stringify({ error: "project_not_found" }, null, 2) }] };
+                if (!project)
+                    return {
+                        content: [{ type: "text", text: JSON.stringify({ error: "project_not_found" }, null, 2) }],
+                    };
 
                 const links = await projects.listProjectAgents(projectId);
                 return { content: [{ type: "text", text: JSON.stringify({ project, agents: links }, null, 2) }] };
             } catch (e: any) {
-                return { content: [{ type: "text", text: JSON.stringify({ error: String(e?.message || "error") }, null, 2) }] };
+                return {
+                    content: [
+                        { type: "text", text: JSON.stringify({ error: String(e?.message || "error") }, null, 2) },
+                    ],
+                };
             }
         }
     );
@@ -219,7 +240,11 @@ export function buildMcpServer(storePath?: string) {
                 });
                 return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] };
             } catch (e: any) {
-                return { content: [{ type: "text", text: JSON.stringify({ error: String(e?.message || "error") }, null, 2) }] };
+                return {
+                    content: [
+                        { type: "text", text: JSON.stringify({ error: String(e?.message || "error") }, null, 2) },
+                    ],
+                };
             }
         }
     );

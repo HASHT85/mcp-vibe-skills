@@ -1,13 +1,13 @@
 // SEC-32: @ts-nocheck removed — type safety restored
 /**
  * EvalNode — Phase 3: Auto-Evaluation of Deployed Projects
- * 
+ *
  * Runs AFTER the Deploy node. Performs automated checks on the live container:
  * - HTTP probe (status 200, valid HTML)
  * - Container log analysis (errors/exceptions)
  * - File structure verification
  * - Build artifact presence
- * 
+ *
  * Produces a scored EvalReport. If score < threshold → emits FIX_AND_REEVAL signal.
  */
 
@@ -29,10 +29,10 @@ function sanitizeShellName(name: string): string {
 
 // ─── Constants ───
 
-const SCORE_THRESHOLD = 70;       // Minimum score to auto-accept
-const MAX_EVAL_CYCLES = 3;        // Max fix attempts before accepting with issues
-const HEALTH_TIMEOUT_SEC = 90;    // Max wait for container to become healthy
-const HEALTH_POLL_SEC = 5;        // Poll interval for health check
+const SCORE_THRESHOLD = 70; // Minimum score to auto-accept
+const MAX_EVAL_CYCLES = 3; // Max fix attempts before accepting with issues
+const HEALTH_TIMEOUT_SEC = 90; // Max wait for container to become healthy
+const HEALTH_POLL_SEC = 5; // Poll interval for health check
 
 // ─── Check Weights ───
 
@@ -91,15 +91,19 @@ export class EvalNode extends AgentNode {
         // Check HTTP
         const httpCheck = await this.checkHttp(deployedUrl);
         checks.push(httpCheck);
-        context.addEvent(this.role, "🧪", 
-            httpCheck.pass ? `HTTP check: ${httpCheck.detail} ✓` : `HTTP check: ${httpCheck.detail} ✗`, 
+        context.addEvent(
+            this.role,
+            "🧪",
+            httpCheck.pass ? `HTTP check: ${httpCheck.detail} ✓` : `HTTP check: ${httpCheck.detail} ✗`,
             httpCheck.pass ? "success" : "warning"
         );
 
         // Check container logs
         const logCheck = await this.checkContainerLogs(projectName);
         checks.push(logCheck);
-        context.addEvent(this.role, "🧪",
+        context.addEvent(
+            this.role,
+            "🧪",
             logCheck.pass ? `Container logs: ${logCheck.detail} ✓` : `Container logs: ${logCheck.detail} ✗`,
             logCheck.pass ? "success" : "warning"
         );
@@ -128,7 +132,12 @@ export class EvalNode extends AgentNode {
         // If max cycles reached, force accept with issues
         if (recommendation === "FIX" && cycle >= MAX_EVAL_CYCLES) {
             recommendation = "SHIP_WITH_ISSUES";
-            context.addEvent(this.role, "⚠️", `Max cycles d'évaluation atteint (${MAX_EVAL_CYCLES}). Acceptation avec réserves.`, "warning");
+            context.addEvent(
+                this.role,
+                "⚠️",
+                `Max cycles d'évaluation atteint (${MAX_EVAL_CYCLES}). Acceptation avec réserves.`,
+                "warning"
+            );
         }
 
         // Build report
@@ -147,13 +156,16 @@ export class EvalNode extends AgentNode {
 
         // Log final result
         const emoji = recommendation === "SHIP" ? "✅" : recommendation === "FIX" ? "🔧" : "⚠️";
-        context.addEvent(this.role, emoji, `Score: ${score}/100 → ${recommendation} (cycle ${cycle}/${MAX_EVAL_CYCLES})`, 
+        context.addEvent(
+            this.role,
+            emoji,
+            `Score: ${score}/100 → ${recommendation} (cycle ${cycle}/${MAX_EVAL_CYCLES})`,
             recommendation === "SHIP" ? "success" : "warning"
         );
         context.updateAgentStatus(this.role, "done", `Score: ${score}/100 → ${recommendation}`);
 
         // ─── Phase 3A: Feedback Loop — store failed checks as eval lessons ───
-        const failedChecks = checks.filter(c => !c.pass);
+        const failedChecks = checks.filter((c) => !c.pass);
         if (failedChecks.length > 0) {
             const projectType = context.pipeline.description?.slice(0, 60) || "projet VEIST";
             const memSvc = getMemoryService();
@@ -164,7 +176,12 @@ export class EvalNode extends AgentNode {
                     // Non-fatal — memory failure must never block the pipeline
                 });
             }
-            context.addEvent(this.role, "🧠", `${failedChecks.length} leçon(s) mémorisée(s) pour les prochains pipelines`, "info");
+            context.addEvent(
+                this.role,
+                "🧠",
+                `${failedChecks.length} leçon(s) mémorisée(s) pour les prochains pipelines`,
+                "info"
+            );
         }
 
         // Emit control signal for fix cycle
@@ -187,10 +204,18 @@ export class EvalNode extends AgentNode {
                 const output = execSync(
                     `docker compose -p ${projectName} ps --format '{{.State}}' 2>/dev/null || docker ps --filter "name=${projectName}" --format '{{.Status}}'`,
                     { timeout: 10000, stdio: ["pipe", "pipe", "pipe"] }
-                ).toString().trim().toLowerCase();
+                )
+                    .toString()
+                    .trim()
+                    .toLowerCase();
 
                 if (output.includes("running") || output.includes("up")) {
-                    context.addEvent(this.role, "🧪", `Container running (détecté en ${i * HEALTH_POLL_SEC}s)`, "success");
+                    context.addEvent(
+                        this.role,
+                        "🧪",
+                        `Container running (détecté en ${i * HEALTH_POLL_SEC}s)`,
+                        "success"
+                    );
                     // Extra 5s grace period for the app to fully initialize
                     await sleep(5000);
                     return true;
@@ -212,16 +237,16 @@ export class EvalNode extends AgentNode {
         try {
             // SEC-18: Validate URL format before use
             const parsed = new URL(url);
-            if (!['http:', 'https:'].includes(parsed.protocol)) {
+            if (!["http:", "https:"].includes(parsed.protocol)) {
                 throw new Error(`Invalid protocol: ${parsed.protocol}`);
             }
 
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 15000);
             const res = await fetch(parsed.href, {
-                method: 'GET',
+                method: "GET",
                 signal: controller.signal,
-                redirect: 'follow',
+                redirect: "follow",
             });
             clearTimeout(timeout);
 
@@ -257,13 +282,14 @@ export class EvalNode extends AgentNode {
             ).toString();
 
             // Count error-like patterns
-            const errorPatterns = /\b(error|exception|fatal|unhandled|ECONNREFUSED|ENOENT|TypeError|ReferenceError|SyntaxError)\b/gi;
+            const errorPatterns =
+                /\b(error|exception|fatal|unhandled|ECONNREFUSED|ENOENT|TypeError|ReferenceError|SyntaxError)\b/gi;
             const matches = logs.match(errorPatterns) || [];
 
             // Filter out false positives (common in build logs)
             // LOGIC-02: Use /i only (no /g) — global flag makes .test() stateful, causing unreliable filtering
             const falsePositives = /error-handler|error\.ts|errorBoundary|console\.error|error_page|no errors/i;
-            const realErrors = matches.filter(m => !falsePositives.test(m));
+            const realErrors = matches.filter((m) => !falsePositives.test(m));
 
             const errorCount = realErrors.length;
             const pass = errorCount <= 2; // Allow up to 2 minor errors
@@ -271,8 +297,8 @@ export class EvalNode extends AgentNode {
             return {
                 name: "no_console_errors",
                 pass,
-                detail: pass 
-                    ? `${errorCount} erreur(s) mineures dans les logs` 
+                detail: pass
+                    ? `${errorCount} erreur(s) mineures dans les logs`
                     : `${errorCount} erreur(s) détectée(s) dans les logs container`,
                 weight: WEIGHTS.no_console_errors,
             };
@@ -302,7 +328,9 @@ export class EvalNode extends AgentNode {
                 found = true;
                 foundDir = dir;
                 break;
-            } catch { /* not found */ }
+            } catch {
+                /* not found */
+            }
         }
 
         // Also check if it's a non-build project (backend, python, etc.)
@@ -319,7 +347,9 @@ export class EvalNode extends AgentNode {
                         weight: WEIGHTS.build_artifacts,
                     };
                 }
-            } catch { /* no package.json */ }
+            } catch {
+                /* no package.json */
+            }
         }
 
         return {
@@ -336,16 +366,25 @@ export class EvalNode extends AgentNode {
         const fs = await import("node:fs/promises");
         const path = await import("node:path");
 
-        const criticalFiles = [
-            "package.json",
-            "Dockerfile",
-        ];
+        const criticalFiles = ["package.json", "Dockerfile"];
 
         const entryPoints = [
-            "src/App.tsx", "src/App.jsx", "src/App.vue", "src/App.svelte",
-            "src/main.tsx", "src/main.jsx", "src/main.ts", "src/main.js",
-            "src/index.ts", "src/index.js", "index.js", "index.ts",
-            "app.py", "main.py", "main.go", "cmd/main.go",
+            "src/App.tsx",
+            "src/App.jsx",
+            "src/App.vue",
+            "src/App.svelte",
+            "src/main.tsx",
+            "src/main.jsx",
+            "src/main.ts",
+            "src/main.js",
+            "src/index.ts",
+            "src/index.js",
+            "index.js",
+            "index.ts",
+            "app.py",
+            "main.py",
+            "main.go",
+            "cmd/main.go",
         ];
 
         let hasPackageJson = false;
@@ -357,7 +396,9 @@ export class EvalNode extends AgentNode {
                 await fs.access(path.join(workspace, f));
                 if (f === "package.json") hasPackageJson = true;
                 if (f === "Dockerfile") hasDockerfile = true;
-            } catch { /* missing */ }
+            } catch {
+                /* missing */
+            }
         }
 
         for (const f of entryPoints) {
@@ -365,7 +406,9 @@ export class EvalNode extends AgentNode {
                 await fs.access(path.join(workspace, f));
                 hasEntryPoint = true;
                 break;
-            } catch { /* not this one */ }
+            } catch {
+                /* not this one */
+            }
         }
 
         const pass = (hasPackageJson || hasEntryPoint) && hasDockerfile;
@@ -396,12 +439,8 @@ export class EvalNode extends AgentNode {
 
     // ─── LLM Fix Instructions ───
 
-    private async generateFixInstructions(
-        context: NodeContext, 
-        checks: EvalCheck[], 
-        score: number
-    ): Promise<string> {
-        const failedChecks = checks.filter(c => !c.pass);
+    private async generateFixInstructions(context: NodeContext, checks: EvalCheck[], score: number): Promise<string> {
+        const failedChecks = checks.filter((c) => !c.pass);
         if (failedChecks.length === 0) return "";
 
         try {
@@ -412,10 +451,13 @@ export class EvalNode extends AgentNode {
 Score actuel: ${score}/100 (seuil: ${SCORE_THRESHOLD})
 
 CHECKS ÉCHOUÉS:
-${failedChecks.map(c => `❌ ${c.name} (poids: ${c.weight}): ${c.detail}`).join('\n')}
+${failedChecks.map((c) => `❌ ${c.name} (poids: ${c.weight}): ${c.detail}`).join("\n")}
 
 CHECKS RÉUSSIS:
-${checks.filter(c => c.pass).map(c => `✓ ${c.name}: ${c.detail}`).join('\n')}
+${checks
+    .filter((c) => c.pass)
+    .map((c) => `✓ ${c.name}: ${c.detail}`)
+    .join("\n")}
 
 Projet: ${context.pipeline.description}
 Workspace: ${context.workspace}
@@ -423,7 +465,8 @@ Workspace: ${context.workspace}
 Produis des instructions de correction COURTES et ACTIONABLES. 
 Concentre-toi sur les checks avec le plus de poids (http_200=40, logs=30, build=20).
 Format: liste numérotée d'actions concrètes (max 5 actions).`,
-                systemPrompt: "Tu es un expert DevOps/debugging. Produis uniquement des instructions de correction concises. Pas de code, juste des actions. Max 200 mots.",
+                systemPrompt:
+                    "Tu es un expert DevOps/debugging. Produis uniquement des instructions de correction concises. Pas de code, juste des actions. Max 200 mots.",
                 cwd: context.workspace,
                 allowedTools: ["read_file", "list_dir"],
                 maxTurns: 3,
@@ -432,13 +475,17 @@ Format: liste numérotée d'actions concrètes (max 5 actions).`,
 
             return result.finalResult || "Corriger les erreurs identifiées dans les checks.";
         } catch {
-            return failedChecks.map(c => `Fix: ${c.name} — ${c.detail}`).join('\n');
+            return failedChecks.map((c) => `Fix: ${c.name} — ${c.detail}`).join("\n");
         }
     }
 
     // Unused but required by abstract class
-    protected getPrompt(context: NodeContext): string { return ""; }
-    protected getSystemPrompt(context: NodeContext): string { return ""; }
+    protected getPrompt(context: NodeContext): string {
+        return "";
+    }
+    protected getSystemPrompt(context: NodeContext): string {
+        return "";
+    }
 }
 
 // ─── Utils ───
@@ -446,5 +493,5 @@ Format: liste numérotée d'actions concrètes (max 5 actions).`,
 // QUAL-03: slugify removed — now imported from orchestrator_utils.ts
 
 function sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }

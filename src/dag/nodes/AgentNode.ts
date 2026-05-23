@@ -41,7 +41,7 @@ export abstract class AgentNode extends DagNode {
         // ─── DeerFlow Pattern: Middleware Chain (before agent) ───
         let prompt = this.getPrompt(context);
         let systemPrompt = this.getSystemPrompt(context);
-        
+
         try {
             const chain = getDefaultMiddlewareChain();
             const mwContext: AgentCallContext = {
@@ -97,7 +97,12 @@ export abstract class AgentNode extends DagNode {
         }
 
         context.updateAgentStatus(this.role, "done", "Terminé");
-        context.addEvent(this.role, this.emoji, `✓ Terminé (Tokens: ${result.inputTokens} in / ${result.outputTokens} out)`, "success");
+        context.addEvent(
+            this.role,
+            this.emoji,
+            `✓ Terminé (Tokens: ${result.inputTokens} in / ${result.outputTokens} out)`,
+            "success"
+        );
 
         // Keep track of tokens (pipeline-level)
         if (!context.pipeline.tokenUsage) {
@@ -110,22 +115,27 @@ export abstract class AgentNode extends DagNode {
         if (!context.pipeline.agentTokens) context.pipeline.agentTokens = [];
         if (!context.pipeline.tokenHistory) context.pipeline.tokenHistory = [];
 
-        const modelName = this.model || context.pipeline.model || 'unknown';
-        const provider = 'openrouter';
+        const modelName = this.model || context.pipeline.model || "unknown";
+        const provider = "openrouter";
 
         // Calculate cost from OpenRouter pricing cache
         let cost = 0;
         try {
             // SEC-31: Use persistent /data/ volume, matching openrouter_models.ts
-            const cachePath = path.join(path.dirname(process.env.STORE_PATH || '/data/store.json'), '.openrouter_cache.json');
+            const cachePath = path.join(
+                path.dirname(process.env.STORE_PATH || "/data/store.json"),
+                ".openrouter_cache.json"
+            );
             if (fs.existsSync(cachePath)) {
-                const models = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+                const models = JSON.parse(fs.readFileSync(cachePath, "utf-8"));
                 const m = models.find((mod: any) => modelName.includes(mod.id) || mod.id.includes(modelName));
                 if (m) {
                     cost = result.inputTokens * m.pricing.prompt + result.outputTokens * m.pricing.completion;
                 }
             }
-        } catch { /* fallback: cost stays 0 */ }
+        } catch {
+            /* fallback: cost stays 0 */
+        }
 
         context.pipeline.agentTokens.push({
             agentId: this.id,
@@ -136,13 +146,13 @@ export abstract class AgentNode extends DagNode {
             inputTokens: result.inputTokens,
             outputTokens: result.outputTokens,
             cost,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
         });
 
         context.pipeline.tokenHistory.push({
             timestamp: new Date().toISOString(),
             tokens: result.inputTokens + result.outputTokens,
-            agentRole: this.role
+            agentRole: this.role,
         });
 
         return this.processResult(result.finalResult || "", context);

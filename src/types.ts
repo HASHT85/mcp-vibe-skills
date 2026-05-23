@@ -13,7 +13,16 @@ export type PipelinePhase =
     | "FAILED"
     | "PAUSED";
 
-export type ProjectType = "static" | "spa" | "fullstack" | "api" | "python-worker" | "node-worker" | "postgres" | "redis" | "unknown";
+export type ProjectType =
+    | "static"
+    | "spa"
+    | "fullstack"
+    | "api"
+    | "python-worker"
+    | "node-worker"
+    | "postgres"
+    | "redis"
+    | "unknown";
 
 export type ProjectService = {
     name: string;
@@ -55,12 +64,12 @@ export type NodeTopology = {
 };
 
 export type ModifyRun = {
-    id: string;              // "mod_1", "mod_2", etc.
-    instructions: string;    // Short summary of what was requested
+    id: string; // "mod_1", "mod_2", etc.
+    instructions: string; // Short summary of what was requested
     startedAt: string;
     topology: NodeTopology[];
     agents: PipelineAgent[];
-    nodeStatuses: Record<string, 'COMPLETED' | 'FAILED' | 'PENDING'>;
+    nodeStatuses: Record<string, "COMPLETED" | "FAILED" | "PENDING">;
     phase: PipelinePhase;
 };
 
@@ -79,19 +88,19 @@ export type AgentTokenRecord = {
 // ─── Phase 3: Auto-Evaluation Types ───
 
 export type EvalCheck = {
-    name: string;           // "http_200", "no_console_errors", "build_success", "file_structure"
+    name: string; // "http_200", "no_console_errors", "build_success", "file_structure"
     pass: boolean;
     detail: string;
-    weight: number;         // 0-100, importance of this check
+    weight: number; // 0-100, importance of this check
 };
 
 export type EvalReport = {
-    score: number;          // 0-100 weighted
+    score: number; // 0-100 weighted
     checks: EvalCheck[];
     recommendation: "SHIP" | "FIX" | "SHIP_WITH_ISSUES";
     fixInstructions?: string;
     timestamp: string;
-    cycle: number;          // which eval cycle (1, 2, 3)
+    cycle: number; // which eval cycle (1, 2, 3)
 };
 
 export type Pipeline = {

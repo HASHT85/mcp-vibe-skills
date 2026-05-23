@@ -66,9 +66,7 @@ async function fetchListPage(url: string, limit = 20): Promise<SkillItem[]> {
         const rank = rankMatch ? Number(rankMatch[1]) : undefined;
 
         // Installs often near end "7.1K"
-        const installsMatch =
-            raw.match(/(\d+(?:\.\d+)?\s*[KMB])\s*$/i) ||
-            raw.match(/(\d+(?:\.\d+)?\s*[KMB])\b/i);
+        const installsMatch = raw.match(/(\d+(?:\.\d+)?\s*[KMB])\s*$/i) || raw.match(/(\d+(?:\.\d+)?\s*[KMB])\b/i);
 
         const installs_display = installsMatch ? installsMatch[1].replace(/\s+/g, "") : undefined;
         const installs = installs_display ? parseCompactNumber(installs_display) : undefined;
@@ -84,7 +82,7 @@ async function fetchListPage(url: string, limit = 20): Promise<SkillItem[]> {
             repo: parsed.repo,
             skill: parsed.skill,
             installs,
-            installs_display
+            installs_display,
         });
     });
 
@@ -124,7 +122,11 @@ function normalizeKeywords(raw: string[]): string[] {
 // ─── TF-IDF Scoring (DeerFlow-inspired relevance scoring) ───
 
 function tokenize(text: string): string[] {
-    return text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(t => t.length >= 2);
+    return text
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter((t) => t.length >= 2);
 }
 
 function buildTfVector(tokens: string[]): Map<string, number> {
@@ -182,11 +184,12 @@ export async function searchSkills(q: string, limit = 20): Promise<SkillItem[]> 
     for (const it of merged) uniq.set(it.href, it);
 
     return Array.from(uniq.values())
-        .filter((it) =>
-            it.title.toLowerCase().includes(query) ||
-            it.owner.toLowerCase().includes(query) ||
-            it.repo.toLowerCase().includes(query) ||
-            it.skill.toLowerCase().includes(query)
+        .filter(
+            (it) =>
+                it.title.toLowerCase().includes(query) ||
+                it.owner.toLowerCase().includes(query) ||
+                it.repo.toLowerCase().includes(query) ||
+                it.skill.toLowerCase().includes(query)
         )
         .slice(0, Math.min(limit, 200));
 }
@@ -206,10 +209,7 @@ export type SkillContent = {
  * Find relevant skills from skills.sh based on context keywords.
  * Returns skills with their full content for injection into agent prompts.
  */
-export async function findSkillsForContext(
-    keywords: string[],
-    limit = 5
-): Promise<SkillContent[]> {
+export async function findSkillsForContext(keywords: string[], limit = 5): Promise<SkillContent[]> {
     if (!keywords.length) return [];
 
     try {
@@ -243,14 +243,16 @@ export async function findSkillsForContext(
 
         // Sort: highest TF-IDF score first, then by install count
         const topSkills = Array.from(uniq.values())
-            .filter(item => (scoreMap.get(item.href) || 0) >= SKILL_RELEVANCE_THRESHOLD)
+            .filter((item) => (scoreMap.get(item.href) || 0) >= SKILL_RELEVANCE_THRESHOLD)
             .sort((a, b) => {
                 const diff = (scoreMap.get(b.href) || 0) - (scoreMap.get(a.href) || 0);
                 return diff !== 0 ? diff : (b.installs || 0) - (a.installs || 0);
             })
             .slice(0, limit);
 
-        console.log(`[Skills] Scored ${uniq.size} skills, ${topSkills.length} above threshold (${SKILL_RELEVANCE_THRESHOLD})`);
+        console.log(
+            `[Skills] Scored ${uniq.size} skills, ${topSkills.length} above threshold (${SKILL_RELEVANCE_THRESHOLD})`
+        );
 
         // Fetch detail for each skill
         const { fetchSkillDetail } = await import("./skills_get.js");
@@ -265,7 +267,7 @@ export async function findSkillsForContext(
                     owner: sk.owner,
                     repo: sk.repo,
                     skill: sk.skill,
-                    content: detail.sections?.map(s => `## ${s.heading}\n${s.content}`).join("\n\n"),
+                    content: detail.sections?.map((s) => `## ${s.heading}\n${s.content}`).join("\n\n"),
                 });
             } catch {
                 // Skip skills that fail to fetch

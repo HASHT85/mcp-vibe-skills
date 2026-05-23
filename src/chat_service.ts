@@ -4,7 +4,7 @@
  * Manages chat sessions where users discuss project ideas
  * before launching the pipeline with an enriched brief.
  * Sessions are persisted to disk so they survive container restarts.
- * 
+ *
  * Uses OpenRouter (OpenAI-compatible API) for all LLM calls.
  */
 
@@ -211,7 +211,10 @@ export class ChatService {
             let oldestTime = Infinity;
             for (const [id, s] of this.sessions) {
                 const t = new Date(s.updatedAt).getTime();
-                if (t < oldestTime) { oldestTime = t; oldestId = id; }
+                if (t < oldestTime) {
+                    oldestTime = t;
+                    oldestId = id;
+                }
             }
             if (oldestId) this.sessions.delete(oldestId);
         }
@@ -236,7 +239,7 @@ export class ChatService {
     listSessions(): ChatSession[] {
         return Array.from(this.sessions.values())
             .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-            .map(s => ({
+            .map((s) => ({
                 ...s,
                 messages: s.messages.slice(-2), // Only return last 2 messages for list view
             }));
@@ -248,12 +251,17 @@ export class ChatService {
         return result;
     }
 
-    async sendMessage(sessionId: string, content: string, pipelineContext?: { name: string; phase: string; error?: string; events: string[]; workspace?: string }, files?: { base64: string; type: string }[]): Promise<{ reply: string; session: ChatSession }> {
+    async sendMessage(
+        sessionId: string,
+        content: string,
+        pipelineContext?: { name: string; phase: string; error?: string; events: string[]; workspace?: string },
+        files?: { base64: string; type: string }[]
+    ): Promise<{ reply: string; session: ChatSession }> {
         const session = this.sessions.get(sessionId);
         if (!session) throw new Error("session_not_found");
 
         // Store a display-friendly version for session history
-        const fileLabel = files && files.length > 0 ? `\n[📎 ${files.length} FILE(S) ATTACHED]` : '';
+        const fileLabel = files && files.length > 0 ? `\n[📎 ${files.length} FILE(S) ATTACHED]` : "";
         session.messages.push({
             role: "user",
             content: content + fileLabel,
@@ -266,10 +274,10 @@ export class ChatService {
             systemPrompt += `\n\nPROJET LIÉ À CETTE CONVERSATION :
 - Nom : ${pipelineContext.name}
 - Status : ${pipelineContext.phase}
-${pipelineContext.error ? `- ❌ Erreur : ${pipelineContext.error}` : ''}
+${pipelineContext.error ? `- ❌ Erreur : ${pipelineContext.error}` : ""}
 
 ÉVÉNEMENTS RÉCENTS DU PIPELINE :
-${pipelineContext.events.slice(-10).join('\n')}
+${pipelineContext.events.slice(-10).join("\n")}
 
 INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
 - Tu as le contexte complet du projet ci-dessus
@@ -298,35 +306,33 @@ INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
         await this.maybeSummarize(session);
 
         // Build messages for OpenRouter (OpenAI-compatible format)
-        const apiMessages: any[] = [
-            { role: "system", content: systemPrompt },
-        ];
+        const apiMessages: any[] = [{ role: "system", content: systemPrompt }];
 
         for (let idx = 0; idx < session.messages.length; idx++) {
             const m = session.messages[idx];
             // Only the LAST user message gets file attachments
-            if (idx === session.messages.length - 1 && m.role === 'user' && files && files.length > 0) {
+            if (idx === session.messages.length - 1 && m.role === "user" && files && files.length > 0) {
                 const contentParts: any[] = [];
-                
+
                 // Add image files as image_url parts
                 for (const file of files) {
-                    if (file.type.startsWith('image/')) {
+                    if (file.type.startsWith("image/")) {
                         contentParts.push({
-                            type: 'image_url',
+                            type: "image_url",
                             image_url: {
                                 url: `data:${file.type};base64,${file.base64}`,
-                            }
+                            },
                         });
                     }
                     // Note: PDFs not natively supported in OpenAI format — skip for now
                 }
-                
+
                 // Add text content
                 contentParts.push({
-                    type: 'text',
+                    type: "text",
                     text: content,
                 });
-                
+
                 apiMessages.push({
                     role: m.role,
                     content: contentParts,
@@ -361,7 +367,10 @@ INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
             // ─── DeerFlow Pattern: Queue conversation for memory extraction ───
             try {
                 const memory = getMemoryService();
-                memory.queueConversation(sessionId, session.messages.map(m => ({ role: m.role, content: m.content })));
+                memory.queueConversation(
+                    sessionId,
+                    session.messages.map((m) => ({ role: m.role, content: m.content }))
+                );
             } catch (err) {
                 console.warn("💬 [Chat] Memory queue skipped:", err);
             }
@@ -395,9 +404,7 @@ INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
         const toKeep = session.messages.slice(cutoff);
 
         // Format older messages for summarization
-        const conversationText = toSummarize
-            .map(m => `${m.role}: ${m.content}`)
-            .join("\n");
+        const conversationText = toSummarize.map((m) => `${m.role}: ${m.content}`).join("\n");
 
         try {
             const response = await this.client.chat.completions.create({
@@ -420,7 +427,9 @@ INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
             };
 
             session.messages = [summaryMessage, ...toKeep];
-            console.log(`💬 [Summarization] Compressed ${toSummarize.length} messages → 1 summary + ${toKeep.length} recent`);
+            console.log(
+                `💬 [Summarization] Compressed ${toSummarize.length} messages → 1 summary + ${toKeep.length} recent`
+            );
             this.scheduleSave();
         } catch (err) {
             console.error("💬 [Summarization] Failed:", err);
@@ -433,19 +442,16 @@ INSTRUCTIONS QUAND L'UTILISATEUR VEUT CORRIGER/MODIFIER CE PROJET :
         if (!session || session.messages.length === 0) return null;
 
         // Build a rich description from the conversation
-        const userMessages = session.messages
-            .filter(m => m.role === "user")
-            .map(m => m.content);
+        const userMessages = session.messages.filter((m) => m.role === "user").map((m) => m.content);
 
-        const assistantSuggestions = session.messages
-            .filter(m => m.role === "assistant")
-            .map(m => m.content);
+        const assistantSuggestions = session.messages.filter((m) => m.role === "assistant").map((m) => m.content);
 
         // Use the first user message as the base idea, enriched with the conversation
         const baseIdea = userMessages[0];
-        const enrichedDetails = assistantSuggestions.length > 0
-            ? `\n\nCONTEXTE ENRICHI par la discussion pré-pipeline:\n${assistantSuggestions.slice(-2).join("\n\n")}`
-            : "";
+        const enrichedDetails =
+            assistantSuggestions.length > 0
+                ? `\n\nCONTEXTE ENRICHI par la discussion pré-pipeline:\n${assistantSuggestions.slice(-2).join("\n\n")}`
+                : "";
 
         // Derive a project name: first 4 words of first message
         const name = String(userMessages[0] || "")

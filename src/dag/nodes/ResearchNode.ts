@@ -17,7 +17,7 @@ export class ResearchNode extends AgentNode {
             emoji: "🌐",
             model: model,
             maxTurns: 15,
-            allowedTools: ["web_search", "fetch_url", "write_memory"]
+            allowedTools: ["web_search", "fetch_url", "write_memory"],
         });
     }
 
@@ -32,7 +32,8 @@ export class ResearchNode extends AgentNode {
             const parts: string[] = [];
             if (repoContext.readme) parts.push(`📄 README.md:\n${repoContext.readme.slice(0, 4000)}`);
             if (repoContext.dockerfile) parts.push(`🐳 Dockerfile:\n${repoContext.dockerfile.slice(0, 1500)}`);
-            if (repoContext.dockerCompose) parts.push(`🐳 docker-compose.yml:\n${repoContext.dockerCompose.slice(0, 1500)}`);
+            if (repoContext.dockerCompose)
+                parts.push(`🐳 docker-compose.yml:\n${repoContext.dockerCompose.slice(0, 1500)}`);
             if (repoContext.goMod) parts.push(`📦 go.mod:\n${repoContext.goMod}`);
             if (repoContext.packageJson) parts.push(`📦 package.json:\n${repoContext.packageJson.slice(0, 1000)}`);
             repoSection = `\n\n📦 CONTEXTE DU REPO SOURCE (fichiers clés pré-lus) :\n${parts.join("\n\n")}\n\n⚠️ IMPORTANT: Ce projet existe DÉJÀ avec du code fonctionnel. Lis bien le README pour comprendre comment il fonctionne. S'il y a déjà un Dockerfile et/ou une image Docker Hub, UTILISE-LES au lieu de tout recréer.\n`;

@@ -21,7 +21,9 @@ async function doSave(pipelines: Map<string, Pipeline>) {
         } catch {
             // Fallback: direct write if rename fails
             await fs.writeFile(STORE_PATH, json, "utf-8");
-            try { await fs.unlink(tmp); } catch {}
+            try {
+                await fs.unlink(tmp);
+            } catch {}
         }
     } catch (err) {
         console.warn("[Orchestrator] Failed to save state:", err);

@@ -1,6 +1,6 @@
-import { motion } from 'framer-motion';
-import type { Pipeline } from '../api/client';
-import { ProjectCard } from './ProjectCard';
+import { motion } from "framer-motion";
+import type { Pipeline } from "../api/client";
+import { ProjectCard } from "./ProjectCard";
 
 interface ProjectListProps {
     pipelines: Pipeline[];
@@ -8,29 +8,34 @@ interface ProjectListProps {
     onRetry?: (id: string) => void;
 }
 
-const HIDDEN_PROJECTS = ['veist', 'veist-dashboard'];
+const HIDDEN_PROJECTS = ["veist", "veist-dashboard"];
 
 export function ProjectList({ pipelines, onSelect, onRetry }: ProjectListProps) {
-    const filtered = pipelines.filter(p => !HIDDEN_PROJECTS.some(h => (p.name || '').toLowerCase().includes(h) || (p.id || '').toLowerCase().includes(h)));
+    const filtered = pipelines.filter(
+        (p) =>
+            !HIDDEN_PROJECTS.some(
+                (h) => (p.name || "").toLowerCase().includes(h) || (p.id || "").toLowerCase().includes(h)
+            )
+    );
     if (!filtered.length) {
         return (
-            <motion.div 
-                className="flex flex-col items-center justify-center p-10 md:p-20 mt-6 md:mt-10 bg-[#1c2025] border border-[#2A3442] relative overflow-hidden h-[50vh] md:h-[60vh]" 
-                initial={{ opacity: 0 }} 
+            <motion.div
+                className="flex flex-col items-center justify-center p-10 md:p-20 mt-6 md:mt-10 bg-[#1c2025] border border-[#2A3442] relative overflow-hidden h-[50vh] md:h-[60vh]"
+                initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
             >
                 <div className="absolute top-0 left-0 w-1 h-1 bg-[#D7FF2F]"></div>
                 <div className="absolute bottom-0 right-0 w-1 h-1 bg-[#D7FF2F]"></div>
-                
-                <span className="material-symbols-outlined text-6xl text-gray-600 mb-6">
-                    dashboard
-                </span>
-                
-                <h3 className="text-2xl font-headline font-bold text-white uppercase mb-4 tracking-tight">NO ACTIVE NODES</h3>
+
+                <span className="material-symbols-outlined text-6xl text-gray-600 mb-6">dashboard</span>
+
+                <h3 className="text-2xl font-headline font-bold text-white uppercase mb-4 tracking-tight">
+                    NO ACTIVE NODES
+                </h3>
                 <p className="font-mono text-xs text-gray-500 max-w-md text-center uppercase tracking-widest leading-relaxed">
                     Initialize a new pipeline sequence to establish a connection with the creative matrix.
                 </p>
-                
+
                 <div className="mt-10 flex gap-2">
                     <div className="w-1.5 h-1.5 bg-[#D7FF2F] animate-pulse"></div>
                     <div className="w-1.5 h-1.5 bg-[#D7FF2F]/40"></div>
@@ -46,9 +51,13 @@ export function ProjectList({ pipelines, onSelect, onRetry }: ProjectListProps) 
                 <div>
                     <div className="flex items-center gap-2 mb-2">
                         <span className="w-2 h-2 bg-[#D7FF2F]"></span>
-                        <p className="font-mono text-xs text-[#D7FF2F] tracking-[0.2em] uppercase">System_State: Operational</p>
+                        <p className="font-mono text-xs text-[#D7FF2F] tracking-[0.2em] uppercase">
+                            System_State: Operational
+                        </p>
                     </div>
-                    <h1 className="font-headline font-bold text-3xl md:text-5xl tracking-tight text-white uppercase">Overview</h1>
+                    <h1 className="font-headline font-bold text-3xl md:text-5xl tracking-tight text-white uppercase">
+                        Overview
+                    </h1>
                 </div>
                 <div className="flex items-center gap-4 font-mono text-[10px] text-gray-500">
                     <span className="border border-[#2A3442] px-2 py-1">{filtered.length} ACTIVE NODES</span>

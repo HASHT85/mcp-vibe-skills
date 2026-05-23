@@ -29,8 +29,18 @@ export class SkillsEnrichmentNode extends DagNode {
         // From stack
         const rawFrontend = analysis?.stack?.frontend;
         const rawBackend = analysis?.stack?.backend;
-        const frontend = typeof rawFrontend === 'string' ? rawFrontend : (Array.isArray(rawFrontend) ? rawFrontend.join(' ') : String(rawFrontend || ''));
-        const backend = typeof rawBackend === 'string' ? rawBackend : (Array.isArray(rawBackend) ? rawBackend.join(' ') : String(rawBackend || ''));
+        const frontend =
+            typeof rawFrontend === "string"
+                ? rawFrontend
+                : Array.isArray(rawFrontend)
+                  ? rawFrontend.join(" ")
+                  : String(rawFrontend || "");
+        const backend =
+            typeof rawBackend === "string"
+                ? rawBackend
+                : Array.isArray(rawBackend)
+                  ? rawBackend.join(" ")
+                  : String(rawBackend || "");
         if (frontend) keywords.push(...frontend.split(/[\s,/]+/).filter((s: string) => s.length > 1));
         if (backend) keywords.push(...backend.split(/[\s,/]+/).filter((s: string) => s.length > 1));
 
@@ -40,7 +50,11 @@ export class SkillsEnrichmentNode extends DagNode {
 
         // From description keywords
         const summary = analysis?.summary || analysis?.description || "";
-        const descWords = summary.toLowerCase().match(/\b(react|vue|svelte|angular|next|nuxt|vite|express|fastapi|flask|django|node|python|typescript|tailwind|docker|api|dashboard|weather|chart|animation)\b/g);
+        const descWords = summary
+            .toLowerCase()
+            .match(
+                /\b(react|vue|svelte|angular|next|nuxt|vite|express|fastapi|flask|django|node|python|typescript|tailwind|docker|api|dashboard|weather|chart|animation)\b/g
+            );
         if (descWords) keywords.push(...descWords);
 
         // ─── From Research Findings (ResearchNode) ───
@@ -74,7 +88,9 @@ export class SkillsEnrichmentNode extends DagNode {
         }
 
         // Deduplicate
-        const uniqueKeywords = [...new Set(keywords.map((k: string) => k.toLowerCase()).filter((k: string) => k.length > 1))];
+        const uniqueKeywords = [
+            ...new Set(keywords.map((k: string) => k.toLowerCase()).filter((k: string) => k.length > 1)),
+        ];
 
         if (uniqueKeywords.length === 0) {
             context.addEvent("Orchestrator", "⚠️", "Aucun keyword détecté pour la recherche skills.sh", "warning");
@@ -87,10 +103,20 @@ export class SkillsEnrichmentNode extends DagNode {
         try {
             const skills: SkillContent[] = await findSkillsForContext(uniqueKeywords, 5);
             context.pipeline.artifacts.skills = skills;
-            context.addEvent("Orchestrator", "📚", `${skills.length} skills trouvés et injectés dans les prompts agents`, "success");
+            context.addEvent(
+                "Orchestrator",
+                "📚",
+                `${skills.length} skills trouvés et injectés dans les prompts agents`,
+                "success"
+            );
             return skills;
         } catch (err: any) {
-            context.addEvent("Orchestrator", "⚠️", `Erreur skills.sh: ${err.message} — on continue sans skills`, "warning");
+            context.addEvent(
+                "Orchestrator",
+                "⚠️",
+                `Erreur skills.sh: ${err.message} — on continue sans skills`,
+                "warning"
+            );
             context.pipeline.artifacts.skills = [];
             return [];
         }

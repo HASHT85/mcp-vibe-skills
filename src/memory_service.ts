@@ -1,10 +1,10 @@
 /**
  * Memory Service — Long-Term Memory (DeerFlow Pattern)
- * 
+ *
  * Extracts facts from conversations, deduplicates them,
  * and injects relevant context into agent system prompts.
  * Inspired by DeerFlow's agents/memory/ system.
- * 
+ *
  * Storage: /data/memory.json (atomic writes via temp file + rename)
  */
 
@@ -25,14 +25,14 @@ export interface MemoryFact {
 }
 
 export interface MemoryContext {
-    workContext: string;     // What the user is currently working on
+    workContext: string; // What the user is currently working on
     personalContext: string; // User preferences, style
-    topOfMind: string;       // 1-3 sentence current focus
+    topOfMind: string; // 1-3 sentence current focus
 }
 
 export interface MemoryHistory {
-    recentMonths: string;    // Summary of recent activity
-    earlierContext: string;  // Older context
+    recentMonths: string; // Summary of recent activity
+    earlierContext: string; // Older context
 }
 
 export interface MemoryData {
@@ -143,9 +143,7 @@ export class MemoryService {
 
     private isDuplicate(newContent: string): boolean {
         const normalized = newContent.trim().toLowerCase().replace(/\s+/g, " ");
-        return this.data.facts.some(
-            f => f.content.trim().toLowerCase().replace(/\s+/g, " ") === normalized
-        );
+        return this.data.facts.some((f) => f.content.trim().toLowerCase().replace(/\s+/g, " ") === normalized);
     }
 
     // ─── Queue Conversation for Memory Extraction (debounced) ───
@@ -153,8 +151,8 @@ export class MemoryService {
     queueConversation(sessionId: string, messages: { role: string; content: string }[]): void {
         // Format messages for extraction
         const formatted = messages
-            .filter(m => typeof m.content === "string")
-            .map(m => `${m.role}: ${m.content}`)
+            .filter((m) => typeof m.content === "string")
+            .map((m) => `${m.role}: ${m.content}`)
             .join("\n");
 
         this.pendingQueue.set(sessionId, {
@@ -204,7 +202,7 @@ export class MemoryService {
 
         const existingFactsSummary = this.data.facts
             .slice(-20)
-            .map(f => `- ${f.content}`)
+            .map((f) => `- ${f.content}`)
             .join("\n");
 
         try {
@@ -264,7 +262,9 @@ export class MemoryService {
             }
 
             await this.saveToDisk();
-            console.log(`🧠 [Memory] Extracted ${added} new facts from session ${sessionId} (total: ${this.data.facts.length})`);
+            console.log(
+                `🧠 [Memory] Extracted ${added} new facts from session ${sessionId} (total: ${this.data.facts.length})`
+            );
         } catch (err) {
             console.error("🧠 [Memory] LLM extraction error:", err);
         }
@@ -283,7 +283,10 @@ export class MemoryService {
 
         // Top facts (sorted by confidence, most recent first within same confidence)
         const topFacts = [...this.data.facts]
-            .sort((a, b) => b.confidence - a.confidence || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .sort(
+                (a, b) =>
+                    b.confidence - a.confidence || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            )
             .slice(0, MAX_INJECTION_FACTS);
 
         if (topFacts.length > 0) {
@@ -331,12 +334,7 @@ export class MemoryService {
      * @param projectType - Tech stack hint (e.g. "React+Node", "Python API")
      * @param fix         - What fixed or should fix the issue
      */
-    async addEvalLesson(
-        checkName: string,
-        detail: string,
-        projectType: string,
-        fix?: string,
-    ): Promise<void> {
+    async addEvalLesson(checkName: string, detail: string, projectType: string, fix?: string): Promise<void> {
         const content = fix
             ? `EVAL_LESSON [${checkName}] pour projet ${projectType}: "${detail}" — Fix appliqué: ${fix}`
             : `EVAL_LESSON [${checkName}] pour projet ${projectType}: "${detail}" — À corriger dans les prochains projets similaires`;

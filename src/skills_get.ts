@@ -22,7 +22,7 @@ export async function fetchSkillDetail(owner: string, repo: string, skill: strin
     // SEC: Strict validation to prevent path traversal and SSRF
     const SAFE_SLUG = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/;
     if (!SAFE_SLUG.test(owner)) throw new Error(`Invalid owner: "${owner.slice(0, 30)}"`);
-    if (!SAFE_SLUG.test(repo))  throw new Error(`Invalid repo: "${repo.slice(0, 30)}"`);
+    if (!SAFE_SLUG.test(repo)) throw new Error(`Invalid repo: "${repo.slice(0, 30)}"`);
     if (!SAFE_SLUG.test(skill)) throw new Error(`Invalid skill: "${skill.slice(0, 30)}"`);
 
     const href = `https://skills.sh/${owner}/${repo}/${skill}`;
@@ -43,7 +43,7 @@ export async function fetchSkillDetail(owner: string, repo: string, skill: strin
     const title = cleanText($("h1").first().text()) || titleFromSlug(skill);
 
     // typed explicitly to satisfy strict TS
-    let description: string | undefined =
+    const description: string | undefined =
         cleanText($("h1").first().nextAll("p").first().text()) ||
         cleanText($("meta[name='description']").attr("content") || "") ||
         undefined;
@@ -73,6 +73,6 @@ export async function fetchSkillDetail(owner: string, repo: string, skill: strin
         skill,
         title,
         description,
-        sections: sections.length ? sections.slice(0, 12) : undefined
+        sections: sections.length ? sections.slice(0, 12) : undefined,
     };
 }

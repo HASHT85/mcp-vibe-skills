@@ -25,7 +25,7 @@ async function hostinger<T = unknown>(method: string, endpoint: string, body?: u
         method,
         headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${HOSTINGER_TOKEN}`,
+            Authorization: `Bearer ${HOSTINGER_TOKEN}`,
         },
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
@@ -41,7 +41,11 @@ async function hostinger<T = unknown>(method: string, endpoint: string, body?: u
 // ─── Repo Analysis Helpers ───
 
 async function readSafe(dir: string, filename: string): Promise<string | null> {
-    try { return await fs.readFile(path.join(dir, filename), "utf-8"); } catch { return null; }
+    try {
+        return await fs.readFile(path.join(dir, filename), "utf-8");
+    } catch {
+        return null;
+    }
 }
 
 interface RepoAnalysis {
@@ -71,7 +75,10 @@ function detectDockerHubImage(readme: string | null, dockerfile: string | null):
     // Check Dockerfile FROM (but skip generic base images)
     if (dockerfile) {
         const fromMatch = dockerfile.match(/^FROM\s+([^\s]+)/m);
-        if (fromMatch && !["node", "python", "golang", "alpine", "ubuntu", "debian", "rust"].some(b => fromMatch[1].startsWith(b))) {
+        if (
+            fromMatch &&
+            !["node", "python", "golang", "alpine", "ubuntu", "debian", "rust"].some((b) => fromMatch[1].startsWith(b))
+        ) {
             return fromMatch[1];
         }
     }
@@ -80,7 +87,7 @@ function detectDockerHubImage(readme: string | null, dockerfile: string | null):
 
 function detectEnvVars(dockerfile: string | null, compose: string | null, readme: string | null): string[] {
     const vars = new Set<string>();
-    
+
     // From Dockerfile ENV
     if (dockerfile) {
         const envMatches = dockerfile.matchAll(/^ENV\s+(\w+)/gm);
@@ -98,7 +105,24 @@ function detectEnvVars(dockerfile: string | null, compose: string | null, readme
     if (readme) {
         const readmeMatches = readme.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b(?=\s*[=:]|\s*—|\s*-\s)/gm);
         for (const m of readmeMatches) {
-            if (!["README", "TODO", "NOTE", "WARNING", "IMPORTANT", "DEPRECATED", "API", "URL", "HTTP", "HTTPS", "GET", "POST", "PUT", "DELETE"].includes(m[1])) {
+            if (
+                ![
+                    "README",
+                    "TODO",
+                    "NOTE",
+                    "WARNING",
+                    "IMPORTANT",
+                    "DEPRECATED",
+                    "API",
+                    "URL",
+                    "HTTP",
+                    "HTTPS",
+                    "GET",
+                    "POST",
+                    "PUT",
+                    "DELETE",
+                ].includes(m[1])
+            ) {
                 vars.add(m[1]);
             }
         }
@@ -143,9 +167,10 @@ function generateCompose(opts: {
     port: number;
     secrets: Record<string, string>;
 }): string {
-    const image = opts.deployMode === "hub_image" && opts.dockerHubImage
-        ? `    image: ${opts.dockerHubImage}`
-        : `    build:\n      context: .`;
+    const image =
+        opts.deployMode === "hub_image" && opts.dockerHubImage
+            ? `    image: ${opts.dockerHubImage}`
+            : `    build:\n      context: .`;
 
     const envLines = Object.entries(opts.secrets)
         .map(([k, v]) => `      - ${k}=${v}`)
@@ -204,9 +229,10 @@ router.post("/analyze", async (req, res) => {
         }
 
         // Read key files
-        const readme = await readSafe(tmpDir, "README.md") ?? await readSafe(tmpDir, "readme.md");
+        const readme = (await readSafe(tmpDir, "README.md")) ?? (await readSafe(tmpDir, "readme.md"));
         const dockerfile = await readSafe(tmpDir, "Dockerfile");
-        const dockerCompose = await readSafe(tmpDir, "docker-compose.yml") ?? await readSafe(tmpDir, "docker-compose.yaml");
+        const dockerCompose =
+            (await readSafe(tmpDir, "docker-compose.yml")) ?? (await readSafe(tmpDir, "docker-compose.yaml"));
         const goMod = await readSafe(tmpDir, "go.mod");
         const packageJson = await readSafe(tmpDir, "package.json");
 
@@ -243,7 +269,9 @@ router.post("/analyze", async (req, res) => {
         res.status(500).json({ error: err.message });
     } finally {
         // Cleanup temp dir
-        try { await fs.rm(tmpDir, { recursive: true, force: true }); } catch {}
+        try {
+            await fs.rm(tmpDir, { recursive: true, force: true });
+        } catch {}
     }
 });
 
@@ -277,12 +305,17 @@ router.post("/launch", async (req, res) => {
         } else if (deployMode === "existing_compose" && githubUrl) {
             // Use the repo's own docker-compose.yml (deployed via GitHub URL)
             // The Hostinger API will pull the compose from the repo
-            const result = await hostinger<{ id: number; name: string; state: string }>("POST",
-                `/api/vps/v1/virtual-machines/${VM_ID}/projects`, {
+            const result = await hostinger<{ id: number; name: string; state: string }>(
+                "POST",
+                `/api/vps/v1/virtual-machines/${VM_ID}/projects`,
+                {
                     project_name: projectName,
                     content: githubUrl,
-                    environment: Object.entries(secrets || {}).map(([k, v]) => `${k}=${v}`).join("\n"),
-                });
+                    environment: Object.entries(secrets || {})
+                        .map(([k, v]) => `${k}=${v}`)
+                        .join("\n"),
+                }
+            );
             return res.json({ actionId: result.id, state: result.state, mode: "existing_compose" });
         } else {
             // Generate compose
@@ -298,12 +331,17 @@ router.post("/launch", async (req, res) => {
         }
 
         // Deploy via Hostinger
-        const result = await hostinger<{ id: number; name: string; state: string }>("POST",
-            `/api/vps/v1/virtual-machines/${VM_ID}/projects`, {
+        const result = await hostinger<{ id: number; name: string; state: string }>(
+            "POST",
+            `/api/vps/v1/virtual-machines/${VM_ID}/projects`,
+            {
                 project_name: projectName,
                 content: composeContent,
-                environment: Object.entries(secrets || {}).map(([k, v]) => `${k}=${v}`).join("\n"),
-            });
+                environment: Object.entries(secrets || {})
+                    .map(([k, v]) => `${k}=${v}`)
+                    .join("\n"),
+            }
+        );
 
         res.json({ actionId: result.id, state: result.state, compose: composeContent });
     } catch (err: any) {
@@ -340,7 +378,10 @@ router.get("/containers/:projectName", async (req, res) => {
         return res.status(500).json({ error: "HOSTINGER_API_TOKEN is not configured" });
     }
     try {
-        const result = await hostinger("GET", `/api/vps/v1/virtual-machines/${VM_ID}/projects/${req.params.projectName}/containers`);
+        const result = await hostinger(
+            "GET",
+            `/api/vps/v1/virtual-machines/${VM_ID}/projects/${req.params.projectName}/containers`
+        );
         res.json(result);
     } catch (err: any) {
         res.status(500).json({ error: err.message });

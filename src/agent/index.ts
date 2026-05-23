@@ -36,8 +36,7 @@ export async function runVeistAgent(options: AgentOptions): Promise<AgentResult>
     const actions: AgentAction[] = [];
     const maxTurns = options.maxTurns || 50;
     const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
-    const maxTokenBudget =
-        options.maxTokenBudget || parseInt(process.env.MAX_TOKENS_PER_AGENT || "0") || 0;
+    const maxTokenBudget = options.maxTokenBudget || parseInt(process.env.MAX_TOKENS_PER_AGENT || "0") || 0;
 
     // Pre-flight check
     if (!process.env.OPENROUTER_API_KEY) {
@@ -68,8 +67,7 @@ export async function runVeistAgent(options: AgentOptions): Promise<AgentResult>
         fullPromptText += "\n\n--- CONTEXT ---\n" + options.appendPrompt;
     }
 
-    const systemPrompt =
-        options.systemPrompt || "You are a senior software engineer. Write clean, working code.";
+    const systemPrompt = options.systemPrompt || "You are a senior software engineer. Write clean, working code.";
 
     const initialContent: any[] = [{ type: "text", text: fullPromptText }];
 
@@ -158,16 +156,10 @@ export async function runVeistAgent(options: AgentOptions): Promise<AgentResult>
                     };
                     actions.push(action);
                     agentEvents.emit("action", action);
-                    console.log(
-                        `[Agent] 🔧 Tool: ${block.name} → ${JSON.stringify(block.input).substring(0, 100)}`
-                    );
+                    console.log(`[Agent] 🔧 Tool: ${block.name} → ${JSON.stringify(block.input).substring(0, 100)}`);
 
                     // Execute tool
-                    const result = await executeTool(
-                        block.name,
-                        block.input as Record<string, any>,
-                        options.cwd
-                    );
+                    const result = await executeTool(block.name, block.input as Record<string, any>, options.cwd);
 
                     const resultAction: AgentAction = {
                         type: "tool_result",

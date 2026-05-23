@@ -8,8 +8,6 @@ import { loadConfig } from "./config.js";
 // ─── Validate environment at startup — fail fast with clear error ───
 loadConfig();
 
-
-
 import { AgentsStore } from "./agents_store.js";
 import { ProjectsStore } from "./projects_store.js";
 
@@ -23,22 +21,26 @@ import { quickDeployRouter } from "./quickDeploy.js";
 import rateLimit from "express-rate-limit";
 
 const app = express();
-const storePath = process.env.STORE_PATH || '/data/store.json';
+const storePath = process.env.STORE_PATH || "/data/store.json";
 
 // SEC-46: Security headers (HSTS, X-Frame-Options, CSP, noSniff, etc.)
-app.use(helmet({
-    contentSecurityPolicy: false,  // API-only — no HTML served
-}));
+app.use(
+    helmet({
+        contentSecurityPolicy: false, // API-only — no HTML served
+    })
+);
 
 // SEC-03: Restrict CORS to dashboard origin
-app.use(cors({
-    origin: [
-        "https://veist.hach.dev",
-        "http://localhost:5173",  // dev mode
-        "http://localhost:3000",
-    ],
-    credentials: true,
-}));
+app.use(
+    cors({
+        origin: [
+            "https://veist.hach.dev",
+            "http://localhost:5173", // dev mode
+            "http://localhost:3000",
+        ],
+        credentials: true,
+    })
+);
 
 // SEC-10: Reduce default body limit (50mb only on launch route)
 app.use(express.json({ limit: "5mb" }));
@@ -77,24 +79,23 @@ if (!ADMIN_USER || !ADMIN_PASS) {
 }
 
 // SEC-04: Ephemeral Token System (for SSE which can't send headers)
-const TOKEN_SECRET = ADMIN_PASS || crypto.randomBytes(32).toString('hex');
+const TOKEN_SECRET = ADMIN_PASS || crypto.randomBytes(32).toString("hex");
 const TOKEN_TTL = 5 * 60 * 1000; // 5 minutes
 
 function generateToken(): string {
     const expires = Date.now() + TOKEN_TTL;
     const payload = `${ADMIN_USER}:${expires}`;
-    const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(payload).digest('hex');
-    return Buffer.from(`${payload}:${sig}`).toString('base64');
+    const sig = crypto.createHmac("sha256", TOKEN_SECRET).update(payload).digest("hex");
+    return Buffer.from(`${payload}:${sig}`).toString("base64");
 }
 
 function verifyToken(token: string): boolean {
     try {
-        const decoded = Buffer.from(token, 'base64').toString();
-        const [user, expiresStr, sig] = decoded.split(':');
+        const decoded = Buffer.from(token, "base64").toString();
+        const [user, expiresStr, sig] = decoded.split(":");
         const expires = parseInt(expiresStr);
         if (Date.now() > expires) return false; // expired
-        const expectedSig = crypto.createHmac('sha256', TOKEN_SECRET)
-            .update(`${user}:${expiresStr}`).digest('hex');
+        const expectedSig = crypto.createHmac("sha256", TOKEN_SECRET).update(`${user}:${expiresStr}`).digest("hex");
         return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig));
     } catch {
         return false;
@@ -102,46 +103,49 @@ function verifyToken(token: string): boolean {
 }
 
 const authMiddleware = (req: Request, res: Response, next: Function) => {
-    let user = "", pass = "";
+    let user = "",
+        pass = "";
     const authHeader = req.headers.authorization;
-    const tokenQuery = req.query.token as string | undefined;  // SEC-04: token-based
+    const tokenQuery = req.query.token as string | undefined; // SEC-04: token-based
 
     if (authHeader) {
-        const decoded = Buffer.from(authHeader.split(' ')[1] || '', 'base64').toString();
-        [user, pass] = decoded.split(':');
+        const decoded = Buffer.from(authHeader.split(" ")[1] || "", "base64").toString();
+        [user, pass] = decoded.split(":");
     } else if (tokenQuery && verifyToken(tokenQuery)) {
         // SEC-04: Valid ephemeral token — allow access
         return next();
     }
 
     // SEC-21: Timing-safe credential comparison to prevent timing attacks
-    const userMatch = user.length === (ADMIN_USER || '').length &&
-        crypto.timingSafeEqual(Buffer.from(user), Buffer.from(ADMIN_USER || ''));
-    const passMatch = pass.length === (ADMIN_PASS || '').length &&
-        crypto.timingSafeEqual(Buffer.from(pass), Buffer.from(ADMIN_PASS || ''));
+    const userMatch =
+        user.length === (ADMIN_USER || "").length &&
+        crypto.timingSafeEqual(Buffer.from(user), Buffer.from(ADMIN_USER || ""));
+    const passMatch =
+        pass.length === (ADMIN_PASS || "").length &&
+        crypto.timingSafeEqual(Buffer.from(pass), Buffer.from(ADMIN_PASS || ""));
 
     if (userMatch && passMatch) {
         next();
     } else {
-        return res.status(401).json({ error: 'Authentication required' });
+        return res.status(401).json({ error: "Authentication required" });
     }
 };
 
 // Apply Auth to API routes (except health/public)
-app.use('/projects', authMiddleware);
-app.use('/pipeline', authMiddleware);
-app.use('/agents', authMiddleware);
-app.use('/containers', authMiddleware);
-app.use('/chat', authMiddleware);
-app.use('/api/quick-deploy', authMiddleware);
-app.use('/vps', authMiddleware);
-app.use('/embeddings', authMiddleware);
+app.use("/projects", authMiddleware);
+app.use("/pipeline", authMiddleware);
+app.use("/agents", authMiddleware);
+app.use("/containers", authMiddleware);
+app.use("/chat", authMiddleware);
+app.use("/api/quick-deploy", authMiddleware);
+app.use("/vps", authMiddleware);
+app.use("/embeddings", authMiddleware);
 // SEC-20: Protect events route (exposes pipeline activity history)
-app.use('/events', authMiddleware);
+app.use("/events", authMiddleware);
 // SEC-24: Protect auxiliary routes
-app.use('/skills', authMiddleware);
-app.use('/profiles', authMiddleware);
-app.use('/templates', authMiddleware);
+app.use("/skills", authMiddleware);
+app.use("/profiles", authMiddleware);
+app.use("/templates", authMiddleware);
 // Initialize Stores
 const agentsStore = new AgentsStore(storePath);
 const projectsStore = new ProjectsStore(storePath);
@@ -170,7 +174,7 @@ app.post("/pipeline/launch", launchLimiter, express.json({ limit: "50mb" }), asy
         const description = String(req.body?.description ?? "").trim();
         const name = req.body?.name ? String(req.body.name).trim() : undefined;
         const model = req.body?.model ? String(req.body.model).trim() : undefined;
-        let files = req.body?.files as { base64: string; type: string }[] | undefined;
+        const files = req.body?.files as { base64: string; type: string }[] | undefined;
         const templateId = req.body?.templateId ? String(req.body.templateId).trim() : undefined;
         const githubUrl = req.body?.githubUrl ? String(req.body.githubUrl).trim() : undefined;
 
@@ -191,9 +195,11 @@ app.post("/pipeline/launch", launchLimiter, express.json({ limit: "50mb" }), asy
                 if (!ALLOWED_MIMES.has(file.type)) {
                     return res.status(400).json({ error: `File type not allowed: ${file.type}` });
                 }
-                const sizeBytes = Buffer.byteLength(file.base64, 'base64');
+                const sizeBytes = Buffer.byteLength(file.base64, "base64");
                 if (sizeBytes > MAX_FILE_SIZE) {
-                    return res.status(400).json({ error: `File too large (${(sizeBytes / 1024 / 1024).toFixed(1)}MB). Max 5MB.` });
+                    return res
+                        .status(400)
+                        .json({ error: `File too large (${(sizeBytes / 1024 / 1024).toFixed(1)}MB). Max 5MB.` });
                 }
             }
         }
@@ -213,9 +219,25 @@ app.get("/templates", async (_req: Request, res: Response) => {
         const query = _req.query.q ? String(_req.query.q) : undefined;
         if (query) {
             const suggestions = suggestTemplates(query);
-            res.json({ templates: suggestions.map((t: any) => ({ id: t.id, name: t.name, emoji: t.emoji, description: t.description, defaultStack: t.defaultStack })) });
+            res.json({
+                templates: suggestions.map((t: any) => ({
+                    id: t.id,
+                    name: t.name,
+                    emoji: t.emoji,
+                    description: t.description,
+                    defaultStack: t.defaultStack,
+                })),
+            });
         } else {
-            res.json({ templates: TEMPLATE_REGISTRY.map((t: any) => ({ id: t.id, name: t.name, emoji: t.emoji, description: t.description, defaultStack: t.defaultStack })) });
+            res.json({
+                templates: TEMPLATE_REGISTRY.map((t: any) => ({
+                    id: t.id,
+                    name: t.name,
+                    emoji: t.emoji,
+                    description: t.description,
+                    defaultStack: t.defaultStack,
+                })),
+            });
         }
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -252,7 +274,9 @@ app.get("/pipeline/:id/events", (req: Request, res: Response) => {
     }
 
     // SSE heartbeat to prevent proxy timeouts (Traefik, Cloudflare)
-    const heartbeat = setInterval(() => { res.write(":\n\n"); }, 30000);
+    const heartbeat = setInterval(() => {
+        res.write(":\n\n");
+    }, 30000);
 
     // Listen for new events
     const onEvent = (event: PipelineEvent) => {
@@ -288,7 +312,7 @@ app.get("/pipeline/events/all", (_req: Request, res: Response) => {
     // PERF-12: Only take last 50 events per pipeline (pre-sorted), then merge
     const pipelines = orchestrator.listPipelines();
     const allEvents = pipelines
-        .flatMap(p => p.events.slice(-50))
+        .flatMap((p) => p.events.slice(-50))
         .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
         .slice(-50);
 
@@ -297,14 +321,19 @@ app.get("/pipeline/events/all", (_req: Request, res: Response) => {
     }
 
     // SSE heartbeat
-    const heartbeat = setInterval(() => { res.write(":\n\n"); }, 30000);
+    const heartbeat = setInterval(() => {
+        res.write(":\n\n");
+    }, 30000);
 
     const onEvent = (event: PipelineEvent) => {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
     };
 
     orchestrator.on("event", onEvent);
-    _req.on("close", () => { clearInterval(heartbeat); orchestrator.off("event", onEvent); });
+    _req.on("close", () => {
+        clearInterval(heartbeat);
+        orchestrator.off("event", onEvent);
+    });
 });
 
 // Pause/Resume pipeline
@@ -326,9 +355,11 @@ async function cleanupPipelineResources(pipelineId: string): Promise<void> {
     // 1. Delete GitHub repo (silently ignore errors)
     if (pipeline.github) {
         try {
-            const { deleteRepo } = await import('./github_api.js');
+            const { deleteRepo } = await import("./github_api.js");
             await deleteRepo(pipeline.github.owner, pipeline.github.repo);
-        } catch { /* Repo may already be deleted */ }
+        } catch {
+            /* Repo may already be deleted */
+        }
     }
 
     // 2. Delete Docker container + image (SEC-15: sanitized names)
@@ -340,18 +371,30 @@ async function cleanupPipelineResources(pipelineId: string): Promise<void> {
         const containerName = sanitizeName(rawName);
         let imageName = "";
         try {
-            const { stdout } = await execAsync(
-                `docker inspect --format="{{.Config.Image}}" ${containerName}`,
-                { encoding: "utf-8", timeout: 5000 }
-            );
+            const { stdout } = await execAsync(`docker inspect --format="{{.Config.Image}}" ${containerName}`, {
+                encoding: "utf-8",
+                timeout: 5000,
+            });
             imageName = stdout.trim();
             if (imageName) sanitizeName(imageName);
-        } catch { /* container may not exist */ }
-        try { await execAsync(`docker rm -f ${containerName}`, { timeout: 15000 }); } catch { /* expected */ }
-        if (imageName) {
-            try { await execAsync(`docker rmi ${imageName}`, { timeout: 15000 }); } catch { /* expected */ }
+        } catch {
+            /* container may not exist */
         }
-    } catch { /* Docker not available */ }
+        try {
+            await execAsync(`docker rm -f ${containerName}`, { timeout: 15000 });
+        } catch {
+            /* expected */
+        }
+        if (imageName) {
+            try {
+                await execAsync(`docker rmi ${imageName}`, { timeout: 15000 });
+            } catch {
+                /* expected */
+            }
+        }
+    } catch {
+        /* Docker not available */
+    }
 
     // 3. Delete from orchestrator
     await orchestrator.deletePipeline(pipelineId);
@@ -377,7 +420,7 @@ app.post("/pipeline/:id/modify", async (req: Request, res: Response) => {
     try {
         const instructions = String(req.body?.instructions ?? "").trim();
         const model = req.body?.model ? String(req.body.model).trim() : undefined;
-        let files = req.body?.files as { base64: string; type: string }[] | undefined;
+        const files = req.body?.files as { base64: string; type: string }[] | undefined;
 
         if (!instructions && (!files || files.length === 0)) {
             return res.status(400).json({ error: "instructions_or_files_required" });
@@ -390,8 +433,9 @@ app.post("/pipeline/:id/modify", async (req: Request, res: Response) => {
             const ALLOWED_MIMES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"]);
             if (files.length > MAX_FILES) return res.status(400).json({ error: `Too many files. Max ${MAX_FILES}.` });
             for (const file of files) {
-                if (!ALLOWED_MIMES.has(file.type)) return res.status(400).json({ error: `File type not allowed: ${file.type}` });
-                const sizeBytes = Buffer.byteLength(file.base64, 'base64');
+                if (!ALLOWED_MIMES.has(file.type))
+                    return res.status(400).json({ error: `File type not allowed: ${file.type}` });
+                const sizeBytes = Buffer.byteLength(file.base64, "base64");
                 if (sizeBytes > MAX_FILE_SIZE) return res.status(400).json({ error: `File too large. Max 5MB.` });
             }
         }
@@ -413,7 +457,7 @@ app.get("/pipeline/:id/repo-context", async (req: Request, res: Response) => {
         if (!pipeline) return res.status(404).json({ error: "pipeline_not_found" });
         if (!pipeline.github) return res.status(400).json({ error: "no_github_repo", context: "" });
 
-        const { getRepoContext } = await import('./github_api.js');
+        const { getRepoContext } = await import("./github_api.js");
         const context = await getRepoContext(pipeline.github.owner, pipeline.github.repo);
         res.json({ context });
     } catch (err: any) {
@@ -490,7 +534,8 @@ app.post("/embeddings/:pipelineId/reindex", async (req: Request, res: Response) 
 
         const { getEmbeddingService } = await import("./embedding_service.js");
         // Non-blocking — return immediately
-        getEmbeddingService().indexRepository(req.params.pipelineId, pipeline.workspace)
+        getEmbeddingService()
+            .indexRepository(req.params.pipelineId, pipeline.workspace)
             .then((idx) => {
                 console.log(`🔮 [Embedding] Manual reindex done: ${idx.chunkCount} chunks`);
             })
@@ -523,10 +568,9 @@ app.get("/projects", async (_req: Request, res: Response) => {
                 agents: p.agents,
                 github: p.github,
                 createdAt: p.createdAt,
-                type: 'pipeline'
+                type: "pipeline",
             });
         }
-
 
         res.json({ projects });
     } catch (err) {
@@ -575,7 +619,14 @@ app.get("/skills/get", async (req: Request, res: Response) => {
     const skill = String(req.query.skill ?? "");
     // SEC-47: Validate params to prevent path injection
     const SKILL_PARAM_RE = /^[a-zA-Z0-9._-]+$/;
-    if (!owner || !repo || !skill || !SKILL_PARAM_RE.test(owner) || !SKILL_PARAM_RE.test(repo) || !SKILL_PARAM_RE.test(skill)) {
+    if (
+        !owner ||
+        !repo ||
+        !skill ||
+        !SKILL_PARAM_RE.test(owner) ||
+        !SKILL_PARAM_RE.test(repo) ||
+        !SKILL_PARAM_RE.test(skill)
+    ) {
         return res.status(400).json({ error: "Invalid owner/repo/skill parameter" });
     }
     const detail = await fetchSkillDetail(owner, repo, skill);
@@ -647,7 +698,8 @@ app.post("/agents/:id/skills", async (req: Request, res: Response) => {
         const skill = String(req.body?.skill ?? "");
         const href = String(req.body?.href ?? "");
         const title = req.body?.title ? String(req.body.title) : undefined;
-        const installs = req.body?.installs != null ? Number(req.body.installs) : undefined;
+        const installs =
+            req.body?.installs !== null && req.body?.installs !== undefined ? Number(req.body.installs) : undefined;
         const installs_display = req.body?.installs_display ? String(req.body.installs_display) : undefined;
 
         if (!owner || !repo || !skill || !href) {
@@ -655,7 +707,13 @@ app.post("/agents/:id/skills", async (req: Request, res: Response) => {
         }
 
         const assigned = await agentsStore.assignSkill(req.params.id, {
-            owner, repo, skill, href, title, installs, installs_display,
+            owner,
+            repo,
+            skill,
+            href,
+            title,
+            installs,
+            installs_display,
         });
 
         res.json({ agentId: req.params.id, assigned });
@@ -678,7 +736,6 @@ app.delete("/agents/:id/skills", async (req: Request, res: Response) => {
     }
 });
 
-
 // ─────────────────────────────────────
 // 🐳 Container Management
 // ─────────────────────────────────────
@@ -689,10 +746,10 @@ app.get("/containers", async (_req: Request, res: Response) => {
         const { promisify } = await import("node:util");
         const execAsync = promisify(exec);
         // PERF-11: Non-blocking docker ps (was execSync — blocked event loop)
-        const { stdout: rawAll } = await execAsync(
-            `docker ps -a --format "{{json .}}"`,
-            { encoding: "utf-8", timeout: 10000 }
-        );
+        const { stdout: rawAll } = await execAsync(`docker ps -a --format "{{json .}}"`, {
+            encoding: "utf-8",
+            timeout: 10000,
+        });
 
         // Deduplicate by ID
         const seen = new Set<string>();
@@ -705,7 +762,9 @@ app.get("/containers", async (_req: Request, res: Response) => {
                     seen.add(parsed.ID);
                     allLines.push(line);
                 }
-            } catch { /* skip invalid JSON */ }
+            } catch {
+                /* skip invalid JSON */
+            }
         }
         const raw = allLines.join("\n");
 
@@ -725,7 +784,7 @@ app.get("/containers", async (_req: Request, res: Response) => {
                     // Derive URL: match pipeline by container name
                     url: (() => {
                         const pipelines = orchestrator.listPipelines();
-                        const match = pipelines.find(p => p.name && `veist-${slugify(p.name)}-app` === c.Names);
+                        const match = pipelines.find((p) => p.name && `veist-${slugify(p.name)}-app` === c.Names);
                         if (match) {
                             if (match.artifacts?.deployedUrl) return match.artifacts.deployedUrl as string;
                             // Use repo name as subdomain (repo.hach.dev)
@@ -794,10 +853,10 @@ app.delete("/containers/:name", async (req: Request, res: Response) => {
         const execAsync = promisify(exec);
         let imageName = "";
         try {
-            const { stdout } = await execAsync(
-                `docker inspect --format="{{.Config.Image}}" ${name}`,
-                { encoding: "utf-8", timeout: 5000 }
-            );
+            const { stdout } = await execAsync(`docker inspect --format="{{.Config.Image}}" ${name}`, {
+                encoding: "utf-8",
+                timeout: 5000,
+            });
             imageName = stdout.trim();
             // QUAL-02: Validate image name — allow colons for image:tag format
             if (imageName && !/^[a-zA-Z0-9][a-zA-Z0-9_./:@-]*$/.test(imageName)) {
@@ -806,7 +865,9 @@ app.delete("/containers/:name", async (req: Request, res: Response) => {
         } catch {}
         await execAsync(`docker rm -f ${name}`, { timeout: 30000 });
         if (imageName) {
-            try { await execAsync(`docker rmi ${imageName}`, { timeout: 30000 }); } catch {}
+            try {
+                await execAsync(`docker rmi ${imageName}`, { timeout: 30000 });
+            } catch {}
         }
         res.json({ ok: true });
     } catch (err: any) {
@@ -819,14 +880,14 @@ app.get("/containers/:name/logs", async (req: Request, res: Response) => {
         const name = sanitizeName(req.params.name);
         // SEC-14: Validate lines as positive integer
         const rawLines = Number(req.query.lines);
-        const lines = (Number.isInteger(rawLines) && rawLines > 0 && rawLines <= 5000) ? rawLines : 100;
+        const lines = Number.isInteger(rawLines) && rawLines > 0 && rawLines <= 5000 ? rawLines : 100;
         const { exec } = await import("node:child_process");
         const { promisify } = await import("node:util");
         const execAsync = promisify(exec);
-        const { stdout: logs } = await execAsync(
-            `docker logs --tail ${lines} ${name} 2>&1`,
-            { encoding: "utf-8", timeout: 10000 }
-        );
+        const { stdout: logs } = await execAsync(`docker logs --tail ${lines} ${name} 2>&1`, {
+            encoding: "utf-8",
+            timeout: 10000,
+        });
         res.json({ logs });
     } catch (err: any) {
         res.status(500).json({ error: err.message, logs: "" });
@@ -874,25 +935,35 @@ app.get("/vps/metrics", async (_req: Request, res: Response) => {
         if (!HOSTINGER_TOKEN) {
             return res.status(500).json({ error: "HOSTINGER_API_TOKEN not configured" });
         }
-        const headers = { Authorization: `Bearer ${HOSTINGER_TOKEN}`, 'Content-Type': 'application/json' };
+        const headers = { Authorization: `Bearer ${HOSTINGER_TOKEN}`, "Content-Type": "application/json" };
 
         // Fetch VPS details + metrics in parallel
         const now = new Date();
         const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-        const fmt = (d: Date) => d.toISOString().split('T')[0];
+        const fmt = (d: Date) => d.toISOString().split("T")[0];
 
         // QUAL-48: Add timeout to Hostinger API fetches
         const vpsController = new AbortController();
         const vpsTimeout = setTimeout(() => vpsController.abort(), 10_000);
         const [detailsRes, metricsRes] = await Promise.all([
-            fetch(`https://developers.hostinger.com/api/vps/v1/virtual-machines/${VPS_ID}`, { headers, signal: vpsController.signal }),
-            fetch(`https://developers.hostinger.com/api/vps/v1/virtual-machines/${VPS_ID}/metrics?date_from=${fmt(yesterday)}&date_to=${fmt(tomorrow)}`, { headers, signal: vpsController.signal }),
+            fetch(`https://developers.hostinger.com/api/vps/v1/virtual-machines/${VPS_ID}`, {
+                headers,
+                signal: vpsController.signal,
+            }),
+            fetch(
+                `https://developers.hostinger.com/api/vps/v1/virtual-machines/${VPS_ID}/metrics?date_from=${fmt(yesterday)}&date_to=${fmt(tomorrow)}`,
+                { headers, signal: vpsController.signal }
+            ),
         ]);
         clearTimeout(vpsTimeout);
 
         if (!detailsRes.ok || !metricsRes.ok) {
-            return res.status(502).json({ error: "Hostinger API error", detailsStatus: detailsRes.status, metricsStatus: metricsRes.status });
+            return res.status(502).json({
+                error: "Hostinger API error",
+                detailsStatus: detailsRes.status,
+                metricsStatus: metricsRes.status,
+            });
         }
 
         const details: any = await detailsRes.json();
@@ -913,7 +984,7 @@ app.get("/vps/metrics", async (_req: Request, res: Response) => {
         };
 
         const totalRam = details.memory * 1024 * 1024; // memory is in MB
-        const totalDisk = details.disk * 1024 * 1024; // disk is in MB  
+        const totalDisk = details.disk * 1024 * 1024; // disk is in MB
         const totalBandwidth = details.bandwidth * 1024 * 1024; // bandwidth is in MB
         const currentRam = latest(metrics.ram_usage?.usage || {});
         const currentDisk = latest(metrics.disk_space?.usage || {});
@@ -931,16 +1002,24 @@ app.get("/vps/metrics", async (_req: Request, res: Response) => {
                 hostname: details.hostname,
                 state: details.state,
                 plan: details.plan,
-                os: details.template?.name || 'Unknown',
-                ip: details.ipv4?.[0]?.address || '',
+                os: details.template?.name || "Unknown",
+                ip: details.ipv4?.[0]?.address || "",
                 cpus: details.cpus,
                 createdAt: details.created_at,
             },
             current: {
                 cpu: Math.round(currentCpu * 100) / 100,
                 ram: { used: currentRam, total: totalRam, percent: Math.round((currentRam / totalRam) * 10000) / 100 },
-                disk: { used: currentDisk, total: totalDisk, percent: Math.round((currentDisk / totalDisk) * 10000) / 100 },
-                bandwidth: { used: totalIncoming + totalOutgoing, total: totalBandwidth, percent: Math.round(((totalIncoming + totalOutgoing) / totalBandwidth) * 10000) / 100 },
+                disk: {
+                    used: currentDisk,
+                    total: totalDisk,
+                    percent: Math.round((currentDisk / totalDisk) * 10000) / 100,
+                },
+                bandwidth: {
+                    used: totalIncoming + totalOutgoing,
+                    total: totalBandwidth,
+                    percent: Math.round(((totalIncoming + totalOutgoing) / totalBandwidth) * 10000) / 100,
+                },
                 traffic: { incoming: totalIncoming, outgoing: totalOutgoing },
                 uptime: uptimeSeconds,
             },
@@ -999,7 +1078,9 @@ app.post("/chat/sessions/:id/message", chatLimiter, async (req: Request, res: Re
 
         // Build pipeline context if a project is linked
         const session = chatService.getSession(req.params.id);
-        let pipelineContext: { name: string; phase: string; error?: string; events: string[]; workspace?: string } | undefined;
+        let pipelineContext:
+            | { name: string; phase: string; error?: string; events: string[]; workspace?: string }
+            | undefined;
         if (session?.projectId) {
             const pipeline = orchestrator.getPipeline(session.projectId);
             if (pipeline) {
@@ -1013,7 +1094,12 @@ app.post("/chat/sessions/:id/message", chatLimiter, async (req: Request, res: Re
             }
         }
 
-        const result = await chatService.sendMessage(req.params.id, content || '[Attached files]', pipelineContext, files);
+        const result = await chatService.sendMessage(
+            req.params.id,
+            content || "[Attached files]",
+            pipelineContext,
+            files
+        );
         res.json(result);
     } catch (err: any) {
         console.error(`[Chat] Error in session ${req.params.id}:`, err.message || err);
@@ -1094,7 +1180,7 @@ app.get("/events", async (req: Request, res: Response) => {
 });
 
 // Quick Deploy routes
-app.use('/api/quick-deploy', quickDeployRouter);
+app.use("/api/quick-deploy", quickDeployRouter);
 
 // Start HTTP server (wait for orchestrator to finish loading state)
 const PORT = Number(process.env.PORT) || 3000;
@@ -1105,7 +1191,7 @@ app.use((err: any, _req: any, res: any, _next: any) => {
     res.status(err.status || 500).json({ error: err.message || "Internal Server Error" });
 });
 
-(async () => {
+void (async () => {
     await orchestrator.ready;
     const server = app.listen(PORT, "0.0.0.0", () => {
         console.log(`🚀 VEIST HQ listening on port ${PORT}  [BUILD: ${process.env.BUILD_TAG || "dev"}]`);
@@ -1146,9 +1232,8 @@ app.use((err: any, _req: any, res: any, _next: any) => {
             process.exit(1);
         }, 10_000).unref();
     };
-    process.on("SIGTERM", () => shutdown("SIGTERM"));
-    process.on("SIGINT", () => shutdown("SIGINT"));
+    process.on("SIGTERM", () => void shutdown("SIGTERM"));
+    process.on("SIGINT", () => void shutdown("SIGINT"));
 })();
 
 export default app;
-

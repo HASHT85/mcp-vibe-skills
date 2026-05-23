@@ -16,16 +16,9 @@ const envSchema = z.object({
         .describe("OpenRouter API key for LLM access"),
 
     // Optional with defaults
-    AI_MODEL: z
-        .string()
-        .default("anthropic/claude-sonnet-4")
-        .describe("Default model for VEIST agents"),
+    AI_MODEL: z.string().default("anthropic/claude-sonnet-4").describe("Default model for VEIST agents"),
 
-    PORT: z
-        .string()
-        .regex(/^\d+$/, "PORT must be a numeric string")
-        .default("3000")
-        .describe("HTTP server port"),
+    PORT: z.string().regex(/^\d+$/, "PORT must be a numeric string").default("3000").describe("HTTP server port"),
 
     MAX_TOKENS_PER_AGENT: z
         .string()
@@ -34,30 +27,15 @@ const envSchema = z.object({
         .describe("Token budget per agent run (0 = unlimited)"),
 
     // Optional keys — features degrade gracefully if missing
-    TAVILY_API_KEY: z
-        .string()
-        .optional()
-        .describe("Tavily API key — required for web_search tool"),
+    TAVILY_API_KEY: z.string().optional().describe("Tavily API key — required for web_search tool"),
 
-    GITHUB_TOKEN: z
-        .string()
-        .optional()
-        .describe("GitHub PAT — required for repo creation feature"),
+    GITHUB_TOKEN: z.string().optional().describe("GitHub PAT — required for repo creation feature"),
 
-    HOSTINGER_API_KEY: z
-        .string()
-        .optional()
-        .describe("Hostinger API key — required for deployment features"),
+    HOSTINGER_API_KEY: z.string().optional().describe("Hostinger API key — required for deployment features"),
 
-    STORE_PATH: z
-        .string()
-        .default("/data/store.json")
-        .describe("Path to the persistent data store"),
+    STORE_PATH: z.string().default("/data/store.json").describe("Path to the persistent data store"),
 
-    NODE_ENV: z
-        .enum(["development", "production", "test"])
-        .default("production")
-        .describe("Node environment"),
+    NODE_ENV: z.enum(["development", "production", "test"]).default("production").describe("Node environment"),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
@@ -70,9 +48,7 @@ export function loadConfig(): AppConfig {
     const result = envSchema.safeParse(process.env);
 
     if (!result.success) {
-        const errors = result.error.issues
-            .map((issue) => `  • ${issue.path.join(".")}: ${issue.message}`)
-            .join("\n");
+        const errors = result.error.issues.map((issue) => `  • ${issue.path.join(".")}: ${issue.message}`).join("\n");
         throw new Error(
             `[Config] ❌ Invalid environment configuration:\n${errors}\n\n` +
                 `Please check your .env file against .env.example`
@@ -89,9 +65,7 @@ export function loadConfig(): AppConfig {
         console.warn("[Config] ⚠️  GITHUB_TOKEN not set — repo creation is disabled");
     }
 
-    console.log(
-        `[Config] ✅ Environment validated (model: ${config.AI_MODEL}, port: ${config.PORT})`
-    );
+    console.log(`[Config] ✅ Environment validated (model: ${config.AI_MODEL}, port: ${config.PORT})`);
     return config;
 }
 

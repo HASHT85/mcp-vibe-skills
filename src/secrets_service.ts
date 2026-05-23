@@ -19,7 +19,7 @@ function getOrCreateSalt(): string {
         if (existsSync(SALT_PATH)) {
             return readFileSync(SALT_PATH, "utf-8").trim();
         }
-        const salt = crypto.randomBytes(32).toString('hex');
+        const salt = crypto.randomBytes(32).toString("hex");
         const dir = path.dirname(SALT_PATH);
         if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
         writeFileSync(SALT_PATH, salt, "utf-8");
@@ -98,7 +98,7 @@ export class SecretsService {
             const dir = path.dirname(this.filePath);
             if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
             if (!existsSync(this.filePath)) return;
-            
+
             const raw = readFileSync(this.filePath, "utf-8");
             const data = JSON.parse(raw);
             if (data.secrets && typeof data.secrets === "object") {
@@ -107,7 +107,7 @@ export class SecretsService {
                         // Decrypt values
                         const decrypted: Record<string, string> = {};
                         for (const [key, val] of Object.entries(secrets as Record<string, string>)) {
-                            decrypted[key] = (data.encrypted) ? decrypt(val) : val;
+                            decrypted[key] = data.encrypted ? decrypt(val) : val;
                         }
                         this.secrets.set(pipelineId, decrypted);
                     }
@@ -128,7 +128,7 @@ export class SecretsService {
         try {
             const dir = path.dirname(this.filePath);
             await fs.mkdir(dir, { recursive: true });
-            
+
             // Encrypt all values before saving
             const encryptedSecrets: Record<string, Record<string, string>> = {};
             for (const [pipelineId, secrets] of this.secrets) {
@@ -137,7 +137,7 @@ export class SecretsService {
                     encryptedSecrets[pipelineId][key] = encrypt(val);
                 }
             }
-            
+
             const data = {
                 encrypted: true,
                 secrets: encryptedSecrets,

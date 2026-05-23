@@ -7,11 +7,7 @@ import { safePath, runBash, listDir } from "./system.js";
 import { readFile, writeFile, replaceInFile, readMemory, writeMemory } from "./file.js";
 import { webSearch, fetchUrl } from "./web.js";
 
-export async function executeTool(
-    name: string,
-    input: Record<string, any>,
-    cwd: string
-): Promise<string> {
+export async function executeTool(name: string, input: Record<string, any>, cwd: string): Promise<string> {
     try {
         switch (name) {
             case "read_file":
@@ -84,8 +80,7 @@ export const TOOLS: any[] = [
     },
     {
         name: "bash",
-        description:
-            "Run a bash command and return its output. Use for npm install, building, testing, etc.",
+        description: "Run a bash command and return its output. Use for npm install, building, testing, etc.",
         input_schema: {
             type: "object" as const,
             properties: {
@@ -104,8 +99,7 @@ export const TOOLS: any[] = [
                 path: { type: "string", description: "Path to the file to modify" },
                 targetStr: {
                     type: "string",
-                    description:
-                        "The EXACT current string in the file to replace (including indentation/newlines)",
+                    description: "The EXACT current string in the file to replace (including indentation/newlines)",
                 },
                 replacementStr: {
                     type: "string",
@@ -117,8 +111,7 @@ export const TOOLS: any[] = [
     },
     {
         name: "web_search",
-        description:
-            "Search the web to find up-to-date documentation or fixes for errors.",
+        description: "Search the web to find up-to-date documentation or fixes for errors.",
         input_schema: {
             type: "object" as const,
             properties: {
@@ -155,8 +148,7 @@ export const TOOLS: any[] = [
     },
     {
         name: "write_memory",
-        description:
-            "Write a value to the shared project memory space so that other agents can see it.",
+        description: "Write a value to the shared project memory space so that other agents can see it.",
         input_schema: {
             type: "object" as const,
             properties: {

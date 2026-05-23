@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { listChatSessions, listPipelines } from '../api/client';
-import type { ChatSession, Pipeline } from '../api/client';
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { listChatSessions, listPipelines } from "../api/client";
+import type { ChatSession, Pipeline } from "../api/client";
 
 interface SidebarProps {
     activeSessionId: string | null;
@@ -15,16 +15,16 @@ interface SidebarProps {
 }
 
 const MODEL_LABELS: Record<string, string> = {
-    'anthropic/claude-sonnet-4': 'Claude Sonnet 4',
-    'anthropic/claude-opus-4.6': 'Claude Opus 4.6',
-    'anthropic/claude-haiku-4-5': 'Claude Haiku 4.5',
-    'google/gemini-3.1-pro-preview': 'Gemini 3.1 Pro',
-    'google/gemini-2.5-flash': 'Gemini 2.5 Flash',
-    'openai/gpt-4o': 'GPT-4o',
-    'deepseek/deepseek-chat': 'DeepSeek Chat',
+    "anthropic/claude-sonnet-4": "Claude Sonnet 4",
+    "anthropic/claude-opus-4.6": "Claude Opus 4.6",
+    "anthropic/claude-haiku-4-5": "Claude Haiku 4.5",
+    "google/gemini-3.1-pro-preview": "Gemini 3.1 Pro",
+    "google/gemini-2.5-flash": "Gemini 2.5 Flash",
+    "openai/gpt-4o": "GPT-4o",
+    "deepseek/deepseek-chat": "DeepSeek Chat",
 };
 
-type SidebarTab = 'chats' | 'projects';
+type SidebarTab = "chats" | "projects";
 
 export function Sidebar({
     activeSessionId,
@@ -36,19 +36,19 @@ export function Sidebar({
     collapsed,
     onToggleCollapse,
 }: SidebarProps) {
-    const [tab, setTab] = useState<SidebarTab>('chats');
+    const [tab, setTab] = useState<SidebarTab>("chats");
     const [mobileOpen, setMobileOpen] = useState(false);
 
     const getSessionTitle = (s: ChatSession) => {
         const firstMsg = s.messages?.[0]?.content;
-        if (firstMsg) return firstMsg.slice(0, 40) + (firstMsg.length > 40 ? '...' : '');
-        return `Chat ${(s.id || '').slice(0, 6)}`;
+        if (firstMsg) return firstMsg.slice(0, 40) + (firstMsg.length > 40 ? "..." : "");
+        return `Chat ${(s.id || "").slice(0, 6)}`;
     };
 
     const getTimeAgo = (dateStr: string) => {
         const diff = Date.now() - new Date(dateStr).getTime();
         const mins = Math.floor(diff / 60000);
-        if (mins < 1) return 'just now';
+        if (mins < 1) return "just now";
         if (mins < 60) return `${mins}m ago`;
         const hrs = Math.floor(mins / 60);
         if (hrs < 24) return `${hrs}h ago`;
@@ -58,19 +58,31 @@ export function Sidebar({
 
     const getPhaseColor = (phase: string) => {
         switch (phase) {
-            case 'COMPLETED': return 'text-status-success';
-            case 'FAILED': return 'text-status-error';
-            case 'RUNNING': case 'PLANNING': case 'BUILDING': return 'text-v-accent';
-            default: return 'text-text-tertiary';
+            case "COMPLETED":
+                return "text-status-success";
+            case "FAILED":
+                return "text-status-error";
+            case "RUNNING":
+            case "PLANNING":
+            case "BUILDING":
+                return "text-v-accent";
+            default:
+                return "text-text-tertiary";
         }
     };
 
     const getPhaseIcon = (phase: string) => {
         switch (phase) {
-            case 'COMPLETED': return 'check_circle';
-            case 'FAILED': return 'error';
-            case 'RUNNING': case 'PLANNING': case 'BUILDING': return 'sync';
-            default: return 'pending';
+            case "COMPLETED":
+                return "check_circle";
+            case "FAILED":
+                return "error";
+            case "RUNNING":
+            case "PLANNING":
+            case "BUILDING":
+                return "sync";
+            default:
+                return "pending";
         }
     };
 
@@ -88,7 +100,7 @@ export function Sidebar({
                     title="Toggle sidebar"
                 >
                     <span className="material-symbols-outlined text-[18px]">
-                        {collapsed ? 'menu_open' : 'left_panel_close'}
+                        {collapsed ? "menu_open" : "left_panel_close"}
                     </span>
                 </button>
             </div>
@@ -97,9 +109,14 @@ export function Sidebar({
             <div className="px-3 pb-3">
                 <button
                     className="w-full flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-surface-4 hover:bg-surface-5 text-text-primary text-sm font-medium transition-all group"
-                    onClick={() => { onNewChat(); setMobileOpen(false); }}
+                    onClick={() => {
+                        onNewChat();
+                        setMobileOpen(false);
+                    }}
                 >
-                    <span className="material-symbols-outlined text-[18px] text-text-secondary group-hover:text-v-accent transition-colors">add_comment</span>
+                    <span className="material-symbols-outlined text-[18px] text-text-secondary group-hover:text-v-accent transition-colors">
+                        add_comment
+                    </span>
                     <span>New chat</span>
                 </button>
             </div>
@@ -108,35 +125,34 @@ export function Sidebar({
             <div className="px-3 pb-2 flex gap-1">
                 <button
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${
-                        tab === 'chats'
-                            ? 'bg-accent-muted text-v-accent'
-                            : 'text-text-tertiary hover:bg-surface-4 hover:text-text-secondary'
+                        tab === "chats"
+                            ? "bg-accent-muted text-v-accent"
+                            : "text-text-tertiary hover:bg-surface-4 hover:text-text-secondary"
                     }`}
-                    onClick={() => setTab('chats')}
+                    onClick={() => setTab("chats")}
                 >
                     <span className="material-symbols-outlined text-[16px]">chat</span>
                     Chats
                 </button>
                 <button
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${
-                        tab === 'projects'
-                            ? 'bg-accent-muted text-v-accent'
-                            : 'text-text-tertiary hover:bg-surface-4 hover:text-text-secondary'
+                        tab === "projects"
+                            ? "bg-accent-muted text-v-accent"
+                            : "text-text-tertiary hover:bg-surface-4 hover:text-text-secondary"
                     }`}
-                    onClick={() => setTab('projects')}
+                    onClick={() => setTab("projects")}
                 >
                     <span className="material-symbols-outlined text-[16px]">deployed_code</span>
                     Projects
-                    {pipelines.filter(p => p.phase === 'RUNNING' || p.phase === 'BUILDING' || p.phase === 'PLANNING').length > 0 && (
-                        <span className="w-2 h-2 rounded-full bg-v-accent animate-pulse-soft" />
-                    )}
+                    {pipelines.filter((p) => p.phase === "RUNNING" || p.phase === "BUILDING" || p.phase === "PLANNING")
+                        .length > 0 && <span className="w-2 h-2 rounded-full bg-v-accent animate-pulse-soft" />}
                 </button>
             </div>
 
             {/* ── Content ── */}
             <div className="flex-1 overflow-y-auto custom-scrollbar px-2 pb-4">
                 <AnimatePresence mode="wait">
-                    {tab === 'chats' ? (
+                    {tab === "chats" ? (
                         <motion.div
                             key="chats"
                             initial={{ opacity: 0, x: -8 }}
@@ -147,7 +163,9 @@ export function Sidebar({
                         >
                             {sessions.length === 0 ? (
                                 <div className="px-4 py-8 text-center">
-                                    <span className="material-symbols-outlined text-3xl text-text-muted mb-2 block">forum</span>
+                                    <span className="material-symbols-outlined text-3xl text-text-muted mb-2 block">
+                                        forum
+                                    </span>
                                     <p className="text-xs text-text-tertiary">No conversations yet</p>
                                     <p className="text-2xs text-text-muted mt-1">Start a new chat to begin</p>
                                 </div>
@@ -159,13 +177,18 @@ export function Sidebar({
                                             key={s.id}
                                             className={`w-full text-left px-3 py-2.5 rounded-lg transition-all group flex flex-col gap-0.5 ${
                                                 isActive
-                                                    ? 'bg-accent-muted text-text-primary'
-                                                    : 'hover:bg-surface-4 text-text-secondary'
+                                                    ? "bg-accent-muted text-text-primary"
+                                                    : "hover:bg-surface-4 text-text-secondary"
                                             }`}
-                                            onClick={() => { onSelectSession(s); setMobileOpen(false); }}
+                                            onClick={() => {
+                                                onSelectSession(s);
+                                                setMobileOpen(false);
+                                            }}
                                         >
                                             <div className="flex items-center gap-2">
-                                                <span className={`material-symbols-outlined text-[14px] shrink-0 ${isActive ? 'text-v-accent' : 'text-text-tertiary'}`}>
+                                                <span
+                                                    className={`material-symbols-outlined text-[14px] shrink-0 ${isActive ? "text-v-accent" : "text-text-tertiary"}`}
+                                                >
                                                     chat_bubble
                                                 </span>
                                                 <span className="text-sm truncate flex-1 font-medium">
@@ -174,7 +197,7 @@ export function Sidebar({
                                             </div>
                                             <div className="flex items-center gap-2 pl-[22px]">
                                                 <span className="text-2xs text-text-muted truncate">
-                                                    {MODEL_LABELS[s.model] || s.model || 'Default'}
+                                                    {MODEL_LABELS[s.model] || s.model || "Default"}
                                                 </span>
                                                 <span className="text-2xs text-text-muted">·</span>
                                                 <span className="text-2xs text-text-muted">
@@ -197,7 +220,9 @@ export function Sidebar({
                         >
                             {pipelines.length === 0 ? (
                                 <div className="px-4 py-8 text-center">
-                                    <span className="material-symbols-outlined text-3xl text-text-muted mb-2 block">rocket_launch</span>
+                                    <span className="material-symbols-outlined text-3xl text-text-muted mb-2 block">
+                                        rocket_launch
+                                    </span>
                                     <p className="text-xs text-text-tertiary">No projects yet</p>
                                     <p className="text-2xs text-text-muted mt-1">Launch one from the chat</p>
                                 </div>
@@ -206,16 +231,23 @@ export function Sidebar({
                                     <button
                                         key={p.id}
                                         className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-surface-4 transition-all group flex flex-col gap-1"
-                                        onClick={() => { onSelectProject(p); setMobileOpen(false); }}
+                                        onClick={() => {
+                                            onSelectProject(p);
+                                            setMobileOpen(false);
+                                        }}
                                     >
                                         <div className="flex items-center gap-2">
-                                            <span className={`material-symbols-outlined text-[14px] shrink-0 ${getPhaseColor(p.phase)} ${
-                                                ['RUNNING', 'BUILDING', 'PLANNING'].includes(p.phase) ? 'animate-spin' : ''
-                                            }`}>
+                                            <span
+                                                className={`material-symbols-outlined text-[14px] shrink-0 ${getPhaseColor(p.phase)} ${
+                                                    ["RUNNING", "BUILDING", "PLANNING"].includes(p.phase)
+                                                        ? "animate-spin"
+                                                        : ""
+                                                }`}
+                                            >
                                                 {getPhaseIcon(p.phase)}
                                             </span>
                                             <span className="text-sm truncate flex-1 font-medium text-text-primary">
-                                                {p.name || 'Unnamed Project'}
+                                                {p.name || "Unnamed Project"}
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2 pl-[22px]">
@@ -226,7 +258,8 @@ export function Sidebar({
                                                 <>
                                                     <span className="text-2xs text-text-muted">·</span>
                                                     <span className="text-2xs text-text-muted">
-                                                        {p.agents.filter(a => a.status === 'active').length}/{p.agents.length} agents
+                                                        {p.agents.filter((a) => a.status === "active").length}/
+                                                        {p.agents.length} agents
                                                     </span>
                                                 </>
                                             )}
@@ -252,9 +285,11 @@ export function Sidebar({
     return (
         <>
             {/* ── Desktop Sidebar ── */}
-            <aside className={`hidden md:flex fixed left-0 top-0 h-screen z-40 transition-all duration-300 ease-in-out ${
-                collapsed ? 'w-0 overflow-hidden' : 'w-[280px]'
-            }`}>
+            <aside
+                className={`hidden md:flex fixed left-0 top-0 h-screen z-40 transition-all duration-300 ease-in-out ${
+                    collapsed ? "w-0 overflow-hidden" : "w-[280px]"
+                }`}
+            >
                 {sidebarContent}
             </aside>
 
@@ -279,10 +314,10 @@ export function Sidebar({
                         />
                         <motion.aside
                             className="md:hidden fixed left-0 top-0 h-full w-[300px] max-w-[85vw] z-50"
-                            initial={{ x: '-100%' }}
+                            initial={{ x: "-100%" }}
                             animate={{ x: 0 }}
-                            exit={{ x: '-100%' }}
-                            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                            exit={{ x: "-100%" }}
+                            transition={{ type: "spring", damping: 25, stiffness: 300 }}
                         >
                             {sidebarContent}
                         </motion.aside>

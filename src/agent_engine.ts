@@ -50,11 +50,7 @@ export async function gitClone(repoUrl: string, targetDir: string): Promise<bool
     });
 }
 
-export async function gitPush(
-    cwd: string,
-    message: string,
-    authRemoteUrl?: string
-): Promise<boolean> {
+export async function gitPush(cwd: string, message: string, authRemoteUrl?: string): Promise<boolean> {
     // Ensure .gitignore exists to prevent staging node_modules, dist, etc.
     try {
         const gitignorePath = path.join(cwd, ".gitignore");
@@ -64,11 +60,7 @@ export async function gitPush(
             .catch(() => false);
         if (!hasGitignore) {
             console.log(`[Git] No .gitignore found, creating default one`);
-            await fs.writeFile(
-                gitignorePath,
-                "node_modules/\ndist/\nbuild/\n.env\n.env.local\n*.log\n",
-                "utf-8"
-            );
+            await fs.writeFile(gitignorePath, "node_modules/\ndist/\nbuild/\n.env\n.env.local\n*.log\n", "utf-8");
         } else {
             const content = await fs.readFile(gitignorePath, "utf-8");
             if (!content.includes("node_modules")) {
@@ -126,9 +118,7 @@ export async function gitPush(
             proc.on("close", (code) => {
                 clearTimeout(cmdTimeout);
                 if (code !== 0) {
-                    console.error(
-                        `[Git] ${cmd} ${args.join(" ")} failed (code ${code}):\n${stderr}`
-                    );
+                    console.error(`[Git] ${cmd} ${args.join(" ")} failed (code ${code}):\n${stderr}`);
                     resolve(false);
                     return;
                 }

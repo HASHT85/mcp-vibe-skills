@@ -14,8 +14,13 @@ export function detectProjectType(analysis: any): ProjectType {
     const hasFrontend = frontend && !["none", "aucun", "n/a", "-", ""].includes(frontend);
     const isSPA = /react|vue|svelte|angular|vite|next|nuxt|remix/.test(frontend);
 
-    const isPythonBot = backend.includes("python") || /python|flask|fastapi|django|pandas|scraper|scraping|bot\s|cron|daemon|trading|data\.sci|machine\.learn|ia\s|ml\s/.test(desc);
-    const isNodeBot = (backend.includes("node") || backend.includes("express")) && /bot\s|scraper|cron|daemon|worker/.test(desc);
+    const isPythonBot =
+        backend.includes("python") ||
+        /python|flask|fastapi|django|pandas|scraper|scraping|bot\s|cron|daemon|trading|data\.sci|machine\.learn|ia\s|ml\s/.test(
+            desc
+        );
+    const isNodeBot =
+        (backend.includes("node") || backend.includes("express")) && /bot\s|scraper|cron|daemon|worker/.test(desc);
 
     if (isPythonBot) return "python-worker";
     if (isNodeBot) return "node-worker";
@@ -46,32 +51,49 @@ export function getDockerfileTemplate(type: ProjectType, stack?: any): string {
 export function getScaffoldGuidance(type: ProjectType): string {
     // Basic guidance
     switch (type) {
-        case "spa": return `INSTRUCTIONS SCAFFOLD (SPA):\n1. Initialise un projet Vite (react-ts)\n2. OBLIGATOIRE: configure Vite pour écouter sur 0.0.0.0 (ajouter --host dans les scripts package.json)\n3. Expose le port 80 pour Nginx (ou le port 3000/5173 en dev)\n4. Génère un docker-compose.yml de base sans labels définis.`;
-        case "python-worker": return `INSTRUCTIONS SCAFFOLD (Python Worker):\n1. Crée requirements.txt\n2. Configure supervisord pour lancer bot et dashboard\n3. Assure-toi que les ports réseau sont exposés sur 0.0.0.0\n4. Génère un docker-compose.yml de base.`;
-        default: return `Assure-toi que ton application écoute sur 0.0.0.0 sinon elle sera inaccessible depuis l'hôte.\nGénère toujours un fichier docker-compose.yml avec un réseau "web" défini en externe.`;
+        case "spa":
+            return `INSTRUCTIONS SCAFFOLD (SPA):\n1. Initialise un projet Vite (react-ts)\n2. OBLIGATOIRE: configure Vite pour écouter sur 0.0.0.0 (ajouter --host dans les scripts package.json)\n3. Expose le port 80 pour Nginx (ou le port 3000/5173 en dev)\n4. Génère un docker-compose.yml de base sans labels définis.`;
+        case "python-worker":
+            return `INSTRUCTIONS SCAFFOLD (Python Worker):\n1. Crée requirements.txt\n2. Configure supervisord pour lancer bot et dashboard\n3. Assure-toi que les ports réseau sont exposés sur 0.0.0.0\n4. Génère un docker-compose.yml de base.`;
+        default:
+            return `Assure-toi que ton application écoute sur 0.0.0.0 sinon elle sera inaccessible depuis l'hôte.\nGénère toujours un fichier docker-compose.yml avec un réseau "web" défini en externe.`;
     }
 }
 
 export function getArchitectureGuidance(type: ProjectType): string {
     switch (type) {
-        case "static": return `CONTRAINTES ARCHITECTURE (site statique): Pas de backend, fichiers plats.`;
-        case "spa": return `CONTRAINTES ARCHITECTURE (SPA): Application Vite (React/Vue/Svelte).`;
-        case "api": return `CONTRAINTES ARCHITECTURE (API backend): Node.js ou Python, avec route GET /health.`;
-        case "fullstack": return `CONTRAINTES ARCHITECTURE (fullstack): Backend qui sert le frontend ou deux DOCKER séparés.`;
-        case "python-worker": return `CONTRAINTES ARCHITECTURE: Bot Python + Dashboard Web Flask. Écrire les données sur disque ou SQLite. Exposer sur 0.0.0.0:8080.`;
-        case "node-worker": return `CONTRAINTES ARCHITECTURE: Bot Node + Dashboard Web Express. Exposer sur 0.0.0.0:3000.`;
-        default: return "";
+        case "static":
+            return `CONTRAINTES ARCHITECTURE (site statique): Pas de backend, fichiers plats.`;
+        case "spa":
+            return `CONTRAINTES ARCHITECTURE (SPA): Application Vite (React/Vue/Svelte).`;
+        case "api":
+            return `CONTRAINTES ARCHITECTURE (API backend): Node.js ou Python, avec route GET /health.`;
+        case "fullstack":
+            return `CONTRAINTES ARCHITECTURE (fullstack): Backend qui sert le frontend ou deux DOCKER séparés.`;
+        case "python-worker":
+            return `CONTRAINTES ARCHITECTURE: Bot Python + Dashboard Web Flask. Écrire les données sur disque ou SQLite. Exposer sur 0.0.0.0:8080.`;
+        case "node-worker":
+            return `CONTRAINTES ARCHITECTURE: Bot Node + Dashboard Web Express. Exposer sur 0.0.0.0:3000.`;
+        default:
+            return "";
     }
 }
 
 export function slugify(text: string): string {
-    return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24).replace(/-+$/g, "");
+    return text
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 24)
+        .replace(/-+$/g, "");
 }
 
 export function tryParseJson(text: string): any {
     try {
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (jsonMatch) return JSON.parse(jsonMatch[0]);
-    } catch { /* ignore */ }
+    } catch {
+        /* ignore */
+    }
     return { raw: text };
 }

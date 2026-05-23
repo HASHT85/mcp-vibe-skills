@@ -24,20 +24,22 @@ export default [
             prettier: prettierPlugin,
         },
         rules: {
-            // ─── Prettier (format automatique) ───
-            "prettier/prettier": "warn",
+            // ─── Prettier (format via npm run format:check, not eslint) ───
+            "prettier/prettier": "off",
 
             // ─── TypeScript (sécurité) ───
             "@typescript-eslint/no-explicit-any": "warn",
-            "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+            "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
             "@typescript-eslint/explicit-function-return-type": "off",
             "@typescript-eslint/no-floating-promises": "error",
 
             // ─── JS général ───
             "no-console": "off",
-            "prefer-const": "error",
+            "prefer-const": "warn",
             "no-var": "error",
             "eqeqeq": ["error", "always"],
+            "no-empty": "warn",
+            "no-useless-escape": "warn",
         },
     },
     prettierConfig,

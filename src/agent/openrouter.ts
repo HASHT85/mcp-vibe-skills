@@ -116,9 +116,7 @@ export async function invokeModel(
             try {
                 parsedArgs = JSON.parse(tc.function.arguments);
             } catch {
-                console.warn(
-                    `[Agent] ⚠️ Malformed tool arguments for ${tc.function.name}, using empty object`
-                );
+                console.warn(`[Agent] ⚠️ Malformed tool arguments for ${tc.function.name}, using empty object`);
             }
             contentBlocks.push({
                 type: "tool_use",

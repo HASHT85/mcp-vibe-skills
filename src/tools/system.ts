@@ -18,9 +18,7 @@ export function safePath(cwd: string, userPath: string): string {
     try {
         const real = realpathSync(resolved);
         if (!real.startsWith(cwd)) {
-            throw new Error(
-                `🚫 Symlink traversal blocked: "${userPath}" resolves outside workspace via symlink.`
-            );
+            throw new Error(`🚫 Symlink traversal blocked: "${userPath}" resolves outside workspace via symlink.`);
         }
         return real;
     } catch (e: any) {
@@ -35,7 +33,8 @@ export function safePath(cwd: string, userPath: string): string {
 const BLOCKED_PATTERNS = [
     // Filesystem destruction
     {
-        pattern: /rm\s+(-rf?|--recursive)\s+(\/(?!\w)|\/(etc|usr|var|bin|sbin|lib|boot|sys|proc|root|home|tmp|data|opt))/,
+        pattern:
+            /rm\s+(-rf?|--recursive)\s+(\/(?!\w)|\/(etc|usr|var|bin|sbin|lib|boot|sys|proc|root|home|tmp|data|opt))/,
         label: "rm -rf system paths",
     },
     { pattern: /mkfs\./, label: "mkfs (format disk)" },

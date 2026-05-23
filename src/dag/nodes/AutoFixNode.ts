@@ -1,6 +1,6 @@
 /**
  * AutoFixNode — Phase 3: Self-Healing Corrections
- * 
+ *
  * Activated only when EvalNode emits FIX_AND_REEVAL.
  * Receives the evaluation report and surgically fixes identified issues.
  * After fixing, the pipeline re-runs QA → Deploy → Eval.
@@ -21,21 +21,26 @@ export class AutoFixNode extends AgentNode {
             dependencies: ["eval"],
             maxTurns: 25,
             allowedTools: [
-                "read_file", "write_file", "replace_in_file", 
-                "bash", "list_dir", "read_memory", "write_memory"
+                "read_file",
+                "write_file",
+                "replace_in_file",
+                "bash",
+                "list_dir",
+                "read_memory",
+                "write_memory",
             ],
         });
     }
 
     protected getPrompt(context: NodeContext): string {
         const report = context.pipeline.artifacts.evalReport as EvalReport | undefined;
-        
+
         if (!report) {
             return `Vérifie que le projet build correctement avec "npm run build" et corrige les erreurs éventuelles.`;
         }
 
-        const failedChecks = report.checks.filter(c => !c.pass);
-        const passedChecks = report.checks.filter(c => c.pass);
+        const failedChecks = report.checks.filter((c) => !c.pass);
+        const passedChecks = report.checks.filter((c) => c.pass);
 
         return `L'auto-évaluation du déploiement a détecté des problèmes dans le projet.
 
@@ -43,12 +48,12 @@ export class AutoFixNode extends AgentNode {
 🔄 CYCLE: ${report.cycle}/3
 
 ✅ CHECKS RÉUSSIS:
-${passedChecks.length > 0 ? passedChecks.map(c => `  ✓ ${c.name} (${c.weight}pts): ${c.detail}`).join('\n') : '  Aucun'}
+${passedChecks.length > 0 ? passedChecks.map((c) => `  ✓ ${c.name} (${c.weight}pts): ${c.detail}`).join("\n") : "  Aucun"}
 
 ❌ CHECKS ÉCHOUÉS:
-${failedChecks.map(c => `  ✗ ${c.name} (${c.weight}pts): ${c.detail}`).join('\n')}
+${failedChecks.map((c) => `  ✗ ${c.name} (${c.weight}pts): ${c.detail}`).join("\n")}
 
-${report.fixInstructions ? `\n📋 INSTRUCTIONS DE CORRECTION:\n${report.fixInstructions}` : ''}
+${report.fixInstructions ? `\n📋 INSTRUCTIONS DE CORRECTION:\n${report.fixInstructions}` : ""}
 
 === WORKFLOW DE CORRECTION ===
 

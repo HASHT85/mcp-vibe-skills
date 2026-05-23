@@ -209,7 +209,6 @@ export class ProjectsStore {
         return { project, agents: createdAgents };
     }
 
-
     /**
      * Ajoute un agent à un projet (utile si l’UI veut “ajouter un agent X” après coup)
      */

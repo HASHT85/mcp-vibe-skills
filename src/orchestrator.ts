@@ -13,7 +13,14 @@ import { runVeistAgent, gitPush, gitClone, gitInit, agentEvents, type AgentActio
 import type { ModifyRun } from "./types.js";
 import { GraphManager } from "./dag/Graph.js";
 import type { NodeContext } from "./dag/Node.js";
-import { AnalysisNode, ArchitectureNode, ScaffoldNode, DevelopmentNode, QANode, DeployNode } from "./dag/nodes/veistNodes.js";
+import {
+    AnalysisNode,
+    ArchitectureNode,
+    ScaffoldNode,
+    DevelopmentNode,
+    QANode,
+    DeployNode,
+} from "./dag/nodes/veistNodes.js";
 import { SupervisorNode } from "./dag/nodes/SupervisorNode.js";
 import { fetchOpenRouterModels } from "./openrouter_models.js";
 import { SkillsEnrichmentNode } from "./dag/nodes/SkillsEnrichmentNode.js";
@@ -21,7 +28,6 @@ import { ResearchNode } from "./dag/nodes/ResearchNode.js";
 import { createRepo } from "./github_api.js";
 import { SecretsService, getSecretsService } from "./secrets_service.js";
 import { cleanupMiddlewareState } from "./middleware.js";
-
 
 import type { Pipeline, PipelinePhase, AgentStatus, PipelineAgent, PipelineEvent } from "./orchestrator_types.js";
 import { savePipelinesState, loadPipelinesState } from "./orchestrator_state.js";
@@ -46,7 +52,10 @@ async function injectSecretsToEnv(pipelineId: string, workspace: string): Promis
     if (!envContent) return 0;
 
     const envPath = path.join(workspace, ".env");
-    const hasExisting = await fs.access(envPath).then(() => true).catch(() => false);
+    const hasExisting = await fs
+        .access(envPath)
+        .then(() => true)
+        .catch(() => false);
 
     if (hasExisting) {
         const existing = await fs.readFile(envPath, "utf-8");
@@ -55,7 +64,7 @@ async function injectSecretsToEnv(pipelineId: string, workspace: string): Promis
             const eqIdx = line.indexOf("=");
             if (eqIdx > 0) vaultKeys.set(line.slice(0, eqIdx), line.slice(eqIdx + 1));
         }
-        const updatedLines = existing.split("\n").map(line => {
+        const updatedLines = existing.split("\n").map((line) => {
             const eqIdx = line.indexOf("=");
             if (eqIdx > 0) {
                 const key = line.slice(0, eqIdx);
@@ -106,13 +115,14 @@ export class Orchestrator extends EventEmitter {
     // ─── Phase 3: Workspace Cleanup ───
 
     private startCleanupTimer() {
-        const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000;   // every 6h
-        const MAX_WORKSPACE_AGE = 48 * 60 * 60 * 1000;  // 48h
+        const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000; // every 6h
+        const MAX_WORKSPACE_AGE = 48 * 60 * 60 * 1000; // 48h
 
         setInterval(async () => {
             let cleaned = 0;
             for (const [id, p] of this.pipelines) {
-                const isTerminal = p.phase === "COMPLETED" || p.phase === "COMPLETED_WITH_ISSUES" || p.phase === "FAILED";
+                const isTerminal =
+                    p.phase === "COMPLETED" || p.phase === "COMPLETED_WITH_ISSUES" || p.phase === "FAILED";
                 if (!isTerminal) continue;
 
                 const age = Date.now() - new Date(p.updatedAt).getTime();
@@ -143,13 +153,22 @@ export class Orchestrator extends EventEmitter {
 
     // ─── Pipeline Management ───
 
-    async launchIdea(description: string, name?: string, model?: string, files?: { base64: string; type: string }[], templateId?: string, githubUrl?: string): Promise<Pipeline> {
+    async launchIdea(
+        description: string,
+        name?: string,
+        model?: string,
+        files?: { base64: string; type: string }[],
+        templateId?: string,
+        githubUrl?: string
+    ): Promise<Pipeline> {
         // #14: Prevent too many concurrent pipelines
         const MAX_CONCURRENT = 3;
         if (this.running.size >= MAX_CONCURRENT) {
-            throw new Error(`Maximum de ${MAX_CONCURRENT} pipelines simultanés atteint. Attendez qu'un pipeline se termine.`);
+            throw new Error(
+                `Maximum de ${MAX_CONCURRENT} pipelines simultanés atteint. Attendez qu'un pipeline se termine.`
+            );
         }
-        
+
         const id = crypto.randomUUID().slice(0, 8);
         const projectName = name || slugify(description);
         const workspace = path.join(WORKSPACE_ROOT, id);
@@ -169,7 +188,7 @@ export class Orchestrator extends EventEmitter {
             phase: "QUEUED",
             progress: 0,
             services: [],
-            agents: DEFAULT_AGENTS.map(a => ({ ...a, status: "waiting" as AgentStatus })),
+            agents: DEFAULT_AGENTS.map((a) => ({ ...a, status: "waiting" as AgentStatus })),
             events: [],
             workspace,
             artifacts: {},
@@ -185,13 +204,21 @@ export class Orchestrator extends EventEmitter {
         if (files && files.length > 0) pipeline.artifacts.initialFiles = files;
 
         this.pipelines.set(id, pipeline);
-        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🚀", `Pipeline créé: "${description}" [Template: ${template?.emoji || "🌐"} ${template?.name || resolvedTemplateId}]`, "info");
+        addPipelineEvent(
+            this,
+            this.pipelines,
+            id,
+            "Orchestrator",
+            "🚀",
+            `Pipeline créé: "${description}" [Template: ${template?.emoji || "🌐"} ${template?.name || resolvedTemplateId}]`,
+            "info"
+        );
         await savePipelinesState(this.pipelines);
 
         // Race-condition fix: Reserve the slot immediately, before fire-and-forget
         this.running.add(id);
 
-        this.executePipeline(id).catch(err => {
+        this.executePipeline(id).catch((err) => {
             console.error(`[Orchestrator] Pipeline ${id} failed:`, err);
             setPipelinePhase(this, this.pipelines, id, "FAILED", String(err.message || err));
         });
@@ -232,8 +259,8 @@ export class Orchestrator extends EventEmitter {
 
     async deletePipeline(id: string): Promise<boolean> {
         const p = this.pipelines.get(id);
-        this.killPipeline(id);
-        
+        void this.killPipeline(id);
+
         // #13: Stop and remove Docker containers for this project
         if (p && p.artifacts.deployed) {
             try {
@@ -242,15 +269,25 @@ export class Orchestrator extends EventEmitter {
                 // Try multi-container first
                 const composeProd = path.join(p.workspace, "docker-compose.prod.yml");
                 const composeDeploy = path.join(p.workspace, "docker-compose.deploy.yml");
-                const hasProd = await fs.access(composeProd).then(() => true).catch(() => false);
-                const hasDeploy = await fs.access(composeDeploy).then(() => true).catch(() => false);
+                const hasProd = await fs
+                    .access(composeProd)
+                    .then(() => true)
+                    .catch(() => false);
+                const hasDeploy = await fs
+                    .access(composeDeploy)
+                    .then(() => true)
+                    .catch(() => false);
                 if (hasProd) {
                     execSync(`docker compose -p ${pName} -f ${composeProd} down --remove-orphans -v`, {
-                        cwd: p.workspace, stdio: "pipe", timeout: 30000
+                        cwd: p.workspace,
+                        stdio: "pipe",
+                        timeout: 30000,
                     });
                 } else if (hasDeploy) {
                     execSync(`docker compose -p ${pName} -f ${composeDeploy} down --remove-orphans -v`, {
-                        cwd: p.workspace, stdio: "pipe", timeout: 30000
+                        cwd: p.workspace,
+                        stdio: "pipe",
+                        timeout: 30000,
                     });
                 }
                 console.log(`[Delete] Cleaned up Docker containers for ${pName}`);
@@ -258,13 +295,15 @@ export class Orchestrator extends EventEmitter {
                 console.warn(`[Delete] Container cleanup failed: ${err.message}`);
             }
         }
-        
+
         // Clean up secrets
         try {
             const secretsSvc = getSecretsService();
             secretsSvc.deleteAllSecrets(id);
-        } catch { /* optional */ }
-        
+        } catch {
+            /* optional */
+        }
+
         this.running.delete(id);
         this.pipelines.delete(id);
         await savePipelinesState(this.pipelines);
@@ -300,7 +339,7 @@ export class Orchestrator extends EventEmitter {
         if (this.running.has(id)) return null;
 
         // Count how many nodes completed
-        const completedCount = Object.values(p.nodeStatuses || {}).filter(s => s === "COMPLETED").length;
+        const completedCount = Object.values(p.nodeStatuses || {}).filter((s) => s === "COMPLETED").length;
         const totalCount = (p.topology || []).length;
 
         // Reset phase but keep everything else
@@ -312,7 +351,7 @@ export class Orchestrator extends EventEmitter {
         if (p.agents && p.nodeStatuses) {
             for (const agent of p.agents) {
                 // Find the matching topology node
-                const topoNode = (p.topology || []).find(t => t.role === agent.role);
+                const topoNode = (p.topology || []).find((t) => t.role === agent.role);
                 if (topoNode && p.nodeStatuses[topoNode.id] === "COMPLETED") {
                     agent.status = "done";
                 } else {
@@ -321,11 +360,19 @@ export class Orchestrator extends EventEmitter {
             }
         }
 
-        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔄", `Resume: ${completedCount}/${totalCount} nodes déjà complétés — reprise au point d'échec`, "info");
+        addPipelineEvent(
+            this,
+            this.pipelines,
+            id,
+            "Orchestrator",
+            "🔄",
+            `Resume: ${completedCount}/${totalCount} nodes déjà complétés — reprise au point d'échec`,
+            "info"
+        );
         await savePipelinesState(this.pipelines);
 
         // Re-execute (executePipeline will read nodeStatuses to skip completed nodes)
-        this.executePipeline(id).catch(err => {
+        this.executePipeline(id).catch((err) => {
             console.error(`[Orchestrator] Retry pipeline ${id} failed:`, err);
             setPipelinePhase(this, this.pipelines, id, "FAILED", String(err.message || err));
         });
@@ -335,7 +382,12 @@ export class Orchestrator extends EventEmitter {
 
     // ─── Modify Existing Pipeline ───
 
-    async modifyPipeline(id: string, instructions: string, model?: string, files?: { base64: string; type: string }[]): Promise<Pipeline | null> {
+    async modifyPipeline(
+        id: string,
+        instructions: string,
+        model?: string,
+        files?: { base64: string; type: string }[]
+    ): Promise<Pipeline | null> {
         const p = this.pipelines.get(id);
         if (p && model) p.model = model;
         if (!p) return null;
@@ -352,10 +404,18 @@ export class Orchestrator extends EventEmitter {
             (p.artifacts as any).pendingModificationFiles = files;
         }
 
-        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "✏️", `Modification demandée: ${instructions.slice(0, 100)}...${(files && files.length > 0) ? ` (avec ${files.length} fichiers)` : ''}`, "info");
+        addPipelineEvent(
+            this,
+            this.pipelines,
+            id,
+            "Orchestrator",
+            "✏️",
+            `Modification demandée: ${instructions.slice(0, 100)}...${files && files.length > 0 ? ` (avec ${files.length} fichiers)` : ""}`,
+            "info"
+        );
         await savePipelinesState(this.pipelines);
 
-        this.executeModification(id, instructions, files).catch(err => {
+        this.executeModification(id, instructions, files).catch((err) => {
             console.error(`[Orchestrator] Modify error for ${id}:`, err);
         });
 
@@ -383,40 +443,80 @@ export class Orchestrator extends EventEmitter {
             instructions: instructions.slice(0, 120),
             startedAt: new Date().toISOString(),
             topology: [
-                { id: `${modRunId}_analyst`, role: 'Analyst', emoji: '🧠', description: 'Analyse de la modification', systemPrompt: '', dependencies: [] },
-                { id: `${modRunId}_developer`, role: 'Developer', emoji: '💻', description: 'Implémentation', systemPrompt: '', dependencies: [`${modRunId}_analyst`] },
-                { id: `${modRunId}_qa`, role: 'QA', emoji: '✅', description: 'Vérification', systemPrompt: '', dependencies: [`${modRunId}_developer`] },
-                { id: `${modRunId}_deploy`, role: 'Deploy', emoji: '🐳', description: 'Redéploiement', systemPrompt: '', dependencies: [`${modRunId}_qa`] },
+                {
+                    id: `${modRunId}_analyst`,
+                    role: "Analyst",
+                    emoji: "🧠",
+                    description: "Analyse de la modification",
+                    systemPrompt: "",
+                    dependencies: [],
+                },
+                {
+                    id: `${modRunId}_developer`,
+                    role: "Developer",
+                    emoji: "💻",
+                    description: "Implémentation",
+                    systemPrompt: "",
+                    dependencies: [`${modRunId}_analyst`],
+                },
+                {
+                    id: `${modRunId}_qa`,
+                    role: "QA",
+                    emoji: "✅",
+                    description: "Vérification",
+                    systemPrompt: "",
+                    dependencies: [`${modRunId}_developer`],
+                },
+                {
+                    id: `${modRunId}_deploy`,
+                    role: "Deploy",
+                    emoji: "🐳",
+                    description: "Redéploiement",
+                    systemPrompt: "",
+                    dependencies: [`${modRunId}_qa`],
+                },
             ],
             agents: [
-                { role: 'Analyst', emoji: '🧠', status: 'waiting' },
-                { role: 'Developer', emoji: '💻', status: 'waiting' },
-                { role: 'QA', emoji: '✅', status: 'waiting' },
-                { role: 'Deploy', emoji: '🐳', status: 'waiting' },
+                { role: "Analyst", emoji: "🧠", status: "waiting" },
+                { role: "Developer", emoji: "💻", status: "waiting" },
+                { role: "QA", emoji: "✅", status: "waiting" },
+                { role: "Deploy", emoji: "🐳", status: "waiting" },
             ],
             nodeStatuses: {
-                [`${modRunId}_analyst`]: 'PENDING',
-                [`${modRunId}_developer`]: 'PENDING',
-                [`${modRunId}_qa`]: 'PENDING',
-                [`${modRunId}_deploy`]: 'PENDING',
+                [`${modRunId}_analyst`]: "PENDING",
+                [`${modRunId}_developer`]: "PENDING",
+                [`${modRunId}_qa`]: "PENDING",
+                [`${modRunId}_deploy`]: "PENDING",
             },
-            phase: 'ANALYSIS',
+            phase: "ANALYSIS",
         };
         p.modifyRuns.push(modRun);
-        this.emit('pipeline:updated', { pipelineId: id });
+        this.emit("pipeline:updated", { pipelineId: id });
 
         // Helper to update modRun node status
-        const setModNode = (nodeKey: string, status: 'COMPLETED' | 'FAILED' | 'PENDING', agentStatus: 'waiting' | 'active' | 'done' | 'error') => {
+        const setModNode = (
+            nodeKey: string,
+            status: "COMPLETED" | "FAILED" | "PENDING",
+            agentStatus: "waiting" | "active" | "done" | "error"
+        ) => {
             modRun.nodeStatuses[`${modRunId}_${nodeKey}`] = status;
-            const ag = modRun.agents.find(a => a.role.toLowerCase() === nodeKey);
+            const ag = modRun.agents.find((a) => a.role.toLowerCase() === nodeKey);
             if (ag) ag.status = agentStatus;
-            this.emit('pipeline:updated', { pipelineId: id });
+            this.emit("pipeline:updated", { pipelineId: id });
         };
 
         try {
             setPipelinePhase(this, this.pipelines, id, "ANALYSIS");
-            setModNode('analyst', 'PENDING', 'active');
-            addPipelineEvent(this, this.pipelines, id, "Analyst", "🧠", "Analyse de la demande de modification...", "info");
+            setModNode("analyst", "PENDING", "active");
+            addPipelineEvent(
+                this,
+                this.pipelines,
+                id,
+                "Analyst",
+                "🧠",
+                "Analyse de la demande de modification...",
+                "info"
+            );
             setAgentStatus(this, this.pipelines, id, "Analyst", "active", "Analyse de la modification...");
 
             const analystResult = await runVeistAgent({
@@ -433,7 +533,8 @@ Analyse la demande et retourne UNIQUEMENT un objet JSON valide avec ce format :
 
 "structural" : Ajout de micro-services, changement de framework, nouvelle base de données, restructuration majeure.
 "bugfix" : Correction de bug, petite feature, modification UI, refacto de code existant.`,
-                systemPrompt: "Tu es un Analyste IA. Tu ne réponds que par un objet JSON valide, sans bloc de markdown ni texte autour.",
+                systemPrompt:
+                    "Tu es un Analyste IA. Tu ne réponds que par un objet JSON valide, sans bloc de markdown ni texte autour.",
                 cwd: p.workspace,
                 allowedTools: ["list_dir", "read_file", "bash"],
                 maxTurns: 10,
@@ -443,7 +544,15 @@ Analyse la demande et retourne UNIQUEMENT un objet JSON valide avec ce format :
 
             addTokenUsage(this.pipelines, id, analystResult);
             if (!analystResult.success) {
-                addPipelineEvent(this, this.pipelines, id, "Analyst", "⚠️", `Erreur d'analyse: ${analystResult.error}`, "warning");
+                addPipelineEvent(
+                    this,
+                    this.pipelines,
+                    id,
+                    "Analyst",
+                    "⚠️",
+                    `Erreur d'analyse: ${analystResult.error}`,
+                    "warning"
+                );
                 throw new Error("Analyst failed");
             }
 
@@ -456,13 +565,29 @@ Analyse la demande et retourne UNIQUEMENT un objet JSON valide avec ce format :
                     const parsed = JSON.parse(jsonMatch[0]);
                     modType = parsed.type === "structural" ? "structural" : "bugfix";
                     if (parsed.plan) modPlan = parsed.plan;
-                    addPipelineEvent(this, this.pipelines, id, "Analyst", "🧠", `Type identifié: ${modType}. Plan généré.`, "success");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Analyst",
+                        "🧠",
+                        `Type identifié: ${modType}. Plan généré.`,
+                        "success"
+                    );
                 }
             } catch (e) {
-                addPipelineEvent(this, this.pipelines, id, "Analyst", "⚠️", "Impossible de parser l'analyse, mode bugfix par défaut.", "warning");
+                addPipelineEvent(
+                    this,
+                    this.pipelines,
+                    id,
+                    "Analyst",
+                    "⚠️",
+                    "Impossible de parser l'analyse, mode bugfix par défaut.",
+                    "warning"
+                );
             }
             setAgentStatus(this, this.pipelines, id, "Analyst", "done");
-            setModNode('analyst', 'COMPLETED', 'done');
+            setModNode("analyst", "COMPLETED", "done");
 
             if (modType === "structural") {
                 setPipelinePhase(this, this.pipelines, id, "ARCHITECTURE");
@@ -476,7 +601,8 @@ ${modPlan}
 Exécute les commandes ou crée les fichiers nécessaires (nouveaux dossiers, docker-compose.yml mis à jour, nouveaux Dockerfile).
 N'ÉCRASE PAS les fichiers de code logique existants. Contente-toi du Scaffolding pour préparer le terrain au développeur.
 Ne boucle pas indéfiniment. Arrête-toi dès que le Scaffolding est prêt.`,
-                    systemPrompt: "Tu es l'Architecte. Structure le projet en suivant le plan. Utilise write_file ou bash (npx, pip) pour le Scaffolding.",
+                    systemPrompt:
+                        "Tu es l'Architecte. Structure le projet en suivant le plan. Utilise write_file ou bash (npx, pip) pour le Scaffolding.",
                     cwd: p.workspace,
                     allowedTools: ["bash", "list_dir", "read_file", "write_file"],
                     maxTurns: 20,
@@ -486,26 +612,45 @@ Ne boucle pas indéfiniment. Arrête-toi dès que le Scaffolding est prêt.`,
 
                 addTokenUsage(this.pipelines, id, archResult);
                 if (!archResult.success) {
-                    addPipelineEvent(this, this.pipelines, id, "Architect", "⚠️", `Erreur architecture: ${archResult.error}`, "warning");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Architect",
+                        "⚠️",
+                        `Erreur architecture: ${archResult.error}`,
+                        "warning"
+                    );
                     if (p.github) {
                         try {
                             const { execSync } = await import("node:child_process");
                             execSync("git reset --hard && git clean -fd", { cwd: p.workspace });
-                        } catch { }
+                        } catch {}
                     }
                     throw new Error("Architect failed");
                 }
-                addPipelineEvent(this, this.pipelines, id, "Architect", "🏗️", "Scaffolding structurel terminé.", "success");
+                addPipelineEvent(
+                    this,
+                    this.pipelines,
+                    id,
+                    "Architect",
+                    "🏗️",
+                    "Scaffolding structurel terminé.",
+                    "success"
+                );
                 setAgentStatus(this, this.pipelines, id, "Architect", "done");
             }
 
             setPipelinePhase(this, this.pipelines, id, "DEVELOPMENT");
             setAgentStatus(this, this.pipelines, id, "Developer", "active", "Modification en cours...");
-            modRun.phase = 'DEVELOPMENT';
-            setModNode('developer', 'PENDING', 'active');
+            modRun.phase = "DEVELOPMENT";
+            setModNode("developer", "PENDING", "active");
 
             if (p.github) {
-                const workspaceExists = await fs.access(p.workspace).then(() => true).catch(() => false);
+                const workspaceExists = await fs
+                    .access(p.workspace)
+                    .then(() => true)
+                    .catch(() => false);
                 if (!workspaceExists) {
                     addPipelineEvent(this, this.pipelines, id, "Developer", "💻", "Re-clonage du workspace...", "info");
                     await gitClone(
@@ -533,7 +678,8 @@ RÈGLES ABSOLUES:
 - Ne boucle pas indéfiniment. Si tu as implémenté le PLAN, arrête-toi.
 - Vérifie que tous les packages importés sont dans le requirements.txt ou package.json du service ciblé.`,
                 attachedFiles: files,
-                systemPrompt: "Tu es un développeur senior. Ton but est de suivre le PLAN D'EXÉCUTION généré par l'Analyste et de l'implémenter exactement. Tu dois modifier ou écrire les fichiers demandés, et arrêter dès que le plan est entièrement implémenté.",
+                systemPrompt:
+                    "Tu es un développeur senior. Ton but est de suivre le PLAN D'EXÉCUTION généré par l'Analyste et de l'implémenter exactement. Tu dois modifier ou écrire les fichiers demandés, et arrêter dès que le plan est entièrement implémenté.",
                 cwd: p.workspace,
                 allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir"],
                 maxTurns: 150,
@@ -542,12 +688,20 @@ RÈGLES ABSOLUES:
             });
 
             if (!result.success) {
-                addPipelineEvent(this, this.pipelines, id, "Developer", "⚠️", `Erreur agent: ${result.error}`, "warning");
+                addPipelineEvent(
+                    this,
+                    this.pipelines,
+                    id,
+                    "Developer",
+                    "⚠️",
+                    `Erreur agent: ${result.error}`,
+                    "warning"
+                );
                 if (p.github) {
                     try {
                         const { execSync } = await import("node:child_process");
                         execSync("git reset --hard && git clean -fd", { cwd: p.workspace });
-                    } catch { }
+                    } catch {}
                 }
                 throw new Error(`Developer agent failed to complete: ${result.error}`);
             }
@@ -559,17 +713,43 @@ RÈGLES ABSOLUES:
                     const { execSync } = await import("node:child_process");
                     const status = execSync("git status --porcelain", { cwd: p.workspace }).toString().trim();
                     hasChanges = status.length > 0;
-                } catch { hasChanges = false; }
+                } catch {
+                    hasChanges = false;
+                }
 
                 if (!hasChanges) {
-                    addPipelineEvent(this, this.pipelines, id, "Developer", "⚠️", "Aucun fichier modifié — l'agent n'a pas écrit de code. Reformule ta demande en étant plus précis sur les fichiers à modifier.", "warning");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Developer",
+                        "⚠️",
+                        "Aucun fichier modifié — l'agent n'a pas écrit de code. Reformule ta demande en étant plus précis sur les fichiers à modifier.",
+                        "warning"
+                    );
                 } else {
                     const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
                     const pushed = await gitPush(p.workspace, `mod: ${instructions.slice(0, 50)}`, authUrl);
                     if (pushed) {
-                        addPipelineEvent(this, this.pipelines, id, "Developer", "💻", "Push → modification appliquée", "success");
+                        addPipelineEvent(
+                            this,
+                            this.pipelines,
+                            id,
+                            "Developer",
+                            "💻",
+                            "Push → modification appliquée",
+                            "success"
+                        );
                     } else {
-                        addPipelineEvent(this, this.pipelines, id, "Developer", "⚠️", "Push échoué — relance la modification", "warning");
+                        addPipelineEvent(
+                            this,
+                            this.pipelines,
+                            id,
+                            "Developer",
+                            "⚠️",
+                            "Push échoué — relance la modification",
+                            "warning"
+                        );
                     }
                 }
 
@@ -577,9 +757,9 @@ RÈGLES ABSOLUES:
                 setAgentStatus(this, this.pipelines, id, "Developer", "done");
                 setAgentStatus(this, this.pipelines, id, "Debugger", "done"); // Skipped in modify mode
                 setAgentStatus(this, this.pipelines, id, "QA", "active", "Vérification post-modification...");
-                setModNode('developer', 'COMPLETED', 'done');
-                modRun.phase = 'QA';
-                setModNode('qa', 'PENDING', 'active');
+                setModNode("developer", "COMPLETED", "done");
+                modRun.phase = "QA";
+                setModNode("qa", "PENDING", "active");
 
                 const qaResult = await runVeistAgent({
                     model: p.model,
@@ -597,18 +777,26 @@ RÈGLES ABSOLUES:
                 });
 
                 if (!qaResult.success) {
-                    addPipelineEvent(this, this.pipelines, id, "QA", "⚠️", `Erreur agent QA: ${qaResult.error}`, "warning");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "QA",
+                        "⚠️",
+                        `Erreur agent QA: ${qaResult.error}`,
+                        "warning"
+                    );
                     if (p.github) {
                         try {
                             const { execSync } = await import("node:child_process");
                             execSync("git reset --hard && git clean -fd", { cwd: p.workspace });
-                        } catch { }
+                        } catch {}
                     }
                     throw new Error(`QA agent failed to complete: ${qaResult.error}`);
                 }
                 addTokenUsage(this.pipelines, id, qaResult);
                 setAgentStatus(this, this.pipelines, id, "QA", "done");
-                setModNode('qa', 'COMPLETED', 'done');
+                setModNode("qa", "COMPLETED", "done");
 
                 if (p.github) {
                     let hasQhanges = false;
@@ -616,14 +804,32 @@ RÈGLES ABSOLUES:
                         const { execSync } = await import("node:child_process");
                         const status = execSync("git status --porcelain", { cwd: p.workspace }).toString().trim();
                         hasQhanges = status.length > 0;
-                    } catch { hasQhanges = false; }
+                    } catch {
+                        hasQhanges = false;
+                    }
 
                     if (hasQhanges) {
                         const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
                         const pushed = await gitPush(p.workspace, `fix: QA auto-corrections applied`, authUrl);
-                        addPipelineEvent(this, this.pipelines, id, "QA", "💻", "Push → correctifs QA appliqués", "success");
+                        addPipelineEvent(
+                            this,
+                            this.pipelines,
+                            id,
+                            "QA",
+                            "💻",
+                            "Push → correctifs QA appliqués",
+                            "success"
+                        );
                     } else {
-                        addPipelineEvent(this, this.pipelines, id, "QA", "✅", "Aucun changement par QA — code déjà correct", "info");
+                        addPipelineEvent(
+                            this,
+                            this.pipelines,
+                            id,
+                            "QA",
+                            "✅",
+                            "Aucun changement par QA — code déjà correct",
+                            "info"
+                        );
                     }
                 }
             }
@@ -632,13 +838,27 @@ RÈGLES ABSOLUES:
 
             // ─── Rebuild and redeploy Docker container after modification ───
             // Deploy if: already deployed OR workspace has deploy files (initial deploy may have failed)
-            const hasDockerfile = await fs.access(path.join(p.workspace, "Dockerfile")).then(() => true).catch(() => false);
-            const hasComposeProdForDeploy = await fs.access(path.join(p.workspace, "docker-compose.prod.yml")).then(() => true).catch(() => false);
+            const hasDockerfile = await fs
+                .access(path.join(p.workspace, "Dockerfile"))
+                .then(() => true)
+                .catch(() => false);
+            const hasComposeProdForDeploy = await fs
+                .access(path.join(p.workspace, "docker-compose.prod.yml"))
+                .then(() => true)
+                .catch(() => false);
             if (p.artifacts.deployed || hasDockerfile || hasComposeProdForDeploy) {
                 try {
-                    modRun.phase = 'DEPLOYING';
-                    setModNode('deploy', 'PENDING', 'active');
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", "Reconstruction du container avec les modifications...", "info");
+                    modRun.phase = "DEPLOYING";
+                    setModNode("deploy", "PENDING", "active");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Orchestrator",
+                        "🐳",
+                        "Reconstruction du container avec les modifications...",
+                        "info"
+                    );
                     const { execSync } = await import("node:child_process");
                     const slug = slugify(p.github?.repo || p.name);
                     const projectName = `veist-${slug}`;
@@ -648,39 +868,71 @@ RÈGLES ABSOLUES:
                     // Re-inject secrets into .env before rebuild
                     try {
                         const injected = await injectSecretsToEnv(id, p.workspace);
-                        if (injected > 0) addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔐", `${injected} secret(s) ré-injectés`, "info");
-                    } catch { /* secrets injection optional */ }
+                        if (injected > 0)
+                            addPipelineEvent(
+                                this,
+                                this.pipelines,
+                                id,
+                                "Orchestrator",
+                                "🔐",
+                                `${injected} secret(s) ré-injectés`,
+                                "info"
+                            );
+                    } catch {
+                        /* secrets injection optional */
+                    }
 
                     // Check for multi-container (docker-compose.prod.yml) first
                     const composeProdPath = path.join(p.workspace, "docker-compose.prod.yml");
-                    const hasComposeProd = await fs.access(composeProdPath).then(() => true).catch(() => false);
+                    const hasComposeProd = await fs
+                        .access(composeProdPath)
+                        .then(() => true)
+                        .catch(() => false);
 
                     if (hasComposeProd) {
                         // Multi-container rebuild
                         console.log(`[Deploy-Modify] Multi-container rebuild via docker-compose.prod.yml`);
                         try {
                             execSync(`docker compose -p ${projectName} -f ${composeProdPath} down --remove-orphans`, {
-                                cwd: p.workspace, stdio: "pipe", timeout: 30000
+                                cwd: p.workspace,
+                                stdio: "pipe",
+                                timeout: 30000,
                             });
-                        } catch { /* didn't exist */ }
+                        } catch {
+                            /* didn't exist */
+                        }
                         execSync(`docker compose -p ${projectName} -f ${composeProdPath} build --no-cache`, {
-                            cwd: p.workspace, timeout: 10 * 60 * 1000, stdio: "pipe"
+                            cwd: p.workspace,
+                            timeout: 10 * 60 * 1000,
+                            stdio: "pipe",
                         });
                         execSync(`docker compose -p ${projectName} -f ${composeProdPath} up -d`, {
-                            cwd: p.workspace, timeout: 60000, stdio: "pipe",
+                            cwd: p.workspace,
+                            timeout: 60000,
+                            stdio: "pipe",
                         });
                     } else {
                         // Single-container rebuild
                         const imageName = `veist-${slug}:latest`;
-                        
+
                         // Find Dockerfile — check root, then subdirectories
                         let dockerfilePath = "";
                         let buildContext = p.workspace;
                         const rootDockerfile = path.join(p.workspace, "Dockerfile");
                         const rootDockerfileProd = path.join(p.workspace, "Dockerfile.prod");
-                        if (await fs.access(rootDockerfileProd).then(() => true).catch(() => false)) {
+                        if (
+                            await fs
+                                .access(rootDockerfileProd)
+                                .then(() => true)
+                                .catch(() => false)
+                        ) {
                             dockerfilePath = rootDockerfileProd;
-                        } else if (await fs.access(rootDockerfile).then(() => true).catch(() => false)) {
+                        } else if (
+                            await fs
+                                .access(rootDockerfile)
+                                .then(() => true)
+                                .catch(() => false)
+                        ) {
                             dockerfilePath = rootDockerfile;
                         } else {
                             // Check subdirectories for Dockerfile
@@ -688,7 +940,12 @@ RÈGLES ABSOLUES:
                             for (const entry of entries) {
                                 if (entry.isDirectory() && entry.name !== "node_modules" && entry.name !== ".git") {
                                     const subDockerfile = path.join(p.workspace, entry.name, "Dockerfile");
-                                    if (await fs.access(subDockerfile).then(() => true).catch(() => false)) {
+                                    if (
+                                        await fs
+                                            .access(subDockerfile)
+                                            .then(() => true)
+                                            .catch(() => false)
+                                    ) {
                                         dockerfilePath = subDockerfile;
                                         buildContext = path.join(p.workspace, entry.name);
                                         break;
@@ -696,9 +953,17 @@ RÈGLES ABSOLUES:
                                 }
                             }
                         }
-                        
+
                         if (!dockerfilePath) {
-                            addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", "Aucun Dockerfile trouvé pour le rebuild", "warning");
+                            addPipelineEvent(
+                                this,
+                                this.pipelines,
+                                id,
+                                "Orchestrator",
+                                "⚠️",
+                                "Aucun Dockerfile trouvé pour le rebuild",
+                                "warning"
+                            );
                         } else {
                             const buildCmd = `docker build --no-cache -f ${dockerfilePath} -t ${imageName} ${buildContext}`;
                             console.log(`[Deploy-Modify] Rebuilding: ${buildCmd}`);
@@ -706,79 +971,128 @@ RÈGLES ABSOLUES:
 
                             // Generate docker-compose.deploy.yml if it doesn't exist (initial deploy may have failed)
                             const deployComposePath = path.join(p.workspace, "docker-compose.deploy.yml");
-                            const hasDeployCompose = await fs.access(deployComposePath).then(() => true).catch(() => false);
+                            const hasDeployCompose = await fs
+                                .access(deployComposePath)
+                                .then(() => true)
+                                .catch(() => false);
                             if (!hasDeployCompose) {
                                 const deployComposeContent = [
-                                    'version: "3.8"', '',
-                                    'services:', '  app:',
+                                    'version: "3.8"',
+                                    "",
+                                    "services:",
+                                    "  app:",
                                     `    image: ${imageName}`,
                                     `    container_name: ${projectName}-app`,
-                                    '    restart: unless-stopped',
-                                    '    networks:', '      - web',
-                                    '    labels:',
+                                    "    restart: unless-stopped",
+                                    "    networks:",
+                                    "      - web",
+                                    "    labels:",
                                     '      - "traefik.enable=true"',
                                     `      - "traefik.http.routers.${projectName}.rule=Host(\`${hostDomain}\`)"`,
                                     `      - "traefik.http.routers.${projectName}.entrypoints=websecure"`,
                                     `      - "traefik.http.routers.${projectName}.tls.certresolver=letsencrypt"`,
                                     `      - "traefik.http.services.${projectName}.loadbalancer.server.port=80"`,
-                                    '', 'networks:', '  web:', '    external: true',
-                                ].join('\n');
+                                    "",
+                                    "networks:",
+                                    "  web:",
+                                    "    external: true",
+                                ].join("\n");
                                 await fs.writeFile(deployComposePath, deployComposeContent, "utf-8");
                                 console.log(`[Deploy-Modify] Generated missing ${deployComposePath}`);
                             }
 
                             try {
                                 execSync(`docker compose -p ${projectName} -f ${deployComposePath} down`, {
-                                    cwd: p.workspace, stdio: "pipe", timeout: 30000
+                                    cwd: p.workspace,
+                                    stdio: "pipe",
+                                    timeout: 30000,
                                 });
-                            } catch { /* didn't exist */ }
+                            } catch {
+                                /* didn't exist */
+                            }
                             execSync(`docker compose -p ${projectName} -f ${deployComposePath} up -d`, {
-                                cwd: p.workspace, timeout: 60000, stdio: "pipe",
+                                cwd: p.workspace,
+                                timeout: 60000,
+                                stdio: "pipe",
                             });
-                            
+
                             p.artifacts.deployed = true;
                             p.artifacts.deployedUrl = `https://${hostDomain}`;
                         }
                     }
 
-                    setModNode('deploy', 'COMPLETED', 'done');
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🐳", `Container reconstruit et redéployé! ${p.artifacts.deployedUrl || ''}`, "success");
+                    setModNode("deploy", "COMPLETED", "done");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Orchestrator",
+                        "🐳",
+                        `Container reconstruit et redéployé! ${p.artifacts.deployedUrl || ""}`,
+                        "success"
+                    );
                 } catch (deployErr: any) {
                     const errMsg = deployErr.stderr ? deployErr.stderr.toString().slice(-300) : deployErr.message;
                     console.error(`[Deploy-Modify] ❌ Rebuild failed: ${errMsg}`);
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `Rebuild container échoué: ${errMsg}`, "warning");
-                    setModNode('deploy', 'FAILED', 'error');
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Orchestrator",
+                        "⚠️",
+                        `Rebuild container échoué: ${errMsg}`,
+                        "warning"
+                    );
+                    setModNode("deploy", "FAILED", "error");
                     // Don't throw — code was pushed, just container rebuild failed
                 }
             }
 
             p.progress = 100;
-            modRun.phase = 'COMPLETED';
+            modRun.phase = "COMPLETED";
             // Mark deploy as done if it wasn't explicitly handled (no docker files)
-            if (modRun.nodeStatuses[`${modRunId}_deploy`] === 'PENDING') {
-                setModNode('deploy', 'COMPLETED', 'done');
+            if (modRun.nodeStatuses[`${modRunId}_deploy`] === "PENDING") {
+                setModNode("deploy", "COMPLETED", "done");
             }
             setPipelinePhase(this, this.pipelines, id, "COMPLETED");
-            addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🎉", "Modification terminée et déployée!", "success");
+            addPipelineEvent(
+                this,
+                this.pipelines,
+                id,
+                "Orchestrator",
+                "🎉",
+                "Modification terminée et déployée!",
+                "success"
+            );
 
             // ─── Phase 2.5: Re-index embeddings after modification (incremental) ───
-            import("./embedding_service.js").then(({ getEmbeddingService }) => {
-                getEmbeddingService().indexRepository(id, p.workspace)
-                    .then((idx) => {
-                        p.artifacts.embeddingsReady = true;
-                        console.log(`🔮 [Embedding] Re-indexed after modify: ${idx.chunkCount} chunks`);
-                    })
-                    .catch((err: any) => console.warn(`[Embedding] Re-index failed:`, err.message));
-            }).catch(() => {});
-
+            import("./embedding_service.js")
+                .then(({ getEmbeddingService }) => {
+                    getEmbeddingService()
+                        .indexRepository(id, p.workspace)
+                        .then((idx) => {
+                            p.artifacts.embeddingsReady = true;
+                            console.log(`🔮 [Embedding] Re-indexed after modify: ${idx.chunkCount} chunks`);
+                        })
+                        .catch((err: any) => console.warn(`[Embedding] Re-index failed:`, err.message));
+                })
+                .catch(() => {});
         } catch (err: any) {
-            if (err.name === 'AbortError') {
+            if (err.name === "AbortError") {
                 addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🛑", "Modification annulée.", "error");
-                modRun.phase = 'FAILED';
+                modRun.phase = "FAILED";
             } else {
                 setPipelinePhase(this, this.pipelines, id, "FAILED", err.message);
-                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "❌", `Erreur modification: ${err.message}`, "error");
-                modRun.phase = 'FAILED';
+                addPipelineEvent(
+                    this,
+                    this.pipelines,
+                    id,
+                    "Orchestrator",
+                    "❌",
+                    `Erreur modification: ${err.message}`,
+                    "error"
+                );
+                modRun.phase = "FAILED";
             }
         } finally {
             this.abortControllers.delete(id);
@@ -807,10 +1121,26 @@ RÈGLES ABSOLUES:
             // ─── GitHub Setup (skip on resume) ───
             const isResume = p.nodeStatuses && Object.keys(p.nodeStatuses).length > 0;
             if (p.sourceGithubUrl && !p.github && !isResume) {
-                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔗", `Clonage du repo: ${p.sourceGithubUrl}`, "info");
+                addPipelineEvent(
+                    this,
+                    this.pipelines,
+                    id,
+                    "Orchestrator",
+                    "🔗",
+                    `Clonage du repo: ${p.sourceGithubUrl}`,
+                    "info"
+                );
                 const success = await gitClone(p.sourceGithubUrl, p.workspace);
                 if (success) {
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔗", `Repo cloné avec succès.`, "success");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Orchestrator",
+                        "🔗",
+                        `Repo cloné avec succès.`,
+                        "success"
+                    );
                     const match = p.sourceGithubUrl.match(/github\.com\/([^\/]+)\/([^\/\.]+)/);
                     if (match) {
                         p.github = { owner: match[1], repo: match[2], url: p.sourceGithubUrl };
@@ -818,13 +1148,22 @@ RÈGLES ABSOLUES:
 
                     // ─── Auto-read key repo files (README, Dockerfile, docker-compose) ───
                     const readSafe = async (name: string): Promise<string | null> => {
-                        try { return await fs.readFile(path.join(p.workspace, name), "utf-8"); } catch { return null; }
+                        try {
+                            return await fs.readFile(path.join(p.workspace, name), "utf-8");
+                        } catch {
+                            return null;
+                        }
                     };
-                    const readme = await readSafe("README.md") ?? await readSafe("readme.md") ?? await readSafe("README") ?? await readSafe("README.rst");
-                    const dockerfile = await readSafe("Dockerfile") ?? await readSafe("server/Dockerfile");
-                    const composeDev = await readSafe("docker-compose.yml") ?? await readSafe("docker-compose.yaml");
-                    const goMod = await readSafe("go.mod") ?? await readSafe("server/go.mod");
-                    const packageJson = await readSafe("package.json") ?? await readSafe("server/package.json");
+                    const readme =
+                        (await readSafe("README.md")) ??
+                        (await readSafe("readme.md")) ??
+                        (await readSafe("README")) ??
+                        (await readSafe("README.rst"));
+                    const dockerfile = (await readSafe("Dockerfile")) ?? (await readSafe("server/Dockerfile"));
+                    const composeDev =
+                        (await readSafe("docker-compose.yml")) ?? (await readSafe("docker-compose.yaml"));
+                    const goMod = (await readSafe("go.mod")) ?? (await readSafe("server/go.mod"));
+                    const packageJson = (await readSafe("package.json")) ?? (await readSafe("server/package.json"));
 
                     const repoContext: Record<string, string> = {};
                     if (readme) repoContext.readme = readme.slice(0, 8000); // cap at 8k chars
@@ -837,67 +1176,175 @@ RÈGLES ABSOLUES:
 
                     const fileList = Object.keys(repoContext).join(", ");
                     if (fileList) {
-                        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "📖", `Fichiers clés lus: ${fileList}`, "info");
+                        addPipelineEvent(
+                            this,
+                            this.pipelines,
+                            id,
+                            "Orchestrator",
+                            "📖",
+                            `Fichiers clés lus: ${fileList}`,
+                            "info"
+                        );
                     }
 
                     // ─── Phase 2.5: Background embedding indexation (non-blocking) ───
-                    import("./embedding_service.js").then(({ getEmbeddingService }) => {
-                        const embeddingService = getEmbeddingService();
-                        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔮", "Indexation sémantique en cours (background)...", "info");
-                        embeddingService.indexRepository(id, p.workspace)
-                            .then((idx) => {
-                                p.artifacts.embeddingsReady = true;
-                                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔮", `Embeddings prêts: ${idx.fileCount} fichiers, ${idx.chunkCount} chunks indexés`, "success");
-                                savePipelinesState(this.pipelines);
-                            })
-                            .catch((err: any) => {
-                                console.warn(`[Embedding] Background indexation failed for ${id}:`, err.message);
-                                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔮", `Indexation échouée (non-bloquant): ${err.message}`, "warning");
-                            });
-                    }).catch(() => { /* embedding service not available */ });
+                    import("./embedding_service.js")
+                        .then(({ getEmbeddingService }) => {
+                            const embeddingService = getEmbeddingService();
+                            addPipelineEvent(
+                                this,
+                                this.pipelines,
+                                id,
+                                "Orchestrator",
+                                "🔮",
+                                "Indexation sémantique en cours (background)...",
+                                "info"
+                            );
+                            embeddingService
+                                .indexRepository(id, p.workspace)
+                                .then((idx) => {
+                                    p.artifacts.embeddingsReady = true;
+                                    addPipelineEvent(
+                                        this,
+                                        this.pipelines,
+                                        id,
+                                        "Orchestrator",
+                                        "🔮",
+                                        `Embeddings prêts: ${idx.fileCount} fichiers, ${idx.chunkCount} chunks indexés`,
+                                        "success"
+                                    );
+                                    void savePipelinesState(this.pipelines);
+                                })
+                                .catch((err: any) => {
+                                    console.warn(`[Embedding] Background indexation failed for ${id}:`, err.message);
+                                    addPipelineEvent(
+                                        this,
+                                        this.pipelines,
+                                        id,
+                                        "Orchestrator",
+                                        "🔮",
+                                        `Indexation échouée (non-bloquant): ${err.message}`,
+                                        "warning"
+                                    );
+                                });
+                        })
+                        .catch(() => {
+                            /* embedding service not available */
+                        });
 
                     await savePipelinesState(this.pipelines);
                 } else {
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `Échec du clonage de ${p.sourceGithubUrl} — on continue sans repo`, "warning");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Orchestrator",
+                        "⚠️",
+                        `Échec du clonage de ${p.sourceGithubUrl} — on continue sans repo`,
+                        "warning"
+                    );
                 }
             } else if (getGithubToken() && !p.github && !isResume) {
                 try {
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔗", "Création du repo GitHub...", "info");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Orchestrator",
+                        "🔗",
+                        "Création du repo GitHub...",
+                        "info"
+                    );
                     const repo = await createRepo(p.name, p.description);
                     p.github = { owner: repo.owner, repo: repo.name, url: repo.url };
                     await gitInit(p.workspace, `https://${getGithubToken()}@github.com/${repo.owner}/${repo.name}.git`);
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔗", `Repo GitHub créé: ${repo.url}`, "success");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Orchestrator",
+                        "🔗",
+                        `Repo GitHub créé: ${repo.url}`,
+                        "success"
+                    );
                     await savePipelinesState(this.pipelines);
                 } catch (gitErr: any) {
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `GitHub setup échoué: ${gitErr.message} — on continue sans GitHub`, "warning");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Orchestrator",
+                        "⚠️",
+                        `GitHub setup échoué: ${gitErr.message} — on continue sans GitHub`,
+                        "warning"
+                    );
                 }
             } else if (isResume && p.github) {
-                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔗", `GitHub repo existant: ${p.github.url}`, "info");
+                addPipelineEvent(
+                    this,
+                    this.pipelines,
+                    id,
+                    "Orchestrator",
+                    "🔗",
+                    `GitHub repo existant: ${p.github.url}`,
+                    "info"
+                );
             }
 
             const context: NodeContext = {
                 pipeline: p,
                 workspace: p.workspace,
-                addEvent: (role, emoji, action, type) => addPipelineEvent(this, this.pipelines, id, role, emoji, action, type),
-                updateAgentStatus: (role, status, action) => setAgentStatus(this, this.pipelines, id, role, status, action),
-                checkAbort: () => abortController.signal.aborted
+                addEvent: (role, emoji, action, type) =>
+                    addPipelineEvent(this, this.pipelines, id, role, emoji, action, type),
+                updateAgentStatus: (role, status, action) =>
+                    setAgentStatus(this, this.pipelines, id, role, status, action),
+                checkAbort: () => abortController.signal.aborted,
             };
 
             // ─── Planner / Dynamic Topology ───
             let dynamicNodes: import("./types.js").NodeTopology[] = [];
             let dynamicIds: string[] = [];
 
-            const baseNodeIds = ["research", "analysis", "skills_enrichment", "architecture", "scaffold", "supervisor_for_scaffold", "qa", "deploy", "eval", "autofix"];
+            const baseNodeIds = [
+                "research",
+                "analysis",
+                "skills_enrichment",
+                "architecture",
+                "scaffold",
+                "supervisor_for_scaffold",
+                "qa",
+                "deploy",
+                "eval",
+                "autofix",
+            ];
 
             if (isResume && p.topology && p.topology.length > 0) {
                 // Resume mode: reuse existing topology, extract dynamic nodes
-                addPipelineEvent(this, this.pipelines, id, "Planner", "🛸", `Resume: réutilisation de la topologie existante (${p.topology.length} nodes)`, "info");
-                dynamicNodes = p.topology.filter(t => !baseNodeIds.includes(t.id) && !t.id.startsWith("supervisor_for_"));
-                dynamicIds = dynamicNodes.map(d => d.id);
+                addPipelineEvent(
+                    this,
+                    this.pipelines,
+                    id,
+                    "Planner",
+                    "🛸",
+                    `Resume: réutilisation de la topologie existante (${p.topology.length} nodes)`,
+                    "info"
+                );
+                dynamicNodes = p.topology.filter(
+                    (t) => !baseNodeIds.includes(t.id) && !t.id.startsWith("supervisor_for_")
+                );
+                dynamicIds = dynamicNodes.map((d) => d.id);
             } else {
                 // Fresh run: use planner to generate dynamic topology
-                addPipelineEvent(this, this.pipelines, id, "Planner", "🛸", "Analyse de la demande: Création de l'essaim d'agents...", "info");
-            
+                addPipelineEvent(
+                    this,
+                    this.pipelines,
+                    id,
+                    "Planner",
+                    "🛸",
+                    "Analyse de la demande: Création de l'essaim d'agents...",
+                    "info"
+                );
+
                 const userModel = p.model || "anthropic/claude-sonnet-4";
 
                 // Build model catalog: benchmarks + live pricing
@@ -907,8 +1354,12 @@ RÈGLES ABSOLUES:
                 let pricingStr = "";
                 try {
                     const liveModels = await fetchOpenRouterModels();
-                    pricingStr = liveModels.slice(0, 25)
-                        .map(m => `  ${m.id} → $${(m.pricing.prompt*1000000).toFixed(2)}/M in, $${(m.pricing.completion*1000000).toFixed(2)}/M out`)
+                    pricingStr = liveModels
+                        .slice(0, 25)
+                        .map(
+                            (m) =>
+                                `  ${m.id} → $${(m.pricing.prompt * 1000000).toFixed(2)}/M in, $${(m.pricing.completion * 1000000).toFixed(2)}/M out`
+                        )
                         .join("\n");
                 } catch {}
 
@@ -957,19 +1408,23 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
                     const plannerResult = await runVeistAgent({
                         model: userModel,
                         prompt: plannerPrompt,
-                        systemPrompt: "You are the VEIST Planner. Output ONLY a valid JSON array of agent objects. No text, no markdown, no explanation. Just the JSON array.",
+                        systemPrompt:
+                            "You are the VEIST Planner. Output ONLY a valid JSON array of agent objects. No text, no markdown, no explanation. Just the JSON array.",
                         cwd: p.workspace,
                         allowedTools: [],
                         maxTurns: 1,
-                        abortSignal: abortController.signal
+                        abortSignal: abortController.signal,
                     });
-                    
+
                     let out = plannerResult.finalResult?.trim() || "[]";
                     // Strip markdown code fences
-                    out = out.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+                    out = out
+                        .replace(/^```(?:json)?\s*/i, "")
+                        .replace(/\s*```\s*$/i, "")
+                        .trim();
                     // Try to extract JSON array from mixed text output
                     if (!out.startsWith("[")) {
-                        const jsonMatch = out.match(/(\[\s*\{[\s\S]*\}\s*\])/);  
+                        const jsonMatch = out.match(/(\[\s*\{[\s\S]*\}\s*\])/);
                         if (jsonMatch) {
                             out = jsonMatch[1];
                         }
@@ -978,45 +1433,119 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
                     addTokenUsage(this.pipelines, id, plannerResult);
                 } catch (err: any) {
                     console.error("[Planner] Failed to parse dynamic topology:", err);
-                    dynamicTopology = [{
-                        id: "development",
-                        role: "Developer",
-                        emoji: "💻",
-                        description: "Fullstack Development",
-                        systemPrompt: "Tu es un Développeur Senior. Implémente le plan de l'Architecte.",
-                        provider: "openrouter",
-                        model: userModel,
-                        dependencies: []
-                    }];
+                    dynamicTopology = [
+                        {
+                            id: "development",
+                            role: "Developer",
+                            emoji: "💻",
+                            description: "Fullstack Development",
+                            systemPrompt: "Tu es un Développeur Senior. Implémente le plan de l'Architecte.",
+                            provider: "openrouter",
+                            model: userModel,
+                            dependencies: [],
+                        },
+                    ];
                 }
 
                 const baseTopology: import("./types.js").NodeTopology[] = [
-                    { id: "research", role: "Researcher", emoji: "🌐", description: "Veille technologique", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: [] },
-                    { id: "analysis", role: "Analyst", emoji: "🔎", description: "Analyse des besoins", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: ["research"] },
-                    { id: "skills_enrichment", role: "Tech Lead", emoji: "📚", description: "Injection de best practices", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: ["analysis"] },
-                    { id: "architecture", role: "Architect", emoji: "🏗️", description: "Conception architecturale", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: ["skills_enrichment"] },
-                    { id: "scaffold", role: "DevOps", emoji: "🔨", description: "Génération de la base", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: ["architecture"] },
-                    { id: "supervisor_for_scaffold", role: "Supervisor", emoji: "👁️", description: "Validation Scaffold", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: ["scaffold"] },
+                    {
+                        id: "research",
+                        role: "Researcher",
+                        emoji: "🌐",
+                        description: "Veille technologique",
+                        systemPrompt: "",
+                        provider: "openrouter",
+                        model: userModel,
+                        dependencies: [],
+                    },
+                    {
+                        id: "analysis",
+                        role: "Analyst",
+                        emoji: "🔎",
+                        description: "Analyse des besoins",
+                        systemPrompt: "",
+                        provider: "openrouter",
+                        model: userModel,
+                        dependencies: ["research"],
+                    },
+                    {
+                        id: "skills_enrichment",
+                        role: "Tech Lead",
+                        emoji: "📚",
+                        description: "Injection de best practices",
+                        systemPrompt: "",
+                        provider: "openrouter",
+                        model: userModel,
+                        dependencies: ["analysis"],
+                    },
+                    {
+                        id: "architecture",
+                        role: "Architect",
+                        emoji: "🏗️",
+                        description: "Conception architecturale",
+                        systemPrompt: "",
+                        provider: "openrouter",
+                        model: userModel,
+                        dependencies: ["skills_enrichment"],
+                    },
+                    {
+                        id: "scaffold",
+                        role: "DevOps",
+                        emoji: "🔨",
+                        description: "Génération de la base",
+                        systemPrompt: "",
+                        provider: "openrouter",
+                        model: userModel,
+                        dependencies: ["architecture"],
+                    },
+                    {
+                        id: "supervisor_for_scaffold",
+                        role: "Supervisor",
+                        emoji: "👁️",
+                        description: "Validation Scaffold",
+                        systemPrompt: "",
+                        provider: "openrouter",
+                        model: userModel,
+                        dependencies: ["scaffold"],
+                    },
                 ];
 
                 // Dynamic agents: keep Planner's model choice, fallback to userModel
-                dynamicNodes = dynamicTopology.map(t => ({
+                dynamicNodes = dynamicTopology.map((t) => ({
                     ...t,
                     provider: t.provider || "openrouter",
                     model: t.model || userModel,
-                    dependencies: t.dependencies.length > 0 ? t.dependencies : ["supervisor_for_scaffold"]
+                    dependencies: t.dependencies.length > 0 ? t.dependencies : ["supervisor_for_scaffold"],
                 }));
 
-                dynamicIds = dynamicNodes.map(d => d.id);
+                dynamicIds = dynamicNodes.map((d) => d.id);
                 const endTopology: import("./types.js").NodeTopology[] = [
-                    { id: "qa", role: "QA Engineer", emoji: "🧪", description: "Tests finaux", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: dynamicIds },
-                    { id: "deploy", role: "Release Manager", emoji: "🚀", description: "Déploiement", systemPrompt: "", provider: "openrouter", model: userModel, dependencies: ["qa"] }
+                    {
+                        id: "qa",
+                        role: "QA Engineer",
+                        emoji: "🧪",
+                        description: "Tests finaux",
+                        systemPrompt: "",
+                        provider: "openrouter",
+                        model: userModel,
+                        dependencies: dynamicIds,
+                    },
+                    {
+                        id: "deploy",
+                        role: "Release Manager",
+                        emoji: "🚀",
+                        description: "Déploiement",
+                        systemPrompt: "",
+                        provider: "openrouter",
+                        model: userModel,
+                        dependencies: ["qa"],
+                    },
                 ];
 
                 p.topology = [...baseTopology, ...dynamicNodes, ...endTopology];
-                
+
                 // Sync traditional agents array for UI backward compatibility
-                p.agents = p.topology.map(t => ({
+                p.agents = p.topology.map((t) => ({
                     role: t.role,
                     emoji: t.emoji,
                     status: "waiting",
@@ -1028,13 +1557,13 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
 
             manager.on("node-start", (node: any) => {
                 const phaseMap: Record<string, import("./types.js").PipelinePhase> = {
-                    "research": "ANALYSIS",
-                    "analysis": "ANALYSIS",
-                    "skills_enrichment": "ANALYSIS",
-                    "architecture": "ARCHITECTURE",
-                    "scaffold": "SCAFFOLD",
-                    "qa": "QA",
-                    "deploy": "DEPLOYING"
+                    research: "ANALYSIS",
+                    analysis: "ANALYSIS",
+                    skills_enrichment: "ANALYSIS",
+                    architecture: "ARCHITECTURE",
+                    scaffold: "SCAFFOLD",
+                    qa: "QA",
+                    deploy: "DEPLOYING",
                 };
                 if (phaseMap[node.id]) {
                     setPipelinePhase(this, this.pipelines, id, phaseMap[node.id]);
@@ -1055,14 +1584,21 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
             });
 
             // Add all base nodes — pass model/provider from topology for multi-model routing
-            const topo = (nodeId: string) => p.topology?.find(t => t.id === nodeId);
+            const topo = (nodeId: string) => p.topology?.find((t) => t.id === nodeId);
             manager.addNode(new ResearchNode(topo("research")?.model, topo("research")?.provider));
             manager.addNode(new AnalysisNode(topo("analysis")?.model, topo("analysis")?.provider));
             manager.addNode(new SkillsEnrichmentNode());
             manager.addNode(new ArchitectureNode(topo("architecture")?.model, topo("architecture")?.provider));
             manager.addNode(new ScaffoldNode(topo("scaffold")?.model, topo("scaffold")?.provider));
-            manager.addNode(new SupervisorNode("scaffold", ["scaffold"], topo("supervisor_for_scaffold")?.model, topo("supervisor_for_scaffold")?.provider));
-            
+            manager.addNode(
+                new SupervisorNode(
+                    "scaffold",
+                    ["scaffold"],
+                    topo("supervisor_for_scaffold")?.model,
+                    topo("supervisor_for_scaffold")?.provider
+                )
+            );
+
             // Add dynamic agents
             const { DynamicAgentNode } = await import("./dag/nodes/DynamicAgentNode.js");
             for (const dn of dynamicNodes) {
@@ -1070,7 +1606,7 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
             }
 
             // End nodes
-            manager.addNode(new QANode(dynamicIds, topo("qa")?.model, topo("qa")?.provider)); 
+            manager.addNode(new QANode(dynamicIds, topo("qa")?.model, topo("qa")?.provider));
             manager.addNode(new DeployNode(topo("deploy")?.model, topo("deploy")?.provider));
 
             // Phase 3: Auto-Evaluation & Self-Healing
@@ -1084,7 +1620,15 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
                 for (const [nodeId, status] of Object.entries(p.nodeStatuses)) {
                     if (status === "COMPLETED") {
                         manager.markCompleted(nodeId);
-                        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⏭️", `Skip: ${nodeId} (déjà complété)`, "info");
+                        addPipelineEvent(
+                            this,
+                            this.pipelines,
+                            id,
+                            "Orchestrator",
+                            "⏭️",
+                            `Skip: ${nodeId} (déjà complété)`,
+                            "info"
+                        );
                     }
                 }
             }
@@ -1093,7 +1637,15 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
             try {
                 const injected = await injectSecretsToEnv(id, p.workspace);
                 if (injected > 0) {
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔐", `${injected} secret(s) injecté(s) dans .env`, "info");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Orchestrator",
+                        "🔐",
+                        `${injected} secret(s) injecté(s) dans .env`,
+                        "info"
+                    );
                 }
             } catch (secretsErr: any) {
                 console.error("[Orchestrator] Failed to inject secrets:", secretsErr);
@@ -1103,12 +1655,20 @@ Output ONLY a valid JSON array. No text before or after. No markdown code blocks
 
             // ─── Generate Professional README ───
             try {
-                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "📝", "Génération du README professionnel...", "info");
-                
+                addPipelineEvent(
+                    this,
+                    this.pipelines,
+                    id,
+                    "Orchestrator",
+                    "📝",
+                    "Génération du README professionnel...",
+                    "info"
+                );
+
                 const analysis = p.artifacts.analysis || {};
                 const architecture = p.artifacts.architecture || {};
                 const topology = p.topology || [];
-                
+
                 const readmeResult = await runVeistAgent({
                     model: p.model,
                     prompt: `Generate a professional, comprehensive README.md for this project.
@@ -1122,7 +1682,7 @@ ${JSON.stringify(analysis, null, 2)}
 ARCHITECTURE:
 ${JSON.stringify(architecture, null, 2)}
 
-PIPELINE AGENTS USED: ${topology.map((t: any) => `${t.emoji} ${t.role}`).join(', ')}
+PIPELINE AGENTS USED: ${topology.map((t: any) => `${t.emoji} ${t.role}`).join(", ")}
 
 Write the README in English (or match the project language if description is in French).
 Include these sections:
@@ -1141,7 +1701,8 @@ Use proper markdown formatting with emojis for section headers.
 Make it look PROFESSIONAL — like a real open-source project README.
 Do NOT include any chat context, conversation logs, or pre-pipeline discussion.
 Output ONLY the raw markdown content of the README, nothing else.`,
-                    systemPrompt: "You are a technical documentation expert. Generate only the README.md content. No code blocks wrapping the output, no explanations — just the raw markdown.",
+                    systemPrompt:
+                        "You are a technical documentation expert. Generate only the README.md content. No code blocks wrapping the output, no explanations — just the raw markdown.",
                     cwd: p.workspace,
                     allowedTools: ["list_dir", "read_file"],
                     maxTurns: 5,
@@ -1155,32 +1716,91 @@ Output ONLY the raw markdown content of the README, nothing else.`,
                     let readmeContent = readmeResult.finalResult.trim();
                     // Strip markdown code fences if the model wrapped it
                     if (readmeContent.startsWith("```")) {
-                        readmeContent = readmeContent.replace(/^```(?:markdown|md)?\n?/, "").replace(/\n?```$/, "").trim();
+                        readmeContent = readmeContent
+                            .replace(/^```(?:markdown|md)?\n?/, "")
+                            .replace(/\n?```$/, "")
+                            .trim();
                     }
                     const readmePath = path.join(p.workspace, "README.md");
                     await fs.writeFile(readmePath, readmeContent, "utf-8");
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "📝", "README.md professionnel généré ✓", "success");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Orchestrator",
+                        "📝",
+                        "README.md professionnel généré ✓",
+                        "success"
+                    );
                 } else {
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", "README generation skipped (agent error)", "warning");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Orchestrator",
+                        "⚠️",
+                        "README generation skipped (agent error)",
+                        "warning"
+                    );
                 }
             } catch (readmeErr: any) {
-                addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `README generation failed: ${readmeErr.message}`, "warning");
+                addPipelineEvent(
+                    this,
+                    this.pipelines,
+                    id,
+                    "Orchestrator",
+                    "⚠️",
+                    `README generation failed: ${readmeErr.message}`,
+                    "warning"
+                );
                 // Non-fatal — continue with push
             }
 
             // ─── Final GitHub Push ───
             if (p.github) {
                 try {
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔗", "Push final vers GitHub...", "info");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Orchestrator",
+                        "🔗",
+                        "Push final vers GitHub...",
+                        "info"
+                    );
                     const authUrl = `https://${getGithubToken()}@github.com/${p.github.owner}/${p.github.repo}.git`;
                     const pushed = await gitPush(p.workspace, "feat: initial project generation", authUrl);
                     if (pushed) {
-                        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🔗", `Push OK → ${p.github.url}`, "success");
+                        addPipelineEvent(
+                            this,
+                            this.pipelines,
+                            id,
+                            "Orchestrator",
+                            "🔗",
+                            `Push OK → ${p.github.url}`,
+                            "success"
+                        );
                     } else {
-                        addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", "Push GitHub échoué", "warning");
+                        addPipelineEvent(
+                            this,
+                            this.pipelines,
+                            id,
+                            "Orchestrator",
+                            "⚠️",
+                            "Push GitHub échoué",
+                            "warning"
+                        );
                     }
                 } catch (pushErr: any) {
-                    addPipelineEvent(this, this.pipelines, id, "Orchestrator", "⚠️", `Push échoué: ${pushErr.message}`, "warning");
+                    addPipelineEvent(
+                        this,
+                        this.pipelines,
+                        id,
+                        "Orchestrator",
+                        "⚠️",
+                        `Push échoué: ${pushErr.message}`,
+                        "warning"
+                    );
                 }
             }
 
@@ -1192,27 +1812,27 @@ Output ONLY the raw markdown content of the README, nothing else.`,
                 github: p.github,
                 model: p.model,
                 artifacts: p.artifacts,
-                addEvent: (role, emoji, msg, type) => addPipelineEvent(this, this.pipelines, id, role, emoji, msg, type as any),
+                addEvent: (role, emoji, msg, type) =>
+                    addPipelineEvent(this, this.pipelines, id, role, emoji, msg, type as any),
             });
 
             // Check if eval reported issues
             const evalReport = p.artifacts.evalReport as any;
-            const finalPhase = (evalReport?.recommendation === "SHIP_WITH_ISSUES")
-                ? "COMPLETED_WITH_ISSUES"
-                : "COMPLETED";
+            const finalPhase =
+                evalReport?.recommendation === "SHIP_WITH_ISSUES" ? "COMPLETED_WITH_ISSUES" : "COMPLETED";
             setPipelinePhase(this, this.pipelines, id, finalPhase);
             setAgentStatus(this, this.pipelines, id, "QA", "done");
             const statusEmoji = finalPhase === "COMPLETED_WITH_ISSUES" ? "⚠️" : "🎉";
-            const statusText = finalPhase === "COMPLETED_WITH_ISSUES" 
-                ? `Projet terminé avec réserves (score eval: ${evalReport?.score}/100)` 
-                : "Projet terminé!";
+            const statusText =
+                finalPhase === "COMPLETED_WITH_ISSUES"
+                    ? `Projet terminé avec réserves (score eval: ${evalReport?.score}/100)`
+                    : "Projet terminé!";
             const completedMsg = p.github
                 ? `${statusText} Repo GitHub: ${p.github.url}${p.artifacts.deployed ? ` | Live: ${p.artifacts.deployedUrl}` : ""}`
                 : `${statusText}${p.artifacts.deployed ? ` Live: ${p.artifacts.deployedUrl}` : ""}`;
             addPipelineEvent(this, this.pipelines, id, "Orchestrator", statusEmoji, completedMsg, "success");
-
         } catch (err: any) {
-            if (err.name === 'AbortError' || err.message === 'Pipeline Aborted') {
+            if (err.name === "AbortError" || err.message === "Pipeline Aborted") {
                 addPipelineEvent(this, this.pipelines, id, "Orchestrator", "🛑", "Pipeline annulé.", "error");
             } else {
                 setPipelinePhase(this, this.pipelines, id, "FAILED", err.message);

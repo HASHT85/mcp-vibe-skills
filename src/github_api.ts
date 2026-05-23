@@ -1,5 +1,5 @@
 // import fetch from 'node-fetch'; // Using global fetch
-import crypto from 'node:crypto';
+import crypto from "node:crypto";
 
 const GITHUB_API = "https://api.github.com";
 
@@ -11,9 +11,9 @@ function getHeaders() {
         console.warn("⚠️ Missing GITHUB_TOKEN in environment variables");
     }
     return {
-        "Authorization": `token ${token || ""}`,
+        Authorization: `token ${token || ""}`,
         "Content-Type": "application/json",
-        "Accept": "application/vnd.github.v3+json"
+        Accept: "application/vnd.github.v3+json",
     };
 }
 
@@ -30,21 +30,21 @@ export async function createRepo(name: string, description: string) {
 
     // 2. Sanitize description: strip control chars, truncate to 350
     const safeDesc = String(description || "")
-        .replace(/[\x00-\x1F\x7F]/g, " ")   // strip control characters
-        .replace(/\s+/g, " ")                 // collapse whitespace
+        .replace(/[\x00-\x1F\x7F]/g, " ") // strip control characters
+        .replace(/\s+/g, " ") // collapse whitespace
         .trim()
         .slice(0, 350);
 
     // 3. Create repo
     const res = await fetch(`${GITHUB_API}/user/repos`, {
-        method: 'POST',
+        method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({
             name,
             description: safeDesc,
             private: true, // Default to private
-            auto_init: true // Create README to allow immediate pushes
-        })
+            auto_init: true, // Create README to allow immediate pushes
+        }),
     });
 
     if (!res.ok) {
@@ -63,8 +63,8 @@ export async function deleteRepo(owner: string, repo: string) {
         throw new Error(`Invalid owner/repo name: "${owner}/${repo}"`);
     }
     const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}`, {
-        method: 'DELETE',
-        headers: getHeaders()
+        method: "DELETE",
+        headers: getHeaders(),
     });
     if (!res.ok && res.status !== 404) {
         const err = await res.json();
@@ -84,7 +84,7 @@ export function getWebhookSecret(): string | undefined {
     if (_webhookSecretCache && _webhookSecretCache.pass === pass) {
         return _webhookSecretCache.secret;
     }
-    const secret = crypto.createHmac('sha256', pass).update('veist-webhook').digest('hex').slice(0, 32);
+    const secret = crypto.createHmac("sha256", pass).update("veist-webhook").digest("hex").slice(0, 32);
     _webhookSecretCache = { pass, secret };
     return secret;
 }
@@ -102,14 +102,14 @@ export async function createWebhook(owner: string, repo: string, webhookUrl: str
     }
 
     const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/hooks`, {
-        method: 'POST',
+        method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({
             name: "web",
             active: true,
             events: ["push"],
             config,
-        })
+        }),
     });
 
     if (!res.ok) {
@@ -119,7 +119,12 @@ export async function createWebhook(owner: string, repo: string, webhookUrl: str
     return res.json();
 }
 
-export async function pushFiles(owner: string, repo: string, files: { path: string; content: string }[], message: string) {
+export async function pushFiles(
+    owner: string,
+    repo: string,
+    files: { path: string; content: string }[],
+    message: string
+) {
     const baseUrl = `${GITHUB_API}/repos/${owner}/${repo}`;
 
     // 1. Get latest commit SHA of main branch
@@ -137,20 +142,20 @@ export async function pushFiles(owner: string, repo: string, files: { path: stri
     // Sanitize paths: remove leading slashes and ./
     const treePayload = {
         base_tree: baseTreeSha,
-        tree: files.map(f => ({
-            path: f.path.replace(/^\/+/, '').replace(/^\.\//, ''), // Remove leading / or ./
+        tree: files.map((f) => ({
+            path: f.path.replace(/^\/+/, "").replace(/^\.\//, ""), // Remove leading / or ./
             mode: "100644", // bulb mode
             type: "blob",
-            content: f.content
-        }))
+            content: f.content,
+        })),
     };
 
     console.log(`[GitHub] Creating tree with ${files.length} files. First file: ${files[0]?.path}`);
 
     const treeRes = await fetch(`${baseUrl}/git/trees`, {
-        method: 'POST',
+        method: "POST",
         headers: getHeaders(),
-        body: JSON.stringify(treePayload)
+        body: JSON.stringify(treePayload),
     });
     if (!treeRes.ok) {
         const err = await treeRes.json();
@@ -162,13 +167,13 @@ export async function pushFiles(owner: string, repo: string, files: { path: stri
 
     // 4. Create commit
     const newCommitRes = await fetch(`${baseUrl}/git/commits`, {
-        method: 'POST',
+        method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({
             message,
             tree: newTreeSha,
-            parents: [latestCommitSha]
-        })
+            parents: [latestCommitSha],
+        }),
     });
     if (!newCommitRes.ok) throw new Error("Failed to create commit");
     const newCommitData: any = await newCommitRes.json();
@@ -176,11 +181,11 @@ export async function pushFiles(owner: string, repo: string, files: { path: stri
 
     // 5. Update reference (push)
     const updateRes = await fetch(`${baseUrl}/git/refs/heads/main`, {
-        method: 'PATCH',
+        method: "PATCH",
         headers: getHeaders(),
         body: JSON.stringify({
-            sha: newCommitSha
-        })
+            sha: newCommitSha,
+        }),
     });
     if (!updateRes.ok) throw new Error("Failed to update ref");
 
@@ -189,11 +194,23 @@ export async function pushFiles(owner: string, repo: string, files: { path: stri
 
 // Fetch repo structure + key files for AI context
 const KEY_FILES = [
-    "package.json", "index.html", "vite.config.ts", "vite.config.js",
-    "Dockerfile", "docker-compose.yml", "docker-compose.yaml",
-    "nginx.conf", "README.md", "src/App.tsx", "src/App.jsx",
-    "src/App.vue", "src/main.tsx", "src/main.jsx", "src/main.ts",
-    "src/index.ts", "src/index.js",
+    "package.json",
+    "index.html",
+    "vite.config.ts",
+    "vite.config.js",
+    "Dockerfile",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "nginx.conf",
+    "README.md",
+    "src/App.tsx",
+    "src/App.jsx",
+    "src/App.vue",
+    "src/main.tsx",
+    "src/main.jsx",
+    "src/main.ts",
+    "src/index.ts",
+    "src/index.js",
 ];
 
 export async function getRepoContext(owner: string, repo: string): Promise<string> {
@@ -205,9 +222,7 @@ export async function getRepoContext(owner: string, repo: string): Promise<strin
         const treeRes = await fetch(`${baseUrl}/git/trees/main?recursive=1`, { headers: getHeaders() });
         if (treeRes.ok) {
             const treeData: any = await treeRes.json();
-            const filePaths = (treeData.tree || [])
-                .filter((f: any) => f.type === "blob")
-                .map((f: any) => f.path);
+            const filePaths = (treeData.tree || []).filter((f: any) => f.type === "blob").map((f: any) => f.path);
             parts.push(`## Structure du repo (${filePaths.length} fichiers)`);
             parts.push("```");
             parts.push(filePaths.join("\n"));
@@ -224,9 +239,8 @@ export async function getRepoContext(owner: string, repo: string): Promise<strin
                 if (data.content && data.encoding === "base64") {
                     const content = Buffer.from(data.content, "base64").toString("utf-8");
                     // Truncate large files
-                    const truncated = content.length > 3000 
-                        ? content.slice(0, 3000) + "\n[... TRUNCATED ...]" 
-                        : content;
+                    const truncated =
+                        content.length > 3000 ? content.slice(0, 3000) + "\n[... TRUNCATED ...]" : content;
                     parts.push(`## ${filePath}`);
                     parts.push("```");
                     parts.push(truncated);

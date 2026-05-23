@@ -15,12 +15,22 @@ export class DynamicAgentNode extends AgentNode {
             model: topology.model,
             dependencies: topology.dependencies.concat(["planner_setup_fake_dep"]), // We'll handle this in orchestrator
             maxTurns: 30, // Default dynamic turns
-            allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir", "read_memory", "write_memory", "web_search", "fetch_url"]
+            allowedTools: [
+                "read_file",
+                "write_file",
+                "replace_in_file",
+                "bash",
+                "list_dir",
+                "read_memory",
+                "write_memory",
+                "web_search",
+                "fetch_url",
+            ],
         });
-        
+
         // Remove the fake dependency, it's just to satisfy the constructor types temporarily if needed
-        this.dependencies = topology.dependencies; 
-        
+        this.dependencies = topology.dependencies;
+
         this.topology = topology;
     }
 

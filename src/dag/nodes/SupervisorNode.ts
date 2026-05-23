@@ -14,7 +14,7 @@ export class SupervisorNode extends AgentNode {
             model: model,
             dependencies,
             allowedTools: ["bash", "read_file", "list_dir", "read_memory", "write_memory"],
-            maxTurns: 10
+            maxTurns: 10,
         });
         this.targetNodeId = targetNodeId;
     }
@@ -58,7 +58,7 @@ export class SupervisorNode extends AgentNode {
             return {
                 _action: "RESET_NODE",
                 targetId: this.targetNodeId,
-                feedback: jsonMatch.feedback || "Travail incorrect."
+                feedback: jsonMatch.feedback || "Travail incorrect.",
             };
         }
 

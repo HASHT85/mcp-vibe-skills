@@ -1,9 +1,9 @@
-import { motion } from 'framer-motion';
-import type { Pipeline } from '../api/client';
+import { motion } from "framer-motion";
+import type { Pipeline } from "../api/client";
 
 export function DeployView({ pipelines }: { pipelines: Pipeline[] }) {
-    const deployed = pipelines.filter(p => p.dokploy);
-    const withGithub = pipelines.filter(p => p.github);
+    const deployed = pipelines.filter((p) => p.dokploy);
+    const withGithub = pipelines.filter((p) => p.github);
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -18,49 +18,82 @@ export function DeployView({ pipelines }: { pipelines: Pipeline[] }) {
             {deployed.length === 0 && withGithub.length === 0 && (
                 <div className="flex flex-col items-center justify-center p-12 border border-border-muted bg-panel/30">
                     <span className="material-symbols-outlined text-4xl text-slate-700 mb-4">cloud_off</span>
-                    <p className="text-slate-400 text-xs tracking-widest uppercase">No active deployments. Projects auto-deploy via Dokploy.</p>
+                    <p className="text-slate-400 text-xs tracking-widest uppercase">
+                        No active deployments. Projects auto-deploy via Dokploy.
+                    </p>
                 </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {withGithub.map(p => {
-                    const isCompleted = p.phase === 'COMPLETED';
-                    const isFailed = p.phase === 'FAILED';
+                {withGithub.map((p) => {
+                    const isCompleted = p.phase === "COMPLETED";
+                    const isFailed = p.phase === "FAILED";
                     const isRunning = !isCompleted && !isFailed;
-                    
-                    const borderColor = isCompleted ? 'border-accent/50' : (isFailed ? 'border-red-500/50' : 'border-primary/50');
-                    const badgeColorClass = isCompleted ? 'bg-accent text-black' : (isFailed ? 'bg-red-500 text-white' : 'bg-primary text-white');
+
+                    const borderColor = isCompleted
+                        ? "border-accent/50"
+                        : isFailed
+                          ? "border-red-500/50"
+                          : "border-primary/50";
+                    const badgeColorClass = isCompleted
+                        ? "bg-accent text-black"
+                        : isFailed
+                          ? "bg-red-500 text-white"
+                          : "bg-primary text-white";
 
                     return (
-                        <div key={p.id} className={`bg-panel border ${borderColor} p-4 relative overflow-hidden flex flex-col`}>
-                            {isRunning && <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 rounded-full blur-xl -mr-6 -mt-6"></div>}
-                            
+                        <div
+                            key={p.id}
+                            className={`bg-panel border ${borderColor} p-4 relative overflow-hidden flex flex-col`}
+                        >
+                            {isRunning && (
+                                <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 rounded-full blur-xl -mr-6 -mt-6"></div>
+                            )}
+
                             <div className="flex justify-between items-start mb-4 relative z-10 border-b border-border-muted pb-3">
                                 <span className="text-lg font-black text-white tracking-widest uppercase truncate pr-2">
-                                    {(p.name || 'unnamed').replace(/\s+/g, '_').toLowerCase()}
+                                    {(p.name || "unnamed").replace(/\s+/g, "_").toLowerCase()}
                                 </span>
-                                <span className={`${badgeColorClass} text-[9px] font-black px-2 py-0.5 uppercase tracking-widest shrink-0`}>
+                                <span
+                                    className={`${badgeColorClass} text-[9px] font-black px-2 py-0.5 uppercase tracking-widest shrink-0`}
+                                >
                                     {p.phase}
                                 </span>
                             </div>
-                            
+
                             <div className="flex flex-col gap-3 font-medium text-xs">
                                 {p.github && (
                                     <div className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
                                         <span className=" материала-symbols-outlined text-[14px]">code_blocks</span>
-                                        <a href={p.github.url} target="_blank" rel="noopener noreferrer" className="truncate hover:underline">
+                                        <a
+                                            href={p.github.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="truncate hover:underline"
+                                        >
                                             {p.github.owner}/{p.github.repo}
                                         </a>
-                                        <span className="material-symbols-outlined text-[12px] ml-auto">open_in_new</span>
+                                        <span className="material-symbols-outlined text-[12px] ml-auto">
+                                            open_in_new
+                                        </span>
                                     </div>
                                 )}
                                 {p.dokploy && (
                                     <div className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
                                         <span className="material-symbols-outlined text-[14px]">dns</span>
-                                        <span className="monospaced tracking-tight text-[10px]">DOKPLOY: {p.dokploy.applicationId?.slice(0, 12)}...</span>
+                                        <span className="monospaced tracking-tight text-[10px]">
+                                            DOKPLOY: {p.dokploy.applicationId?.slice(0, 12)}...
+                                        </span>
                                         {p.dokploy.url && (
-                                            <a href={p.dokploy.url} target="_blank" rel="noopener noreferrer" className="ml-auto text-accent">
-                                                <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+                                            <a
+                                                href={p.dokploy.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="ml-auto text-accent"
+                                            >
+                                                <span className="material-symbols-outlined text-[16px]">
+                                                    open_in_new
+                                                </span>
                                             </a>
                                         )}
                                     </div>

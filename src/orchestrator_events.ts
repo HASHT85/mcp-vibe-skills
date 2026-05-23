@@ -22,7 +22,7 @@ export function addPipelineEvent(
         agentRole: role,
         agentEmoji: emoji,
         action,
-        type
+        type,
     };
     p.events.push(e);
     emitter.emit("event", e);
@@ -38,7 +38,7 @@ export function setAgentStatus(
 ) {
     const p = pipelines.get(id);
     if (!p) return;
-    const agent = p.agents.find(a => a.role === role);
+    const agent = p.agents.find((a) => a.role === role);
     if (agent) {
         agent.status = status;
         if (action) agent.currentAction = action;
@@ -98,15 +98,24 @@ export function addAgentTokenUsage(
         // Try to load from cache
         try {
             // SEC-31: Use persistent /data/ volume, matching openrouter_models.ts
-            const cachePath = path.join(path.dirname(process.env.STORE_PATH || '/data/store.json'), '.openrouter_cache.json');
+            const cachePath = path.join(
+                path.dirname(process.env.STORE_PATH || "/data/store.json"),
+                ".openrouter_cache.json"
+            );
             if (fs.existsSync(cachePath)) {
-                const models = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
-                const m = models.find((mod: any) => model.replace('openrouter/', '').includes(mod.id) || mod.id.includes(model.replace('openrouter/', '')));
+                const models = JSON.parse(fs.readFileSync(cachePath, "utf-8"));
+                const m = models.find(
+                    (mod: any) =>
+                        model.replace("openrouter/", "").includes(mod.id) ||
+                        mod.id.includes(model.replace("openrouter/", ""))
+                );
                 if (m) {
                     cost = inputTokens * m.pricing.prompt + outputTokens * m.pricing.completion;
                 }
             }
-        } catch { /* fallback to 0 */ }
+        } catch {
+            /* fallback to 0 */
+        }
     }
 
     const record = {
@@ -114,17 +123,17 @@ export function addAgentTokenUsage(
         role,
         emoji,
         provider,
-        model: model.replace('openrouter/', ''),
+        model: model.replace("openrouter/", ""),
         inputTokens,
         outputTokens,
         cost,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
     };
 
     p.agentTokens.push(record);
     p.tokenHistory.push({
         timestamp: record.timestamp,
         tokens: inputTokens + outputTokens,
-        agentRole: role
+        agentRole: role,
     });
 }

@@ -97,9 +97,7 @@ export async function fetchUrl(urlStr: string): Promise<string> {
         const text = await res.text();
 
         const $ = cheerio.load(text);
-        $(
-            "script, style, noscript, svg, nav, footer, header, aside, .sidebar, #sidebar, .ad, .advertisement"
-        ).remove();
+        $("script, style, noscript, svg, nav, footer, header, aside, .sidebar, #sidebar, .ad, .advertisement").remove();
         let cleanText = $("body").text().replace(/\s+/g, " ").trim();
         if (!cleanText) {
             cleanText = $.text().replace(/\s+/g, " ").trim();

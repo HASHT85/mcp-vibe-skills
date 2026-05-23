@@ -1,9 +1,9 @@
 /**
  * Middleware Chain — Agent Execution Hooks (DeerFlow Pattern)
- * 
+ *
  * Provides modular pre/post processing around VEIST agent calls.
  * Inspired by DeerFlow's agents/middlewares/ system.
- * 
+ *
  * Built-in middlewares:
  * - MemoryMiddleware: injects memory context, queues outputs for extraction
  * - LoopDetectionMiddleware: detects agent stuck loops
@@ -146,9 +146,10 @@ export const LoopDetectionMiddleware: Middleware = {
         // Detect: same fingerprint 3+ times in a row
         if (history.length >= 3) {
             const last3 = history.slice(-3);
-            if (last3.every(h => h === last3[0])) {
+            if (last3.every((h) => h === last3[0])) {
                 console.warn(`⚙️ [Middleware:LoopDetection] Agent stuck loop detected for ${key}!`);
-                result.output += "\n\n⚠️ [LOOP DETECTED] Agent appears to be repeating the same output. Consider different approach.";
+                result.output +=
+                    "\n\n⚠️ [LOOP DETECTED] Agent appears to be repeating the same output. Consider different approach.";
             }
         }
 
@@ -178,7 +179,9 @@ export const TokenTrackingMiddleware: Middleware = {
                 if (oldest) tokenTotals.delete(oldest);
             }
 
-            console.log(`⚙️ [Middleware:TokenTracking] Pipeline ${key} node ${context.nodeId}: +${usage.input_tokens || 0}in +${usage.output_tokens || 0}out (total: ${prev.input}in/${prev.output}out)`);
+            console.log(
+                `⚙️ [Middleware:TokenTracking] Pipeline ${key} node ${context.nodeId}: +${usage.input_tokens || 0}in +${usage.output_tokens || 0}out (total: ${prev.input}in/${prev.output}out)`
+            );
         }
         return result;
     },
@@ -210,7 +213,9 @@ export const EmbeddingMiddleware: Middleware = {
 
             if (contextBlock) {
                 context.systemPrompt = context.systemPrompt + contextBlock;
-                console.log(`⚙️ [Middleware:Embedding] Injected code context (${contextBlock.length} chars) for pipeline ${context.pipelineId}`);
+                console.log(
+                    `⚙️ [Middleware:Embedding] Injected code context (${contextBlock.length} chars) for pipeline ${context.pipelineId}`
+                );
             }
         } catch (err) {
             console.warn("⚙️ [Middleware:Embedding] Failed to inject code context:", err);

@@ -1,6 +1,6 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import type { PipelineEvent } from '../api/client';
-import type { EvalReport } from '../api/client';
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import type { PipelineEvent } from "../api/client";
+import type { EvalReport } from "../api/client";
 
 export interface NodeTopology {
     id: string;
@@ -8,7 +8,7 @@ export interface NodeTopology {
     emoji: string;
     description: string;
     dependencies: string[];
-    provider?: 'anthropic' | 'openrouter';
+    provider?: "anthropic" | "openrouter";
     model?: string;
 }
 
@@ -18,7 +18,7 @@ export interface ModifyRunData {
     startedAt: string;
     topology: NodeTopology[];
     agents: { role: string; emoji: string; status: string; currentAction?: string }[];
-    nodeStatuses: Record<string, 'COMPLETED' | 'FAILED' | 'PENDING'>;
+    nodeStatuses: Record<string, "COMPLETED" | "FAILED" | "PENDING">;
     phase: string;
 }
 
@@ -28,13 +28,13 @@ export interface ProjectNodeMapProps {
     events?: PipelineEvent[];
     selectedNodeId?: string | null;
     onSelectNode?: (id: string | null) => void;
-    nodeStatuses?: Record<string, 'COMPLETED' | 'FAILED' | 'PENDING'>;
+    nodeStatuses?: Record<string, "COMPLETED" | "FAILED" | "PENDING">;
     pipelinePhase?: string;
     modifyRuns?: ModifyRunData[];
     evalReport?: EvalReport;
 }
 
-type NodeStatus = 'waiting' | 'active' | 'done' | 'error';
+type NodeStatus = "waiting" | "active" | "done" | "error";
 
 interface LayoutNode {
     id: string;
@@ -46,7 +46,7 @@ interface LayoutNode {
 
 function calculateDepths(nodes: NodeTopology[]): Map<string, number> {
     const depths = new Map<string, number>();
-    nodes.forEach(n => depths.set(n.id, 0));
+    nodes.forEach((n) => depths.set(n.id, 0));
     let changed = true;
     while (changed) {
         changed = false;
@@ -71,7 +71,16 @@ const NODE_H = 52;
 const H_SPACING = 260;
 const V_SPACING = 90;
 
-export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode, nodeStatuses, pipelinePhase, modifyRuns, evalReport }: ProjectNodeMapProps) {
+export function ProjectNodeMap({
+    topology,
+    agents,
+    selectedNodeId,
+    onSelectNode,
+    nodeStatuses,
+    pipelinePhase,
+    modifyRuns,
+    evalReport,
+}: ProjectNodeMapProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
     const [isPanning, setIsPanning] = useState(false);
@@ -82,11 +91,11 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
     const safeTopology = useMemo(() => {
         if (topology && topology.length > 0) return topology;
         return agents.filter(Boolean).map((a, i, arr) => ({
-            id: a.role.replace(/\s+/g, '_').toLowerCase(),
+            id: a.role.replace(/\s+/g, "_").toLowerCase(),
             role: a.role,
             emoji: a.emoji,
-            description: '',
-            dependencies: i > 0 ? [arr[i - 1].role.replace(/\s+/g, '_').toLowerCase()] : []
+            description: "",
+            dependencies: i > 0 ? [arr[i - 1].role.replace(/\s+/g, "_").toLowerCase()] : [],
         }));
     }, [topology, agents]);
 
@@ -95,10 +104,10 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
         const depths = calculateDepths(safeTopology);
         const maxDepth = Math.max(0, ...Array.from(depths.values()));
         const layers: NodeTopology[][] = Array.from({ length: maxDepth + 1 }, () => []);
-        safeTopology.forEach(node => {
+        safeTopology.forEach((node) => {
             layers[depths.get(node.id) || 0].push(node);
         });
-        const maxLayerSize = Math.max(...layers.map(l => l.length));
+        const maxLayerSize = Math.max(...layers.map((l) => l.length));
         const totalH = maxLayerSize * V_SPACING;
         const result: LayoutNode[] = [];
         layers.forEach((layer, col) => {
@@ -110,7 +119,7 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
                     node,
                     x: col * H_SPACING + 60,
                     y: offsetY + row * V_SPACING + 60,
-                    depth: col
+                    depth: col,
                 });
             });
         });
@@ -119,7 +128,7 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
 
     const layoutMap = useMemo(() => {
         const m = new Map<string, LayoutNode>();
-        layout.forEach(l => m.set(l.id, l));
+        layout.forEach((l) => m.set(l.id, l));
         return m;
     }, [layout]);
 
@@ -130,17 +139,17 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
         hasInitialized.current = true;
         const cw = containerRef.current.clientWidth;
         const ch = containerRef.current.clientHeight;
-        const minX = Math.min(...layout.map(n => n.x)) - 40;
-        const maxX = Math.max(...layout.map(n => n.x)) + NODE_W + 40;
-        const minY = Math.min(...layout.map(n => n.y)) - 40;
-        const maxY = Math.max(...layout.map(n => n.y)) + NODE_H + 40;
+        const minX = Math.min(...layout.map((n) => n.x)) - 40;
+        const maxX = Math.max(...layout.map((n) => n.x)) + NODE_W + 40;
+        const minY = Math.min(...layout.map((n) => n.y)) - 40;
+        const maxY = Math.max(...layout.map((n) => n.y)) + NODE_H + 40;
         const gw = maxX - minX;
         const gh = maxY - minY;
         const scale = Math.min(cw / gw, ch / gh, 1.3);
         setTransform({
             x: (cw - gw * scale) / 2 - minX * scale,
             y: (ch - gh * scale) / 2 - minY * scale,
-            scale
+            scale,
         });
     }, [layout]);
 
@@ -157,40 +166,48 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
         setTransform({
             x: mx - (mx - t.x) * (ns / t.scale),
             y: my - (my - t.y) * (ns / t.scale),
-            scale: ns
+            scale: ns,
         });
     }, []);
 
     // Pan
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
-        if (e.button !== 0 || (e.target as HTMLElement).closest('[data-node]')) return;
+        if (e.button !== 0 || (e.target as HTMLElement).closest("[data-node]")) return;
         setIsPanning(true);
         panStart.current = { x: e.clientX - tRef.current.x, y: e.clientY - tRef.current.y };
     }, []);
-    const handleMouseMove = useCallback((e: React.MouseEvent) => {
-        if (!isPanning) return;
-        setTransform(t => ({ ...t, x: e.clientX - panStart.current.x, y: e.clientY - panStart.current.y }));
-    }, [isPanning]);
+    const handleMouseMove = useCallback(
+        (e: React.MouseEvent) => {
+            if (!isPanning) return;
+            setTransform((t) => ({ ...t, x: e.clientX - panStart.current.x, y: e.clientY - panStart.current.y }));
+        },
+        [isPanning]
+    );
     const handleMouseUp = useCallback(() => setIsPanning(false), []);
 
     // Status
     const getStatus = (nodeId: string, role: string): NodeStatus => {
-        if (pipelinePhase === 'COMPLETED') return 'done';
-        if (pipelinePhase === 'FAILED') {
-            if (nodeStatuses?.[nodeId] === 'FAILED') return 'error';
-            if (nodeStatuses?.[nodeId] === 'COMPLETED') return 'done';
+        if (pipelinePhase === "COMPLETED") return "done";
+        if (pipelinePhase === "FAILED") {
+            if (nodeStatuses?.[nodeId] === "FAILED") return "error";
+            if (nodeStatuses?.[nodeId] === "COMPLETED") return "done";
         }
-        if (nodeStatuses?.[nodeId] === 'COMPLETED') return 'done';
-        if (nodeStatuses?.[nodeId] === 'FAILED') return 'error';
-        const ag = agents.find(a => a.role === role);
-        return (ag?.status as NodeStatus) || 'waiting';
+        if (nodeStatuses?.[nodeId] === "COMPLETED") return "done";
+        if (nodeStatuses?.[nodeId] === "FAILED") return "error";
+        const ag = agents.find((a) => a.role === role);
+        return (ag?.status as NodeStatus) || "waiting";
     };
 
     const sc: Record<NodeStatus, { dot: string; border: string; text: string; label: string }> = {
-        waiting: { dot: 'rgba(215,255,47,0.15)', border: 'rgba(215,255,47,0.2)', text: 'rgba(215,255,47,0.4)', label: 'IDLE' },
-        active:  { dot: '#D7FF2F', border: '#D7FF2F', text: '#D7FF2F', label: 'PROCESSING' },
-        done:    { dot: '#34d399', border: 'rgba(52,211,153,0.5)', text: '#34d399', label: 'STABLE' },
-        error:   { dot: '#FF6A3D', border: '#FF6A3D', text: '#FF6A3D', label: 'CRITICAL' }
+        waiting: {
+            dot: "rgba(215,255,47,0.15)",
+            border: "rgba(215,255,47,0.2)",
+            text: "rgba(215,255,47,0.4)",
+            label: "IDLE",
+        },
+        active: { dot: "#D7FF2F", border: "#D7FF2F", text: "#D7FF2F", label: "PROCESSING" },
+        done: { dot: "#34d399", border: "rgba(52,211,153,0.5)", text: "#34d399", label: "STABLE" },
+        error: { dot: "#FF6A3D", border: "#FF6A3D", text: "#FF6A3D", label: "CRITICAL" },
     };
 
     // Modify runs layout
@@ -200,8 +217,8 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
     const modRunLayouts = useMemo(() => {
         if (!modifyRuns || modifyRuns.length === 0) return [];
         // Find rightmost node X in main layout as connection point
-        const mainMaxX = layout.length > 0 ? Math.max(...layout.map(n => n.x)) : 60;
-        const mainMaxY = layout.length > 0 ? Math.max(...layout.map(n => n.y)) : 60;
+        const mainMaxX = layout.length > 0 ? Math.max(...layout.map((n) => n.x)) : 60;
+        const mainMaxY = layout.length > 0 ? Math.max(...layout.map((n) => n.y)) : 60;
 
         return modifyRuns.map((run, runIdx) => {
             const baseY = mainMaxY + NODE_H + MOD_Y_OFFSET + runIdx * (NODE_H + MOD_RUN_SPACING);
@@ -220,31 +237,37 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
 
     // Build layout map for modify runs
     const modLayoutMaps = useMemo(() => {
-        return modRunLayouts.map(mrl => {
+        return modRunLayouts.map((mrl) => {
             const m = new Map<string, LayoutNode>();
-            mrl.nodes.forEach(l => m.set(l.id, l));
+            mrl.nodes.forEach((l) => m.set(l.id, l));
             return m;
         });
     }, [modRunLayouts]);
 
-    const allModNodes = modRunLayouts.flatMap(mrl => mrl.nodes);
-    const graphW = Math.max(
-        layout.length > 0 ? Math.max(...layout.map(n => n.x)) : 0,
-        allModNodes.length > 0 ? Math.max(...allModNodes.map(n => n.x)) : 0
-    ) + NODE_W + 200;
-    const graphH = Math.max(
-        layout.length > 0 ? Math.max(...layout.map(n => n.y)) : 0,
-        allModNodes.length > 0 ? Math.max(...allModNodes.map(n => n.y)) : 0
-    ) + NODE_H + 200;
+    const allModNodes = modRunLayouts.flatMap((mrl) => mrl.nodes);
+    const graphW =
+        Math.max(
+            layout.length > 0 ? Math.max(...layout.map((n) => n.x)) : 0,
+            allModNodes.length > 0 ? Math.max(...allModNodes.map((n) => n.x)) : 0
+        ) +
+        NODE_W +
+        200;
+    const graphH =
+        Math.max(
+            layout.length > 0 ? Math.max(...layout.map((n) => n.y)) : 0,
+            allModNodes.length > 0 ? Math.max(...allModNodes.map((n) => n.y)) : 0
+        ) +
+        NODE_H +
+        200;
 
     return (
         <div
             ref={containerRef}
             className="w-full h-full relative overflow-hidden"
             style={{
-                background: 'radial-gradient(ellipse at center, rgba(28,36,44,0.3) 0%, #0B0F14 70%)',
-                cursor: isPanning ? 'grabbing' : 'grab',
-                fontFamily: "'JetBrains Mono', 'IBM Plex Mono', monospace"
+                background: "radial-gradient(ellipse at center, rgba(28,36,44,0.3) 0%, #0B0F14 70%)",
+                cursor: isPanning ? "grabbing" : "grab",
+                fontFamily: "'JetBrains Mono', 'IBM Plex Mono', monospace",
             }}
             onWheel={handleWheel}
             onMouseDown={handleMouseDown}
@@ -253,25 +276,32 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
             onMouseLeave={handleMouseUp}
         >
             {/* CRT Scanlines */}
-            <div className="absolute inset-0 pointer-events-none opacity-[0.06] z-[1]"
+            <div
+                className="absolute inset-0 pointer-events-none opacity-[0.06] z-[1]"
                 style={{
-                    background: 'linear-gradient(to bottom, transparent 50%, rgba(215,255,47,0.05) 50%)',
-                    backgroundSize: '100% 4px'
+                    background: "linear-gradient(to bottom, transparent 50%, rgba(215,255,47,0.05) 50%)",
+                    backgroundSize: "100% 4px",
                 }}
             />
 
             {/* Transform layer */}
-            <div style={{
-                transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
-                transformOrigin: '0 0',
-                position: 'absolute',
-                top: 0, left: 0,
-                willChange: 'transform'
-            }}>
+            <div
+                style={{
+                    transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+                    transformOrigin: "0 0",
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    willChange: "transform",
+                }}
+            >
                 {/* SVG Connection Lines */}
-                <svg className="absolute pointer-events-none" style={{ top: 0, left: 0, width: graphW, height: graphH, overflow: 'visible' }}>
-                    {safeTopology.map(node =>
-                        node.dependencies.map(depId => {
+                <svg
+                    className="absolute pointer-events-none"
+                    style={{ top: 0, left: 0, width: graphW, height: graphH, overflow: "visible" }}
+                >
+                    {safeTopology.map((node) =>
+                        node.dependencies.map((depId) => {
                             const src = layoutMap.get(depId);
                             const tgt = layoutMap.get(node.id);
                             if (!src || !tgt) return null;
@@ -283,11 +313,11 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
 
                             const srcSt = getStatus(depId, src.node.role);
                             const tgtSt = getStatus(node.id, node.role);
-                            const isLive = srcSt === 'active' || tgtSt === 'active';
-                            const isDone = srcSt === 'done' && tgtSt === 'done';
-                            const isErr = srcSt === 'error' || tgtSt === 'error';
+                            const isLive = srcSt === "active" || tgtSt === "active";
+                            const isDone = srcSt === "done" && tgtSt === "done";
+                            const isErr = srcSt === "error" || tgtSt === "error";
 
-                            const color = isErr ? '#FF6A3D' : isLive ? '#D7FF2F' : isDone ? '#34d399' : '#D7FF2F';
+                            const color = isErr ? "#FF6A3D" : isLive ? "#D7FF2F" : isDone ? "#34d399" : "#D7FF2F";
                             const opacity = isErr ? 0.8 : isLive ? 0.6 : isDone ? 0.4 : 0.15;
                             const width = isLive ? 1.5 : 1;
 
@@ -302,7 +332,7 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
                                         stroke={color}
                                         strokeWidth={width}
                                         opacity={opacity}
-                                        strokeDasharray={isErr ? '4 3' : isLive ? '6 4' : 'none'}
+                                        strokeDasharray={isErr ? "4 3" : isLive ? "6 4" : "none"}
                                     />
                                     <rect x={tx - 2} y={ty - 2} width={4} height={4} fill={color} opacity={opacity} />
                                 </g>
@@ -338,8 +368,8 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
                         }
 
                         // Connections between mod nodes
-                        mrl.run.topology.forEach(node => {
-                            node.dependencies.forEach(depId => {
+                        mrl.run.topology.forEach((node) => {
+                            node.dependencies.forEach((depId) => {
                                 const src = modLayoutMaps[mrlIdx]?.get(depId);
                                 const tgt = modLayoutMaps[mrlIdx]?.get(node.id);
                                 if (!src || !tgt) return;
@@ -351,9 +381,9 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
 
                                 const srcSt = runNodeStatuses[depId];
                                 const tgtSt = runNodeStatuses[node.id];
-                                const isDone = srcSt === 'COMPLETED' && tgtSt === 'COMPLETED';
-                                const isFailed = srcSt === 'FAILED' || tgtSt === 'FAILED';
-                                const color = isFailed ? '#FF6A3D' : isDone ? '#F59E0B' : '#F59E0B';
+                                const isDone = srcSt === "COMPLETED" && tgtSt === "COMPLETED";
+                                const isFailed = srcSt === "FAILED" || tgtSt === "FAILED";
+                                const color = isFailed ? "#FF6A3D" : isDone ? "#F59E0B" : "#F59E0B";
                                 const opacity = isFailed ? 0.7 : isDone ? 0.5 : 0.2;
 
                                 connLines.push(
@@ -365,7 +395,14 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
                                             strokeWidth={1}
                                             opacity={opacity}
                                         />
-                                        <rect x={tx - 2} y={ty - 2} width={4} height={4} fill={color} opacity={opacity} />
+                                        <rect
+                                            x={tx - 2}
+                                            y={ty - 2}
+                                            width={4}
+                                            height={4}
+                                            fill={color}
+                                            opacity={opacity}
+                                        />
                                     </g>
                                 );
                             });
@@ -376,32 +413,35 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
                 </svg>
 
                 {/* Nodes */}
-                {layout.map(ln => {
+                {layout.map((ln) => {
                     const status = getStatus(ln.id, ln.node.role);
                     const s = sc[status];
                     const sel = selectedNodeId === ln.id;
-                    const agent = agents.find(a => a.role === ln.node.role);
+                    const agent = agents.find((a) => a.role === ln.node.role);
 
                     return (
                         <div
                             key={ln.id}
                             data-node="true"
-                            onClick={(e) => { e.stopPropagation(); onSelectNode?.(sel ? null : ln.id); }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectNode?.(sel ? null : ln.id);
+                            }}
                             className="absolute select-none group"
-                            style={{ left: ln.x, top: ln.y, width: NODE_W, cursor: 'pointer' }}
+                            style={{ left: ln.x, top: ln.y, width: NODE_W, cursor: "pointer" }}
                         >
                             <div
                                 className="relative p-2.5 transition-all duration-200"
                                 style={{
-                                    background: sel ? 'rgba(215,255,47,0.05)' : '#0B0F14',
-                                    border: `1px solid ${sel ? '#D7FF2F' : s.border}`,
+                                    background: sel ? "rgba(215,255,47,0.05)" : "#0B0F14",
+                                    border: `1px solid ${sel ? "#D7FF2F" : s.border}`,
                                     boxShadow: sel
-                                        ? '0 0 20px rgba(215,255,47,0.12)'
-                                        : status === 'error'
-                                            ? '0 0 15px rgba(255,106,61,0.15)'
-                                            : status === 'active'
-                                                ? '0 0 10px rgba(215,255,47,0.08)'
-                                                : 'none',
+                                        ? "0 0 20px rgba(215,255,47,0.12)"
+                                        : status === "error"
+                                          ? "0 0 15px rgba(255,106,61,0.15)"
+                                          : status === "active"
+                                            ? "0 0 10px rgba(215,255,47,0.08)"
+                                            : "none",
                                 }}
                             >
                                 {/* Header: dot + role */}
@@ -409,84 +449,117 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
                                     <span
                                         className="shrink-0"
                                         style={{
-                                            width: 6, height: 6,
+                                            width: 6,
+                                            height: 6,
                                             background: s.dot,
-                                            display: 'block',
-                                            animation: status === 'active' ? 'pulse 2s infinite' : 'none'
+                                            display: "block",
+                                            animation: status === "active" ? "pulse 2s infinite" : "none",
                                         }}
                                     />
-                                    <span style={{ fontSize: '0.6rem', color: s.text, fontWeight: 700, letterSpacing: '0.05em' }}>
+                                    <span
+                                        style={{
+                                            fontSize: "0.6rem",
+                                            color: s.text,
+                                            fontWeight: 700,
+                                            letterSpacing: "0.05em",
+                                        }}
+                                    >
                                         {ln.node.role.toUpperCase()}
                                     </span>
                                 </div>
                                 {/* Status label */}
-                                <div style={{ fontSize: '0.5rem', color: s.text, opacity: 0.6, marginLeft: 14, letterSpacing: '0.1em' }}>
+                                <div
+                                    style={{
+                                        fontSize: "0.5rem",
+                                        color: s.text,
+                                        opacity: 0.6,
+                                        marginLeft: 14,
+                                        letterSpacing: "0.1em",
+                                    }}
+                                >
                                     STATUS: {s.label}
                                 </div>
                                 {/* Model info on hover / selected */}
-                                {(sel || status !== 'waiting') && ln.node.model && (
-                                    <div style={{
-                                        fontSize: '0.45rem',
-                                        color: 'rgba(215,255,47,0.3)',
-                                        marginLeft: 14,
-                                        marginTop: 2,
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap' as const
-                                    }}>
-                                        {ln.node.provider === 'openrouter' ? 'OR' : 'AN'}::{ln.node.model}
+                                {(sel || status !== "waiting") && ln.node.model && (
+                                    <div
+                                        style={{
+                                            fontSize: "0.45rem",
+                                            color: "rgba(215,255,47,0.3)",
+                                            marginLeft: 14,
+                                            marginTop: 2,
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap" as const,
+                                        }}
+                                    >
+                                        {ln.node.provider === "openrouter" ? "OR" : "AN"}::{ln.node.model}
                                     </div>
                                 )}
                                 {/* Current action */}
-                                {status === 'active' && agent?.currentAction && (
-                                    <div style={{
-                                        fontSize: '0.45rem',
-                                        color: '#D7FF2F',
-                                        opacity: 0.5,
-                                        marginLeft: 14,
-                                        marginTop: 3,
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap' as const
-                                    }}>
+                                {status === "active" && agent?.currentAction && (
+                                    <div
+                                        style={{
+                                            fontSize: "0.45rem",
+                                            color: "#D7FF2F",
+                                            opacity: 0.5,
+                                            marginLeft: 14,
+                                            marginTop: 3,
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap" as const,
+                                        }}
+                                    >
                                         ▶ {agent.currentAction}
                                     </div>
                                 )}
                                 {/* Eval score badge */}
-                                {ln.id === 'eval' && evalReport && (() => {
-                                    const sc = evalReport.score >= 70 ? '#34d399' : evalReport.score >= 50 ? '#F59E0B' : '#FF6A3D';
-                                    return (
-                                        <div style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 4,
-                                            marginLeft: 14,
-                                            marginTop: 4,
-                                        }}>
-                                            <span style={{
-                                                fontSize: '0.55rem',
-                                                fontWeight: 900,
-                                                color: sc,
-                                                textShadow: `0 0 8px ${sc}66`,
-                                                letterSpacing: '0.05em',
-                                            }}>
-                                                SCORE {evalReport.score}/100
-                                            </span>
-                                            <span style={{
-                                                fontSize: '0.45rem',
-                                                fontWeight: 700,
-                                                color: sc,
-                                                opacity: 0.7,
-                                                padding: '0 3px',
-                                                background: `${sc}18`,
-                                                border: `1px solid ${sc}44`,
-                                                letterSpacing: '0.08em',
-                                            }}>
-                                                {evalReport.recommendation}
-                                            </span>
-                                        </div>
-                                    );
-                                })()}
+                                {ln.id === "eval" &&
+                                    evalReport &&
+                                    (() => {
+                                        const sc =
+                                            evalReport.score >= 70
+                                                ? "#34d399"
+                                                : evalReport.score >= 50
+                                                  ? "#F59E0B"
+                                                  : "#FF6A3D";
+                                        return (
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: 4,
+                                                    marginLeft: 14,
+                                                    marginTop: 4,
+                                                }}
+                                            >
+                                                <span
+                                                    style={{
+                                                        fontSize: "0.55rem",
+                                                        fontWeight: 900,
+                                                        color: sc,
+                                                        textShadow: `0 0 8px ${sc}66`,
+                                                        letterSpacing: "0.05em",
+                                                    }}
+                                                >
+                                                    SCORE {evalReport.score}/100
+                                                </span>
+                                                <span
+                                                    style={{
+                                                        fontSize: "0.45rem",
+                                                        fontWeight: 700,
+                                                        color: sc,
+                                                        opacity: 0.7,
+                                                        padding: "0 3px",
+                                                        background: `${sc}18`,
+                                                        border: `1px solid ${sc}44`,
+                                                        letterSpacing: "0.08em",
+                                                    }}
+                                                >
+                                                    {evalReport.recommendation}
+                                                </span>
+                                            </div>
+                                        );
+                                    })()}
                             </div>
                         </div>
                     );
@@ -502,61 +575,105 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
                                 style={{
                                     left: mrl.nodes[0].x - 70,
                                     top: mrl.nodes[0].y + 10,
-                                    fontSize: '0.5rem',
-                                    color: '#F59E0B',
+                                    fontSize: "0.5rem",
+                                    color: "#F59E0B",
                                     fontWeight: 700,
-                                    letterSpacing: '0.1em',
-                                    writingMode: 'vertical-lr' as const,
-                                    textOrientation: 'mixed' as const,
+                                    letterSpacing: "0.1em",
+                                    writingMode: "vertical-lr" as const,
+                                    textOrientation: "mixed" as const,
                                     opacity: 0.7,
                                 }}
                             >
                                 MOD #{mrlIdx + 1}
                             </div>
                         )}
-                        {mrl.nodes.map(ln => {
+                        {mrl.nodes.map((ln) => {
                             const nodeStatus = mrl.run.nodeStatuses[ln.id];
-                            const isCompleted = nodeStatus === 'COMPLETED';
-                            const isFailed = nodeStatus === 'FAILED';
-                            const isPending = nodeStatus === 'PENDING';
-                            const modAgent = mrl.run.agents.find(a => a.role === ln.node.role);
-                            const isActive = modAgent?.status === 'active';
+                            const isCompleted = nodeStatus === "COMPLETED";
+                            const isFailed = nodeStatus === "FAILED";
+                            const isPending = nodeStatus === "PENDING";
+                            const modAgent = mrl.run.agents.find((a) => a.role === ln.node.role);
+                            const isActive = modAgent?.status === "active";
 
-                            const borderColor = isFailed ? '#FF6A3D' : isActive ? '#F59E0B' : isCompleted ? 'rgba(245,158,11,0.5)' : 'rgba(245,158,11,0.2)';
-                            const dotColor = isFailed ? '#FF6A3D' : isActive ? '#F59E0B' : isCompleted ? '#F59E0B' : 'rgba(245,158,11,0.3)';
-                            const textColor = isFailed ? '#FF6A3D' : isActive ? '#F59E0B' : isCompleted ? '#F59E0B' : 'rgba(245,158,11,0.4)';
-                            const statusLabel = isFailed ? 'FAILED' : isActive ? 'PROCESSING' : isCompleted ? 'DONE' : 'IDLE';
+                            const borderColor = isFailed
+                                ? "#FF6A3D"
+                                : isActive
+                                  ? "#F59E0B"
+                                  : isCompleted
+                                    ? "rgba(245,158,11,0.5)"
+                                    : "rgba(245,158,11,0.2)";
+                            const dotColor = isFailed
+                                ? "#FF6A3D"
+                                : isActive
+                                  ? "#F59E0B"
+                                  : isCompleted
+                                    ? "#F59E0B"
+                                    : "rgba(245,158,11,0.3)";
+                            const textColor = isFailed
+                                ? "#FF6A3D"
+                                : isActive
+                                  ? "#F59E0B"
+                                  : isCompleted
+                                    ? "#F59E0B"
+                                    : "rgba(245,158,11,0.4)";
+                            const statusLabel = isFailed
+                                ? "FAILED"
+                                : isActive
+                                  ? "PROCESSING"
+                                  : isCompleted
+                                    ? "DONE"
+                                    : "IDLE";
 
                             return (
                                 <div
                                     key={ln.id}
                                     data-node="true"
                                     className="absolute select-none"
-                                    style={{ left: ln.x, top: ln.y, width: NODE_W, cursor: 'default' }}
+                                    style={{ left: ln.x, top: ln.y, width: NODE_W, cursor: "default" }}
                                 >
                                     <div
                                         className="relative p-2.5 transition-all duration-200"
                                         style={{
-                                            background: '#0B0F14',
+                                            background: "#0B0F14",
                                             border: `1px solid ${borderColor}`,
-                                            boxShadow: isActive ? '0 0 10px rgba(245,158,11,0.12)' : isFailed ? '0 0 10px rgba(255,106,61,0.12)' : 'none',
+                                            boxShadow: isActive
+                                                ? "0 0 10px rgba(245,158,11,0.12)"
+                                                : isFailed
+                                                  ? "0 0 10px rgba(255,106,61,0.12)"
+                                                  : "none",
                                         }}
                                     >
                                         <div className="flex items-center gap-2 mb-0.5">
                                             <span
                                                 className="shrink-0"
                                                 style={{
-                                                    width: 6, height: 6,
+                                                    width: 6,
+                                                    height: 6,
                                                     background: dotColor,
-                                                    display: 'block',
-                                                    animation: isActive ? 'pulse 2s infinite' : 'none',
+                                                    display: "block",
+                                                    animation: isActive ? "pulse 2s infinite" : "none",
                                                 }}
                                             />
-                                            <span style={{ fontSize: '0.6rem', color: textColor, fontWeight: 700, letterSpacing: '0.05em' }}>
+                                            <span
+                                                style={{
+                                                    fontSize: "0.6rem",
+                                                    color: textColor,
+                                                    fontWeight: 700,
+                                                    letterSpacing: "0.05em",
+                                                }}
+                                            >
                                                 {ln.node.emoji} {ln.node.role.toUpperCase()}
                                             </span>
                                         </div>
-                                        <div style={{ fontSize: '0.5rem', color: textColor, opacity: 0.6, marginLeft: 14, letterSpacing: '0.1em' }}>
+                                        <div
+                                            style={{
+                                                fontSize: "0.5rem",
+                                                color: textColor,
+                                                opacity: 0.6,
+                                                marginLeft: 14,
+                                                letterSpacing: "0.1em",
+                                            }}
+                                        >
                                             STATUS: {statusLabel}
                                         </div>
                                     </div>
@@ -568,8 +685,13 @@ export function ProjectNodeMap({ topology, agents, selectedNodeId, onSelectNode,
             </div>
 
             {/* Zoom HUD */}
-            <div className="absolute bottom-3 right-3 z-10 flex items-center gap-3"
-                style={{ fontSize: '0.55rem', color: 'rgba(215,255,47,0.3)', fontFamily: "'JetBrains Mono', monospace" }}
+            <div
+                className="absolute bottom-3 right-3 z-10 flex items-center gap-3"
+                style={{
+                    fontSize: "0.55rem",
+                    color: "rgba(215,255,47,0.3)",
+                    fontFamily: "'JetBrains Mono', monospace",
+                }}
             >
                 <span>ZOOM: {Math.round(transform.scale * 100)}%</span>
                 <span>|</span>

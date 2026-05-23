@@ -1,292 +1,353 @@
-<!DOCTYPE html>
+<!doctype html>
 
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>VEIST // TERMINAL_CRITICAL_FOCUS</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        "primary": "#D7FF2F", // Acid Green
-                        "secondary": "#FF6A3D", // Safety Orange
-                        "background-dark": "#0B0F14", // Deep Charcoal
-                        "ui-border": "#2A2F35",
-                    },
-                    fontFamily: {
-                        "display": ["Public Sans", "sans-serif"],
-                        "mono": ["JetBrains Mono", "monospace"]
-                    },
-                    borderRadius: {
-                        "DEFAULT": "0px",
-                        "lg": "0px",
-                        "xl": "0px",
-                        "full": "9999px"
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+        <title>VEIST // TERMINAL_CRITICAL_FOCUS</title>
+        <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap"
+            rel="stylesheet"
+        />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+            rel="stylesheet"
+        />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+            rel="stylesheet"
+        />
+        <script id="tailwind-config">
+            tailwind.config = {
+                darkMode: "class",
+                theme: {
+                    extend: {
+                        colors: {
+                            primary: "#D7FF2F", // Acid Green
+                            secondary: "#FF6A3D", // Safety Orange
+                            "background-dark": "#0B0F14", // Deep Charcoal
+                            "ui-border": "#2A2F35",
+                        },
+                        fontFamily: {
+                            display: ["Public Sans", "sans-serif"],
+                            mono: ["JetBrains Mono", "monospace"],
+                        },
+                        borderRadius: {
+                            DEFAULT: "0px",
+                            lg: "0px",
+                            xl: "0px",
+                            full: "9999px",
+                        },
                     },
                 },
-            },
-        }
-    </script>
-<style>
-        body {
-            background-color: #0B0F14;
-            color: #E2E8F0;
-            font-family: 'JetBrains Mono', monospace;
-        }
-        .terminal-border {
-            border: 1px solid #2A2F35;
-        }
-        .scanline {
-            width: 100%;
-            height: 2px;
-            background: rgba(215, 255, 47, 0.03);
-            position: absolute;
-            top: 0;
-            left: 0;
-            pointer-events: none;
-        }
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #0B0F14;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #2A2F35;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #D7FF2F;
-        }
-    </style>
-</head>
-<body class="bg-background-dark text-slate-100 overflow-hidden font-mono selection:bg-primary selection:text-background-dark">
-<div class="flex h-screen w-full flex-col lg:flex-row overflow-hidden border-4 border-ui-border">
-<!-- Sidebar: Session Control -->
-<aside class="w-full lg:w-80 flex flex-col border-r border-ui-border bg-background-dark">
-<div class="p-6 border-b border-ui-border flex flex-col gap-4">
-<div class="flex items-center gap-3">
-<img alt="VEIST V Logo" class="h-8 w-auto" data-alt="VEIST brand logo V shape" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBotx2-edePm5TPI5Qqv2L56c3HYHOJqx-AV7P9DA8oEHkdrHTmTkZ6MLGAm-Kbi_oc8DGF9s1BOZ8u59E5U9S2HwRochwxjy4wUfSBtK_diFmIJpEcU1hprd2bOSSfi4WOvibQe_yPY548AOiengaOVGNb6zqFT-7K2YXrkusCeyxhud2zz-Ju6jOBFw4C14hTAG1gT_VXwFyz_OCFBjzhRzUUAIB_y7CiXHELwZyTJ4RMM8R8vHX9T7K5CVYdCWnR3psbB_MUo78"/>
-<div class="flex flex-col">
-<h1 class="text-sm font-bold tracking-tighter text-primary">VEIST // TERMINAL</h1>
-<p class="text-[10px] text-slate-500 uppercase tracking-widest">ID: CRITICAL_FOCUS</p>
-</div>
-</div>
-<button class="w-full bg-primary text-background-dark px-4 py-2 text-xs font-bold flex items-center justify-between hover:bg-white transition-colors">
-                    NEW_SESSION
-                    <span class="material-symbols-outlined text-sm">add</span>
-</button>
-</div>
-<nav class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
-<div class="text-[10px] text-slate-500 mb-4 px-2">ACTIVE_CHANNELS</div>
-<div class="border border-primary bg-primary/5 p-3 flex flex-col gap-1 cursor-pointer">
-<div class="flex justify-between items-center">
-<span class="text-xs font-bold text-primary">MISSION_CONTROL</span>
-<span class="text-[9px] bg-primary text-background-dark px-1">LIVE</span>
-</div>
-<p class="text-[10px] text-slate-400 truncate">SYS: COORDINATES_LOCKED...</p>
-</div>
-<div class="border border-ui-border p-3 flex flex-col gap-1 cursor-pointer hover:border-slate-500 transition-colors">
-<div class="flex justify-between items-center">
-<span class="text-xs font-bold text-slate-300">SQUAD_BRAVO</span>
-<span class="text-[9px] text-slate-500 uppercase">Idle</span>
-</div>
-<p class="text-[10px] text-slate-500 truncate">RECV: STATUS_GREEN</p>
-</div>
-<div class="border border-ui-border p-3 flex flex-col gap-1 cursor-pointer hover:border-slate-500 opacity-60">
-<div class="flex justify-between items-center">
-<span class="text-xs font-bold text-slate-300">ENCRYPTED_FEED_04</span>
-<span class="material-symbols-outlined text-[12px]">lock</span>
-</div>
-<p class="text-[10px] text-slate-500">AUTH_REQUIRED</p>
-</div>
-</nav>
-<div class="p-4 border-t border-ui-border bg-black/20">
-<div class="flex items-center justify-between text-[10px] text-secondary mb-2">
-<span>HARDWARE_TEMP</span>
-<span>42°C</span>
-</div>
-<div class="w-full bg-ui-border h-1">
-<div class="bg-secondary h-full" style="width: 65%;"></div>
-</div>
-</div>
-</aside>
-<!-- Main Chat Area -->
-<main class="flex-1 flex flex-col bg-background-dark relative">
-<div class="scanline"></div>
-<!-- Header -->
-<header class="h-16 border-b border-ui-border flex items-center justify-between px-6 bg-background-dark z-10">
-<div class="flex items-center gap-6">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-primary">radar</span>
-<h2 class="text-sm font-bold tracking-tight">VEIST // CRITICAL_FOCUS</h2>
-</div>
-<div class="hidden md:flex gap-4 text-[10px] border-l border-ui-border pl-6 text-slate-500 uppercase">
-<div class="flex flex-col">
-<span>STATUS: <span class="text-primary">ACTIVE</span></span>
-<span>ENCRYPTION: AES-256</span>
-</div>
-<div class="flex flex-col border-l border-ui-border pl-4">
-<span>SECURE_LINK: ESTABLISHED</span>
-<span>LAT: 52.5200 N / LONG: 13.4050 E</span>
-</div>
-</div>
-</div>
-<div class="flex items-center gap-4">
-<button class="material-symbols-outlined text-slate-400 hover:text-white">settings</button>
-<button class="material-symbols-outlined text-secondary hover:text-white">report_problem</button>
-<div class="h-8 w-8 bg-ui-border border border-slate-700" data-alt="User avatar thumbnail placeholder">
-<img alt="Avatar" class="w-full h-full grayscale opacity-50" data-alt="System operator avatar icon" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTAXzt_R2plQa5XDVLKjf23XcsYbE19IQ83zXHSJUP3Qdo7OnnmbmSnQ2keiPT_boh_1Opyti25mdh_csIN3buG79CzHZNblvaJ9YjZDd_v_RnxTZRaZbs8EZdbfW6SMalW5i4Xi9te8CXNWx4yuWUqW02Cg7JnZsW0P_jMzdshyEYMiKedzuAvon-TJMvP6rMvFkI2oozwAIwKhDeGqAex8Vp7aNi30qxwt2Mv0BQn5STS7qO_cK37sG2bhqdpQ_8dguYjMhpWSc"/>
-</div>
-</div>
-</header>
-<!-- Message Stream -->
-<section class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-<!-- System Message -->
-<div class="flex flex-col gap-2 max-w-3xl">
-<div class="flex items-center gap-2 text-[10px] text-slate-500">
-<span class="text-secondary font-bold">[!] SYSTEM_LOG</span>
-<span>14:22:05_UTC</span>
-<span class="border-t border-ui-border flex-1"></span>
-</div>
-<div class="border border-ui-border bg-ui-border/10 p-4">
-<p class="text-sm leading-relaxed">
-<span class="text-primary font-bold">[HANDSHAKE_VERIFIED]</span> 
-                            CONNECTION ESTABLISHED WITH SECTOR_7B. INITIALIZING DATA STREAM...
-                            <br/>
-<span class="text-slate-500">SCANNING FOR UNIDENTIFIED SIGNATURES... [CLEAN]</span>
-</p>
-</div>
-</div>
-<!-- User Message -->
-<div class="flex flex-col gap-2 max-w-3xl ml-auto text-right">
-<div class="flex items-center justify-end gap-2 text-[10px] text-slate-500">
-<span class="border-t border-ui-border flex-1"></span>
-<span>14:22:40_UTC</span>
-<span class="text-primary font-bold">OPERATOR_01</span>
-</div>
-<div class="border border-primary/30 bg-primary/5 p-4 inline-block">
-<p class="text-sm leading-relaxed text-slate-200">
-                            MOVING TO COORDINATES_B4. MAINTAIN STEALTH MODE. REQUESTING SQUAD SYNC.
-                        </p>
-</div>
-<div class="text-[9px] text-slate-600">DELIVERED // ENCRYPTED</div>
-</div>
-<!-- Squad Message -->
-<div class="flex flex-col gap-2 max-w-3xl">
-<div class="flex items-center gap-2 text-[10px] text-slate-500">
-<span class="text-slate-300 font-bold">SQUAD_LEADER</span>
-<span>14:23:15_UTC</span>
-<span class="border-t border-ui-border flex-1"></span>
-</div>
-<div class="border border-ui-border p-4">
-<p class="text-sm leading-relaxed text-slate-400 italic">
-                            [DATA_STREAM] SECTOR_CLEAR. INTERFACE_SYNCHRONIZED. BRAVO TEAM READY FOR EXTRACTION.
-                        </p>
-<div class="mt-3 flex gap-4">
-<div class="p-2 border border-ui-border bg-black/40 flex items-center gap-2">
-<span class="material-symbols-outlined text-xs text-secondary">location_on</span>
-<span class="text-[9px] text-slate-500 uppercase">POS_DATA.LOG</span>
-</div>
-</div>
-</div>
-</div>
-<!-- System Alert -->
-<div class="flex flex-col gap-2 max-w-3xl">
-<div class="flex items-center gap-2 text-[10px] text-secondary">
-<span class="font-bold">[!] URGENT_ALERT</span>
-<span>14:25:01_UTC</span>
-<span class="border-t border-secondary/30 flex-1"></span>
-</div>
-<div class="border border-secondary bg-secondary/5 p-4">
-<p class="text-sm leading-relaxed text-secondary font-bold uppercase tracking-wider">
-                            WARNING: THERMAL SPIKE DETECTED IN QUADRANT 4. EVASIVE ACTION RECOMMENDED.
-                        </p>
-</div>
-</div>
-</section>
-<!-- Bottom UI: Metadata & Input -->
-<footer class="p-6 border-t border-ui-border bg-background-dark space-y-4">
-<div class="flex justify-between items-center text-[10px] text-slate-500 font-bold px-2">
-<div class="flex gap-4">
-<span class="flex items-center gap-1"><span class="h-1.5 w-1.5 bg-primary rounded-full"></span> LINK: STABLE</span>
-<span>LAT: 40.7128</span>
-<span>LONG: 74.0060</span>
-</div>
-<div class="flex gap-4 uppercase">
-<span>Terminal: V_09.4</span>
-<span>Buffer: 1024KB</span>
-</div>
-</div>
-<div class="relative group">
-<div class="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-bold text-lg select-none">&gt;</div>
-<input autofocus="" class="w-full bg-ui-border/20 border border-ui-border p-4 pl-10 text-sm text-slate-100 placeholder:text-slate-700 focus:outline-none focus:border-primary transition-colors font-mono" placeholder="ENTER_COMMAND_OR_MESSAGE..." type="text"/>
-<div class="absolute right-4 top-1/2 -translate-y-1/2 flex gap-3">
-<span class="material-symbols-outlined text-slate-600 hover:text-primary cursor-pointer text-sm">attach_file</span>
-<span class="material-symbols-outlined text-slate-600 hover:text-primary cursor-pointer text-sm">terminal</span>
-</div>
-</div>
-<!-- Alignment Ticks / Technical Details -->
-<div class="absolute bottom-0 left-0 p-1">
-<div class="w-4 h-4 border-l border-b border-slate-700"></div>
-</div>
-<div class="absolute bottom-0 right-0 p-1">
-<div class="w-4 h-4 border-r border-b border-slate-700"></div>
-</div>
-<div class="absolute top-0 left-0 p-1">
-<div class="w-4 h-4 border-l border-t border-slate-700"></div>
-</div>
-<div class="absolute top-0 right-0 p-1">
-<div class="w-4 h-4 border-r border-t border-slate-700"></div>
-</div>
-</footer>
-</main>
-<!-- Right System Panel (Optional/Desktop) -->
-<aside class="hidden xl:flex w-64 border-l border-ui-border flex-col bg-background-dark/50 p-4 gap-6">
-<div class="flex flex-col gap-2">
-<div class="text-[10px] text-primary font-bold tracking-widest uppercase">Target_View</div>
-<div class="aspect-square border border-ui-border relative overflow-hidden bg-slate-900 flex items-center justify-center">
-<div class="absolute inset-0 opacity-20 bg-[radial-gradient(circle,_#D7FF2F_1px,_transparent_1px)] bg-[size:10px_10px]"></div>
-<span class="material-symbols-outlined text-secondary text-4xl opacity-50">center_focus_weak</span>
-<div class="absolute bottom-2 left-2 text-[8px] text-primary">SCAN_MODE: ACTIVE</div>
-</div>
-</div>
-<div class="flex flex-col gap-2">
-<div class="text-[10px] text-slate-500 font-bold uppercase">System_Load</div>
-<div class="space-y-3">
-<div class="space-y-1">
-<div class="flex justify-between text-[9px]">
-<span class="text-slate-400">ENCRYPTION_ENGINE</span>
-<span class="text-primary">88%</span>
-</div>
-<div class="h-1 bg-ui-border w-full">
-<div class="h-full bg-primary" style="width: 88%"></div>
-</div>
-</div>
-<div class="space-y-1">
-<div class="flex justify-between text-[9px]">
-<span class="text-slate-400">SIGNAL_BUFFER</span>
-<span class="text-secondary">24%</span>
-</div>
-<div class="h-1 bg-ui-border w-full">
-<div class="h-full bg-secondary" style="width: 24%"></div>
-</div>
-</div>
-</div>
-</div>
-<div class="flex-1"></div>
-<div class="p-3 border border-ui-border bg-black/40">
-<div class="text-[9px] text-slate-600 leading-tight">
-                    CRITICAL FOCUS BRUTALIST INTERFACE<br/>
-                    VER: 7.33.1.0<br/>
-                    AUTH: VEIST_CORP
+            };
+        </script>
+        <style>
+            body {
+                background-color: #0b0f14;
+                color: #e2e8f0;
+                font-family: "JetBrains Mono", monospace;
+            }
+            .terminal-border {
+                border: 1px solid #2a2f35;
+            }
+            .scanline {
+                width: 100%;
+                height: 2px;
+                background: rgba(215, 255, 47, 0.03);
+                position: absolute;
+                top: 0;
+                left: 0;
+                pointer-events: none;
+            }
+            .custom-scrollbar::-webkit-scrollbar {
+                width: 4px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-track {
+                background: #0b0f14;
+            }
+            .custom-scrollbar::-webkit-scrollbar-thumb {
+                background: #2a2f35;
+            }
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                background: #d7ff2f;
+            }
+        </style>
+    </head>
+    <body
+        class="bg-background-dark text-slate-100 overflow-hidden font-mono selection:bg-primary selection:text-background-dark"
+    >
+        <div class="flex h-screen w-full flex-col lg:flex-row overflow-hidden border-4 border-ui-border">
+            <!-- Sidebar: Session Control -->
+            <aside class="w-full lg:w-80 flex flex-col border-r border-ui-border bg-background-dark">
+                <div class="p-6 border-b border-ui-border flex flex-col gap-4">
+                    <div class="flex items-center gap-3">
+                        <img
+                            alt="VEIST V Logo"
+                            class="h-8 w-auto"
+                            data-alt="VEIST brand logo V shape"
+                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBotx2-edePm5TPI5Qqv2L56c3HYHOJqx-AV7P9DA8oEHkdrHTmTkZ6MLGAm-Kbi_oc8DGF9s1BOZ8u59E5U9S2HwRochwxjy4wUfSBtK_diFmIJpEcU1hprd2bOSSfi4WOvibQe_yPY548AOiengaOVGNb6zqFT-7K2YXrkusCeyxhud2zz-Ju6jOBFw4C14hTAG1gT_VXwFyz_OCFBjzhRzUUAIB_y7CiXHELwZyTJ4RMM8R8vHX9T7K5CVYdCWnR3psbB_MUo78"
+                        />
+                        <div class="flex flex-col">
+                            <h1 class="text-sm font-bold tracking-tighter text-primary">VEIST // TERMINAL</h1>
+                            <p class="text-[10px] text-slate-500 uppercase tracking-widest">ID: CRITICAL_FOCUS</p>
+                        </div>
+                    </div>
+                    <button
+                        class="w-full bg-primary text-background-dark px-4 py-2 text-xs font-bold flex items-center justify-between hover:bg-white transition-colors"
+                    >
+                        NEW_SESSION
+                        <span class="material-symbols-outlined text-sm">add</span>
+                    </button>
                 </div>
-</div>
-</aside>
-</div>
-</body></html>
+                <nav class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
+                    <div class="text-[10px] text-slate-500 mb-4 px-2">ACTIVE_CHANNELS</div>
+                    <div class="border border-primary bg-primary/5 p-3 flex flex-col gap-1 cursor-pointer">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-bold text-primary">MISSION_CONTROL</span>
+                            <span class="text-[9px] bg-primary text-background-dark px-1">LIVE</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 truncate">SYS: COORDINATES_LOCKED...</p>
+                    </div>
+                    <div
+                        class="border border-ui-border p-3 flex flex-col gap-1 cursor-pointer hover:border-slate-500 transition-colors"
+                    >
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-bold text-slate-300">SQUAD_BRAVO</span>
+                            <span class="text-[9px] text-slate-500 uppercase">Idle</span>
+                        </div>
+                        <p class="text-[10px] text-slate-500 truncate">RECV: STATUS_GREEN</p>
+                    </div>
+                    <div
+                        class="border border-ui-border p-3 flex flex-col gap-1 cursor-pointer hover:border-slate-500 opacity-60"
+                    >
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-bold text-slate-300">ENCRYPTED_FEED_04</span>
+                            <span class="material-symbols-outlined text-[12px]">lock</span>
+                        </div>
+                        <p class="text-[10px] text-slate-500">AUTH_REQUIRED</p>
+                    </div>
+                </nav>
+                <div class="p-4 border-t border-ui-border bg-black/20">
+                    <div class="flex items-center justify-between text-[10px] text-secondary mb-2">
+                        <span>HARDWARE_TEMP</span>
+                        <span>42°C</span>
+                    </div>
+                    <div class="w-full bg-ui-border h-1">
+                        <div class="bg-secondary h-full" style="width: 65%"></div>
+                    </div>
+                </div>
+            </aside>
+            <!-- Main Chat Area -->
+            <main class="flex-1 flex flex-col bg-background-dark relative">
+                <div class="scanline"></div>
+                <!-- Header -->
+                <header
+                    class="h-16 border-b border-ui-border flex items-center justify-between px-6 bg-background-dark z-10"
+                >
+                    <div class="flex items-center gap-6">
+                        <div class="flex items-center gap-3">
+                            <span class="material-symbols-outlined text-primary">radar</span>
+                            <h2 class="text-sm font-bold tracking-tight">VEIST // CRITICAL_FOCUS</h2>
+                        </div>
+                        <div
+                            class="hidden md:flex gap-4 text-[10px] border-l border-ui-border pl-6 text-slate-500 uppercase"
+                        >
+                            <div class="flex flex-col">
+                                <span>STATUS: <span class="text-primary">ACTIVE</span></span>
+                                <span>ENCRYPTION: AES-256</span>
+                            </div>
+                            <div class="flex flex-col border-l border-ui-border pl-4">
+                                <span>SECURE_LINK: ESTABLISHED</span>
+                                <span>LAT: 52.5200 N / LONG: 13.4050 E</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <button class="material-symbols-outlined text-slate-400 hover:text-white">settings</button>
+                        <button class="material-symbols-outlined text-secondary hover:text-white">
+                            report_problem
+                        </button>
+                        <div
+                            class="h-8 w-8 bg-ui-border border border-slate-700"
+                            data-alt="User avatar thumbnail placeholder"
+                        >
+                            <img
+                                alt="Avatar"
+                                class="w-full h-full grayscale opacity-50"
+                                data-alt="System operator avatar icon"
+                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTAXzt_R2plQa5XDVLKjf23XcsYbE19IQ83zXHSJUP3Qdo7OnnmbmSnQ2keiPT_boh_1Opyti25mdh_csIN3buG79CzHZNblvaJ9YjZDd_v_RnxTZRaZbs8EZdbfW6SMalW5i4Xi9te8CXNWx4yuWUqW02Cg7JnZsW0P_jMzdshyEYMiKedzuAvon-TJMvP6rMvFkI2oozwAIwKhDeGqAex8Vp7aNi30qxwt2Mv0BQn5STS7qO_cK37sG2bhqdpQ_8dguYjMhpWSc"
+                            />
+                        </div>
+                    </div>
+                </header>
+                <!-- Message Stream -->
+                <section class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                    <!-- System Message -->
+                    <div class="flex flex-col gap-2 max-w-3xl">
+                        <div class="flex items-center gap-2 text-[10px] text-slate-500">
+                            <span class="text-secondary font-bold">[!] SYSTEM_LOG</span>
+                            <span>14:22:05_UTC</span>
+                            <span class="border-t border-ui-border flex-1"></span>
+                        </div>
+                        <div class="border border-ui-border bg-ui-border/10 p-4">
+                            <p class="text-sm leading-relaxed">
+                                <span class="text-primary font-bold">[HANDSHAKE_VERIFIED]</span>
+                                CONNECTION ESTABLISHED WITH SECTOR_7B. INITIALIZING DATA STREAM...
+                                <br />
+                                <span class="text-slate-500">SCANNING FOR UNIDENTIFIED SIGNATURES... [CLEAN]</span>
+                            </p>
+                        </div>
+                    </div>
+                    <!-- User Message -->
+                    <div class="flex flex-col gap-2 max-w-3xl ml-auto text-right">
+                        <div class="flex items-center justify-end gap-2 text-[10px] text-slate-500">
+                            <span class="border-t border-ui-border flex-1"></span>
+                            <span>14:22:40_UTC</span>
+                            <span class="text-primary font-bold">OPERATOR_01</span>
+                        </div>
+                        <div class="border border-primary/30 bg-primary/5 p-4 inline-block">
+                            <p class="text-sm leading-relaxed text-slate-200">
+                                MOVING TO COORDINATES_B4. MAINTAIN STEALTH MODE. REQUESTING SQUAD SYNC.
+                            </p>
+                        </div>
+                        <div class="text-[9px] text-slate-600">DELIVERED // ENCRYPTED</div>
+                    </div>
+                    <!-- Squad Message -->
+                    <div class="flex flex-col gap-2 max-w-3xl">
+                        <div class="flex items-center gap-2 text-[10px] text-slate-500">
+                            <span class="text-slate-300 font-bold">SQUAD_LEADER</span>
+                            <span>14:23:15_UTC</span>
+                            <span class="border-t border-ui-border flex-1"></span>
+                        </div>
+                        <div class="border border-ui-border p-4">
+                            <p class="text-sm leading-relaxed text-slate-400 italic">
+                                [DATA_STREAM] SECTOR_CLEAR. INTERFACE_SYNCHRONIZED. BRAVO TEAM READY FOR EXTRACTION.
+                            </p>
+                            <div class="mt-3 flex gap-4">
+                                <div class="p-2 border border-ui-border bg-black/40 flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-xs text-secondary">location_on</span>
+                                    <span class="text-[9px] text-slate-500 uppercase">POS_DATA.LOG</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- System Alert -->
+                    <div class="flex flex-col gap-2 max-w-3xl">
+                        <div class="flex items-center gap-2 text-[10px] text-secondary">
+                            <span class="font-bold">[!] URGENT_ALERT</span>
+                            <span>14:25:01_UTC</span>
+                            <span class="border-t border-secondary/30 flex-1"></span>
+                        </div>
+                        <div class="border border-secondary bg-secondary/5 p-4">
+                            <p class="text-sm leading-relaxed text-secondary font-bold uppercase tracking-wider">
+                                WARNING: THERMAL SPIKE DETECTED IN QUADRANT 4. EVASIVE ACTION RECOMMENDED.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+                <!-- Bottom UI: Metadata & Input -->
+                <footer class="p-6 border-t border-ui-border bg-background-dark space-y-4">
+                    <div class="flex justify-between items-center text-[10px] text-slate-500 font-bold px-2">
+                        <div class="flex gap-4">
+                            <span class="flex items-center gap-1"
+                                ><span class="h-1.5 w-1.5 bg-primary rounded-full"></span> LINK: STABLE</span
+                            >
+                            <span>LAT: 40.7128</span>
+                            <span>LONG: 74.0060</span>
+                        </div>
+                        <div class="flex gap-4 uppercase">
+                            <span>Terminal: V_09.4</span>
+                            <span>Buffer: 1024KB</span>
+                        </div>
+                    </div>
+                    <div class="relative group">
+                        <div
+                            class="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-bold text-lg select-none"
+                        >
+                            &gt;
+                        </div>
+                        <input
+                            autofocus=""
+                            class="w-full bg-ui-border/20 border border-ui-border p-4 pl-10 text-sm text-slate-100 placeholder:text-slate-700 focus:outline-none focus:border-primary transition-colors font-mono"
+                            placeholder="ENTER_COMMAND_OR_MESSAGE..."
+                            type="text"
+                        />
+                        <div class="absolute right-4 top-1/2 -translate-y-1/2 flex gap-3">
+                            <span
+                                class="material-symbols-outlined text-slate-600 hover:text-primary cursor-pointer text-sm"
+                                >attach_file</span
+                            >
+                            <span
+                                class="material-symbols-outlined text-slate-600 hover:text-primary cursor-pointer text-sm"
+                                >terminal</span
+                            >
+                        </div>
+                    </div>
+                    <!-- Alignment Ticks / Technical Details -->
+                    <div class="absolute bottom-0 left-0 p-1">
+                        <div class="w-4 h-4 border-l border-b border-slate-700"></div>
+                    </div>
+                    <div class="absolute bottom-0 right-0 p-1">
+                        <div class="w-4 h-4 border-r border-b border-slate-700"></div>
+                    </div>
+                    <div class="absolute top-0 left-0 p-1">
+                        <div class="w-4 h-4 border-l border-t border-slate-700"></div>
+                    </div>
+                    <div class="absolute top-0 right-0 p-1">
+                        <div class="w-4 h-4 border-r border-t border-slate-700"></div>
+                    </div>
+                </footer>
+            </main>
+            <!-- Right System Panel (Optional/Desktop) -->
+            <aside class="hidden xl:flex w-64 border-l border-ui-border flex-col bg-background-dark/50 p-4 gap-6">
+                <div class="flex flex-col gap-2">
+                    <div class="text-[10px] text-primary font-bold tracking-widest uppercase">Target_View</div>
+                    <div
+                        class="aspect-square border border-ui-border relative overflow-hidden bg-slate-900 flex items-center justify-center"
+                    >
+                        <div
+                            class="absolute inset-0 opacity-20 bg-[radial-gradient(circle,_#D7FF2F_1px,_transparent_1px)] bg-[size:10px_10px]"
+                        ></div>
+                        <span class="material-symbols-outlined text-secondary text-4xl opacity-50"
+                            >center_focus_weak</span
+                        >
+                        <div class="absolute bottom-2 left-2 text-[8px] text-primary">SCAN_MODE: ACTIVE</div>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <div class="text-[10px] text-slate-500 font-bold uppercase">System_Load</div>
+                    <div class="space-y-3">
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[9px]">
+                                <span class="text-slate-400">ENCRYPTION_ENGINE</span>
+                                <span class="text-primary">88%</span>
+                            </div>
+                            <div class="h-1 bg-ui-border w-full">
+                                <div class="h-full bg-primary" style="width: 88%"></div>
+                            </div>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[9px]">
+                                <span class="text-slate-400">SIGNAL_BUFFER</span>
+                                <span class="text-secondary">24%</span>
+                            </div>
+                            <div class="h-1 bg-ui-border w-full">
+                                <div class="h-full bg-secondary" style="width: 24%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex-1"></div>
+                <div class="p-3 border border-ui-border bg-black/40">
+                    <div class="text-[9px] text-slate-600 leading-tight">
+                        CRITICAL FOCUS BRUTALIST INTERFACE<br />
+                        VER: 7.33.1.0<br />
+                        AUTH: VEIST_CORP
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </body>
+</html>

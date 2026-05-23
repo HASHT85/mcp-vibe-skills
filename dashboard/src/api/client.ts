@@ -1,21 +1,21 @@
-const API_BASE = import.meta.env.DEV ? '/api' : 'https://api.veist.hach.dev';
+const API_BASE = import.meta.env.DEV ? "/api" : "https://api.veist.hach.dev";
 
 // ─── Auth ───
 
 const getAuthHeaders = (): Record<string, string> => {
-    const auth = localStorage.getItem('veist_auth');
+    const auth = localStorage.getItem("veist_auth");
     if (auth) {
-        return { 'Authorization': `Basic ${btoa(auth)}` };
+        return { Authorization: `Basic ${btoa(auth)}` };
     }
     return {};
 };
 
 export function setAuth(user: string, pass: string) {
-    localStorage.setItem('veist_auth', `${user}:${pass}`);
+    localStorage.setItem("veist_auth", `${user}:${pass}`);
 }
 
 export function checkAuth() {
-    return !!localStorage.getItem('veist_auth');
+    return !!localStorage.getItem("veist_auth");
 }
 
 // ─── API Fetch Helper ───
@@ -24,27 +24,34 @@ async function api<T = unknown>(path: string, options?: RequestInit): Promise<T>
     const res = await fetch(`${API_BASE}${path}`, {
         ...options,
         headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             ...getAuthHeaders(),
             ...(options?.headers || {}),
         },
     });
-    if (res.status === 401) throw new Error('Unauthorized');
+    if (res.status === 401) throw new Error("Unauthorized");
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
 }
 
 // ─── Pipeline (Orchestrator) ───
 
-export async function launchIdea(description: string, name?: string, model?: string, files?: { base64: string; type: string }[], templateId?: string, githubUrl?: string) {
-    return api<{ pipeline: Pipeline }>('/pipeline/launch', {
-        method: 'POST',
+export async function launchIdea(
+    description: string,
+    name?: string,
+    model?: string,
+    files?: { base64: string; type: string }[],
+    templateId?: string,
+    githubUrl?: string
+) {
+    return api<{ pipeline: Pipeline }>("/pipeline/launch", {
+        method: "POST",
         body: JSON.stringify({ description, name, model, files, templateId, githubUrl }),
     });
 }
 
 export async function listPipelines() {
-    return api<{ pipelines: Pipeline[] }>('/pipeline/list');
+    return api<{ pipelines: Pipeline[] }>("/pipeline/list");
 }
 
 export async function getPipelineStatus(id: string) {
@@ -56,33 +63,35 @@ export async function getPipeline(id: string) {
 }
 
 export async function pausePipeline(id: string) {
-    return api('/pipeline/' + id + '/pause', { method: 'POST' });
+    return api("/pipeline/" + id + "/pause", { method: "POST" });
 }
 
 export async function resumePipeline(id: string) {
-    return api('/pipeline/' + id + '/resume', { method: 'POST' });
+    return api("/pipeline/" + id + "/resume", { method: "POST" });
 }
 
 export async function killPipeline(id: string) {
-    return api('/pipeline/' + id + '/kill', { method: 'POST' });
+    return api("/pipeline/" + id + "/kill", { method: "POST" });
 }
 
 export async function deletePipeline(id: string) {
-    return api('/pipeline/' + id, { method: 'DELETE' });
+    return api("/pipeline/" + id, { method: "DELETE" });
 }
 
 // ─── SSE (Server-Sent Events) ───
 
 export function connectPipelineSSE(id: string, onEvent: (event: PipelineEvent) => void): () => void {
-    const auth = localStorage.getItem('veist_auth');
-    const url = `${API_BASE}/pipeline/${id}/events${auth ? `?auth=${btoa(auth)}` : ''}`;
+    const auth = localStorage.getItem("veist_auth");
+    const url = `${API_BASE}/pipeline/${id}/events${auth ? `?auth=${btoa(auth)}` : ""}`;
     const es = new EventSource(url);
 
     es.onmessage = (e) => {
         try {
             const data = JSON.parse(e.data);
             onEvent(data);
-        } catch { /* skip */ }
+        } catch {
+            /* skip */
+        }
     };
 
     es.onerror = () => {
@@ -103,23 +112,25 @@ export function connectAllSSE(onEvent: (event: PipelineEvent) => void): () => vo
 
     function connect() {
         if (closed) return;
-        const auth = localStorage.getItem('veist_auth');
-        const url = `${API_BASE}/pipeline/events/all${auth ? `?auth=${btoa(auth)}` : ''}`;
+        const auth = localStorage.getItem("veist_auth");
+        const url = `${API_BASE}/pipeline/events/all${auth ? `?auth=${btoa(auth)}` : ""}`;
         es = new EventSource(url);
 
         es.onopen = () => {
-            console.log('[SSE] Connected to live events');
+            console.log("[SSE] Connected to live events");
         };
 
         es.onmessage = (e) => {
             try {
                 const data = JSON.parse(e.data);
                 onEvent(data);
-            } catch { /* skip */ }
+            } catch {
+                /* skip */
+            }
         };
 
         es.onerror = () => {
-            console.warn('[SSE] Connection lost, reconnecting in 3s...');
+            console.warn("[SSE] Connection lost, reconnecting in 3s...");
             es?.close();
             if (!closed) {
                 reconnectTimer = setTimeout(connect, 3000);
@@ -136,9 +147,14 @@ export function connectAllSSE(onEvent: (event: PipelineEvent) => void): () => vo
     };
 }
 
-export async function modifyPipeline(id: string, instructions: string, model?: string, files?: { base64: string; type: string }[]) {
+export async function modifyPipeline(
+    id: string,
+    instructions: string,
+    model?: string,
+    files?: { base64: string; type: string }[]
+) {
     return api<{ pipeline: Pipeline }>(`/pipeline/${id}/modify`, {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify({ instructions, model, files }),
     });
 }
@@ -146,17 +162,17 @@ export async function modifyPipeline(id: string, instructions: string, model?: s
 // ─── Legacy ───
 
 export async function getProjects() {
-    const data = await api<{ projects: Project[] }>('/projects');
+    const data = await api<{ projects: Project[] }>("/projects");
     return data.projects || [];
 }
 
 export async function deleteProject(projectId: string) {
-    return api('/projects/' + projectId, { method: 'DELETE' });
+    return api("/projects/" + projectId, { method: "DELETE" });
 }
 
 // ─── Types ───
 
-export type AgentStatus = 'waiting' | 'active' | 'done' | 'error';
+export type AgentStatus = "waiting" | "active" | "done" | "error";
 
 export type PipelineAgent = {
     role: string;
@@ -174,7 +190,7 @@ export type PipelineEvent = {
     agentRole: string;
     agentEmoji: string;
     action: string;
-    type: 'info' | 'success' | 'error' | 'warning' | 'deploy';
+    type: "info" | "success" | "error" | "warning" | "deploy";
 };
 
 export type NodeTopology = {
@@ -184,7 +200,7 @@ export type NodeTopology = {
     description: string;
     dependencies: string[];
     systemPrompt: string;
-    provider?: 'anthropic' | 'openrouter';
+    provider?: "anthropic" | "openrouter";
     model?: string;
 };
 
@@ -221,7 +237,7 @@ export type Pipeline = {
         url?: string;
     };
     topology?: NodeTopology[];
-    nodeStatuses?: Record<string, 'COMPLETED' | 'FAILED' | 'PENDING'>;
+    nodeStatuses?: Record<string, "COMPLETED" | "FAILED" | "PENDING">;
     artifacts: Record<string, unknown>;
     tokenUsage?: { inputTokens: number; outputTokens: number };
     agentTokens?: AgentTokenRecord[];
@@ -240,8 +256,8 @@ export type Project = {
     agents: PipelineAgent[];
     type: string;
     createdAt: string;
-    github?: Pipeline['github'];
-    dokploy?: Pipeline['dokploy'];
+    github?: Pipeline["github"];
+    dokploy?: Pipeline["dokploy"];
 };
 
 // ─── 📂 Repo Context ───
@@ -249,9 +265,9 @@ export type Project = {
 export async function getRepoContext(pipelineId: string): Promise<string> {
     try {
         const data = await api<{ context: string }>(`/pipeline/${pipelineId}/repo-context`);
-        return data.context || '';
+        return data.context || "";
     } catch {
-        return '';
+        return "";
     }
 }
 
@@ -269,23 +285,23 @@ export type Container = {
 };
 
 export async function listContainers() {
-    return api<{ containers: Container[] }>('/containers');
+    return api<{ containers: Container[] }>("/containers");
 }
 
 export async function stopContainer(name: string) {
-    return api('/containers/' + name + '/stop', { method: 'POST' });
+    return api("/containers/" + name + "/stop", { method: "POST" });
 }
 
 export async function startContainer(name: string) {
-    return api('/containers/' + name + '/start', { method: 'POST' });
+    return api("/containers/" + name + "/start", { method: "POST" });
 }
 
 export async function restartContainer(name: string) {
-    return api('/containers/' + name + '/restart', { method: 'POST' });
+    return api("/containers/" + name + "/restart", { method: "POST" });
 }
 
 export async function deleteContainer(name: string) {
-    return api('/containers/' + name, { method: 'DELETE' });
+    return api("/containers/" + name, { method: "DELETE" });
 }
 
 export async function getContainerLogs(name: string, lines = 100) {
@@ -296,7 +312,7 @@ export async function getContainerLogs(name: string, lines = 100) {
 
 export async function retryPipeline(id: string) {
     return api<{ pipeline: Pipeline; retriedFrom: string }>(`/pipeline/${id}/retry`, {
-        method: 'POST',
+        method: "POST",
     });
 }
 
@@ -304,7 +320,7 @@ export async function retryPipeline(id: string) {
 
 export async function saveSecrets(pipelineId: string, secrets: Record<string, string>) {
     return api<{ ok: boolean; count: number }>(`/pipeline/${pipelineId}/secrets`, {
-        method: 'PUT',
+        method: "PUT",
         body: JSON.stringify({ secrets }),
     });
 }
@@ -316,7 +332,7 @@ export async function getSecrets(pipelineId: string) {
 // ─── 💬 Chat Mode ───
 
 export type ChatMessage = {
-    role: 'user' | 'assistant';
+    role: "user" | "assistant";
     content: string;
     timestamp: string;
 };
@@ -330,15 +346,15 @@ export type ChatSession = {
 };
 
 export async function createChatSession(model?: string) {
-    return api<{ session: ChatSession }>('/chat/sessions', {
-        method: 'POST',
+    return api<{ session: ChatSession }>("/chat/sessions", {
+        method: "POST",
         body: JSON.stringify({ model }),
     });
 }
 
 export async function sendChatMessage(sessionId: string, content: string, files?: { base64: string; type: string }[]) {
     return api<{ reply: string; session: ChatSession }>(`/chat/sessions/${sessionId}/message`, {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify({ content, files }),
     });
 }
@@ -348,18 +364,18 @@ export async function getChatSession(sessionId: string) {
 }
 
 export async function listChatSessions() {
-    return api<{ sessions: ChatSession[] }>('/chat/sessions');
+    return api<{ sessions: ChatSession[] }>("/chat/sessions");
 }
 
 export async function launchFromChat(sessionId: string, name?: string, templateId?: string, githubUrl?: string) {
     return api<{ pipeline: Pipeline; brief: any }>(`/chat/sessions/${sessionId}/launch`, {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify({ name, templateId, githubUrl }),
     });
 }
 
 export async function deleteChatSession(sessionId: string) {
-    return api('/chat/sessions/' + sessionId, { method: 'DELETE' });
+    return api("/chat/sessions/" + sessionId, { method: "DELETE" });
 }
 
 // ─── Quick Deploy ───
@@ -380,8 +396,8 @@ export interface RepoAnalysis {
 }
 
 export async function analyzeRepo(githubUrl: string) {
-    return api<RepoAnalysis>('/api/quick-deploy/analyze', {
-        method: 'POST',
+    return api<RepoAnalysis>("/api/quick-deploy/analyze", {
+        method: "POST",
         body: JSON.stringify({ githubUrl }),
     });
 }
@@ -396,8 +412,8 @@ export async function launchQuickDeploy(config: {
     port?: number;
     composeOverride?: string;
 }) {
-    return api<{ actionId: number; state: string; compose?: string }>('/api/quick-deploy/launch', {
-        method: 'POST',
+    return api<{ actionId: number; state: string; compose?: string }>("/api/quick-deploy/launch", {
+        method: "POST",
         body: JSON.stringify(config),
     });
 }
@@ -407,12 +423,14 @@ export async function getDeployStatus(actionId: number) {
 }
 
 export async function getDeployContainers(projectName: string) {
-    return api<{ id: string; name: string; status: string; state: string; health: string }[]>(`/api/quick-deploy/containers/${projectName}`);
+    return api<{ id: string; name: string; status: string; state: string; health: string }[]>(
+        `/api/quick-deploy/containers/${projectName}`
+    );
 }
 
 // ─── 🔍 Eval Report (Phase 3B) ───
 
-export type EvalCheckName = 'http_200' | 'no_console_errors' | 'build_artifacts' | 'file_structure';
+export type EvalCheckName = "http_200" | "no_console_errors" | "build_artifacts" | "file_structure";
 
 export type EvalCheck = {
     name: EvalCheckName;
@@ -424,7 +442,7 @@ export type EvalCheck = {
 export type EvalReport = {
     score: number;
     checks: EvalCheck[];
-    recommendation: 'SHIP' | 'FIX' | 'SHIP_WITH_ISSUES';
+    recommendation: "SHIP" | "FIX" | "SHIP_WITH_ISSUES";
     fixInstructions?: string;
     cycle: number;
     timestamp: string;

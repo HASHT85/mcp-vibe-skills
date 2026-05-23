@@ -49,7 +49,24 @@ const WEB_SPA: ProjectTemplate = {
     name: "Application Web (SPA)",
     emoji: "🌐",
     description: "Site web interactif — React, Vue, Svelte, Angular",
-    keywords: ["site", "website", "web app", "dashboard", "portfolio", "landing", "spa", "react", "vue", "svelte", "angular", "vite", "frontend", "interface", "ui", "page"],
+    keywords: [
+        "site",
+        "website",
+        "web app",
+        "dashboard",
+        "portfolio",
+        "landing",
+        "spa",
+        "react",
+        "vue",
+        "svelte",
+        "angular",
+        "vite",
+        "frontend",
+        "interface",
+        "ui",
+        "page",
+    ],
     defaultStack: { frontend: "React + Vite + TypeScript", extras: ["Tailwind CSS"] },
     deployStrategy: "docker-traefik",
     needsTraefik: true,
@@ -112,7 +129,21 @@ const API_ONLY: ProjectTemplate = {
     name: "API Backend",
     emoji: "⚡",
     description: "API REST/GraphQL — Express, FastAPI, Flask, NestJS",
-    keywords: ["api", "backend", "rest", "graphql", "server", "microservice", "fastapi", "express", "nestjs", "flask", "django", "endpoint", "service"],
+    keywords: [
+        "api",
+        "backend",
+        "rest",
+        "graphql",
+        "server",
+        "microservice",
+        "fastapi",
+        "express",
+        "nestjs",
+        "flask",
+        "django",
+        "endpoint",
+        "service",
+    ],
     defaultStack: { backend: "Node.js + Express + TypeScript" },
     deployStrategy: "docker-traefik",
     needsTraefik: true,
@@ -171,7 +202,23 @@ const FULLSTACK: ProjectTemplate = {
     name: "Application Fullstack",
     emoji: "🏗️",
     description: "Frontend + Backend + Base de données — Application complète",
-    keywords: ["fullstack", "full-stack", "full stack", "application", "app", "plateforme", "platform", "saas", "marketplace", "e-commerce", "ecommerce", "social", "forum", "blog", "cms"],
+    keywords: [
+        "fullstack",
+        "full-stack",
+        "full stack",
+        "application",
+        "app",
+        "plateforme",
+        "platform",
+        "saas",
+        "marketplace",
+        "e-commerce",
+        "ecommerce",
+        "social",
+        "forum",
+        "blog",
+        "cms",
+    ],
     defaultStack: { frontend: "React + Vite", backend: "Node.js + Express", database: "PostgreSQL" },
     deployStrategy: "docker-compose",
     needsTraefik: true,
@@ -251,7 +298,17 @@ const DISCORD_BOT: ProjectTemplate = {
     name: "Bot Discord/Telegram",
     emoji: "🤖",
     description: "Bot de chat — Discord.js, Telegraf, python-telegram-bot",
-    keywords: ["bot", "discord", "telegram", "slack", "chatbot", "bot discord", "bot telegram", "bot slack", "whatsapp"],
+    keywords: [
+        "bot",
+        "discord",
+        "telegram",
+        "slack",
+        "chatbot",
+        "bot discord",
+        "bot telegram",
+        "bot slack",
+        "whatsapp",
+    ],
     defaultStack: { backend: "Node.js + Discord.js", extras: ["SQLite"] },
     deployStrategy: "docker-only",
     needsTraefik: false,
@@ -312,7 +369,18 @@ const CLI_TOOL: ProjectTemplate = {
     name: "Outil CLI",
     emoji: "🔧",
     description: "Outil en ligne de commande — Node.js, Python, Go, Rust",
-    keywords: ["cli", "command line", "terminal", "outil", "tool", "script", "automation", "scraper", "crawler", "cron"],
+    keywords: [
+        "cli",
+        "command line",
+        "terminal",
+        "outil",
+        "tool",
+        "script",
+        "automation",
+        "scraper",
+        "crawler",
+        "cron",
+    ],
     defaultStack: { backend: "Node.js + Commander.js + TypeScript" },
     deployStrategy: "docker-only",
     needsTraefik: false,
@@ -370,7 +438,22 @@ const PYTHON_APP: ProjectTemplate = {
     name: "Application Python",
     emoji: "🐍",
     description: "Backend Python — FastAPI, Flask, Django, Data Science",
-    keywords: ["python", "fastapi", "flask", "django", "data", "machine learning", "ml", "ia", "ai", "scraping", "pandas", "numpy", "data science", "analyse"],
+    keywords: [
+        "python",
+        "fastapi",
+        "flask",
+        "django",
+        "data",
+        "machine learning",
+        "ml",
+        "ia",
+        "ai",
+        "scraping",
+        "pandas",
+        "numpy",
+        "data science",
+        "analyse",
+    ],
     defaultStack: { backend: "Python + FastAPI", database: "PostgreSQL" },
     deployStrategy: "docker-traefik",
     needsTraefik: true,
@@ -430,7 +513,21 @@ const GAME: ProjectTemplate = {
     name: "Jeu Web",
     emoji: "🎮",
     description: "Jeu web — Canvas, WebGL, Phaser, Three.js, Pixi.js",
-    keywords: ["jeu", "game", "gaming", "canvas", "webgl", "phaser", "three.js", "pixi", "2d", "3d", "arcade", "puzzle", "platformer"],
+    keywords: [
+        "jeu",
+        "game",
+        "gaming",
+        "canvas",
+        "webgl",
+        "phaser",
+        "three.js",
+        "pixi",
+        "2d",
+        "3d",
+        "arcade",
+        "puzzle",
+        "platformer",
+    ],
     defaultStack: { frontend: "Vite + TypeScript + Phaser 3" },
     deployStrategy: "docker-traefik",
     needsTraefik: true,
@@ -503,7 +600,7 @@ export function detectTemplate(description: string): ProjectTemplate {
         for (const keyword of template.keywords) {
             if (desc.includes(keyword)) {
                 // Exact word boundary match scores higher
-                const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, "i");
+                const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
                 score += regex.test(desc) ? 3 : 1;
             }
         }
@@ -520,7 +617,7 @@ export function detectTemplate(description: string): ProjectTemplate {
  * Get a template by ID.
  */
 export function getTemplateById(id: string): ProjectTemplate | undefined {
-    return TEMPLATE_REGISTRY.find(t => t.id === id);
+    return TEMPLATE_REGISTRY.find((t) => t.id === id);
 }
 
 /**
@@ -528,11 +625,11 @@ export function getTemplateById(id: string): ProjectTemplate | undefined {
  */
 export function suggestTemplates(description: string): ProjectTemplate[] {
     const desc = description.toLowerCase();
-    const scored = TEMPLATE_REGISTRY.map(template => {
+    const scored = TEMPLATE_REGISTRY.map((template) => {
         let score = 0;
         for (const keyword of template.keywords) {
             if (desc.includes(keyword)) {
-                const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, "i");
+                const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
                 score += regex.test(desc) ? 3 : 1;
             }
         }
@@ -540,5 +637,5 @@ export function suggestTemplates(description: string): ProjectTemplate[] {
     }).sort((a, b) => b.score - a.score);
 
     // Return top 3 (or at least the default)
-    return scored.slice(0, 3).map(s => s.template);
+    return scored.slice(0, 3).map((s) => s.template);
 }

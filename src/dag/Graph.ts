@@ -21,7 +21,7 @@ export class GraphManager extends (EventEmitter as any) {
 
     /** QUAL-55: Public getter for progress tracking — avoids (manager as any).nodes */
     getCompletedCount(): number {
-        return Array.from(this.nodes.values()).filter(n => n.status === "COMPLETED" || n.status === "SKIPPED").length;
+        return Array.from(this.nodes.values()).filter((n) => n.status === "COMPLETED" || n.status === "SKIPPED").length;
     }
 
     /** Pre-mark a node as completed (for resume/retry — skips execution) */
@@ -42,13 +42,15 @@ export class GraphManager extends (EventEmitter as any) {
                     return reject(this.error || new Error("Pipeline Aborted"));
                 }
 
-                const allDone = Array.from(this.nodes.values()).every(n => n.status === "COMPLETED" || n.status === "SKIPPED");
+                const allDone = Array.from(this.nodes.values()).every(
+                    (n) => n.status === "COMPLETED" || n.status === "SKIPPED"
+                );
                 if (allDone) {
                     this.running = false;
                     return resolve();
                 }
 
-                const failed = Array.from(this.nodes.values()).find(n => n.status === "FAILED");
+                const failed = Array.from(this.nodes.values()).find((n) => n.status === "FAILED");
                 if (failed) {
                     this.running = false;
                     return reject(failed.error);
@@ -57,7 +59,7 @@ export class GraphManager extends (EventEmitter as any) {
                 // Find runnable nodes
                 for (const [id, node] of this.nodes) {
                     if (node.status === "PENDING") {
-                        const canRun = node.dependencies.every(depId => {
+                        const canRun = node.dependencies.every((depId) => {
                             const dep = this.nodes.get(depId);
                             return dep && (dep.status === "COMPLETED" || dep.status === "SKIPPED");
                         });
@@ -65,91 +67,106 @@ export class GraphManager extends (EventEmitter as any) {
                             node.status = "RUNNING";
                             this.emit("node-start", node);
 
-                            node.execute(this.context).then(res => {
-                                // Support for feedback loops (Supervisor -> Node)
-                                if (res && res._action === "RESET_NODE" && res.targetId) {
-                                    // Track rejection count per target node
-                                    const count = (this.rejectionCounts.get(res.targetId) || 0) + 1;
-                                    this.rejectionCounts.set(res.targetId, count);
+                            node.execute(this.context)
+                                .then((res) => {
+                                    // Support for feedback loops (Supervisor -> Node)
+                                    if (res && res._action === "RESET_NODE" && res.targetId) {
+                                        // Track rejection count per target node
+                                        const count = (this.rejectionCounts.get(res.targetId) || 0) + 1;
+                                        this.rejectionCounts.set(res.targetId, count);
 
-                                    if (count >= GraphManager.MAX_REJECTIONS) {
-                                        // Max rejections reached — auto-accept to prevent token waste
-                                        console.log(`[Graph] Max rejections (${GraphManager.MAX_REJECTIONS}) reached for ${res.targetId}, auto-accepting`);
-                                        node.status = "COMPLETED";
-                                        node.result = { status: "VALID", note: "Auto-accepted after max rejections" };
-                                        this.emit("node-complete", { node, result: node.result });
+                                        if (count >= GraphManager.MAX_REJECTIONS) {
+                                            // Max rejections reached — auto-accept to prevent token waste
+                                            console.log(
+                                                `[Graph] Max rejections (${GraphManager.MAX_REJECTIONS}) reached for ${res.targetId}, auto-accepting`
+                                            );
+                                            node.status = "COMPLETED";
+                                            node.result = {
+                                                status: "VALID",
+                                                note: "Auto-accepted after max rejections",
+                                            };
+                                            this.emit("node-complete", { node, result: node.result });
+                                            checkExecution();
+                                            return;
+                                        }
+
+                                        this.emit("node-feedback", {
+                                            node,
+                                            target: res.targetId,
+                                            feedback: res.feedback,
+                                        });
+
+                                        // Reset target node
+                                        const targetNode = this.nodes.get(res.targetId);
+                                        if (targetNode) {
+                                            targetNode.reset();
+                                            (targetNode as any).supervisorFeedback = res.feedback;
+                                        }
+
+                                        // Reset all nodes that depend on the target node, including THIS supervisor node
+                                        this.resetDependents(res.targetId);
+
                                         checkExecution();
                                         return;
                                     }
 
-                                    this.emit("node-feedback", { node, target: res.targetId, feedback: res.feedback });
+                                    // Phase 3: Support for eval feedback loop (Eval → AutoFix → QA → Deploy → Eval)
+                                    if (res && res._action === "FIX_AND_REEVAL" && res.report) {
+                                        const evalCycle = res.report.cycle || 1;
 
-                                    // Reset target node
-                                    const targetNode = this.nodes.get(res.targetId);
-                                    if (targetNode) {
-                                        targetNode.reset();
-                                        (targetNode as any).supervisorFeedback = res.feedback;
-                                    }
+                                        this.emit("node-feedback", {
+                                            node,
+                                            target: "autofix",
+                                            feedback: `Eval cycle ${evalCycle}: score ${res.report.score}/100`,
+                                        });
 
-                                    // Reset all nodes that depend on the target node, including THIS supervisor node
-                                    this.resetDependents(res.targetId);
+                                        // Mark eval as completed (it produced a result)
+                                        node.status = "COMPLETED";
+                                        node.result = res.report;
 
-                                    checkExecution();
-                                    return;
-                                }
-
-                                // Phase 3: Support for eval feedback loop (Eval → AutoFix → QA → Deploy → Eval)
-                                if (res && res._action === "FIX_AND_REEVAL" && res.report) {
-                                    const evalCycle = res.report.cycle || 1;
-
-                                    this.emit("node-feedback", {
-                                        node,
-                                        target: "autofix",
-                                        feedback: `Eval cycle ${evalCycle}: score ${res.report.score}/100`
-                                    });
-
-                                    // Mark eval as completed (it produced a result)
-                                    node.status = "COMPLETED";
-                                    node.result = res.report;
-
-                                    // Reset the fix chain: autofix → qa → deploy → eval
-                                    for (const resetId of ["autofix", "qa", "deploy", "eval"]) {
-                                        const resetNode = this.nodes.get(resetId);
-                                        if (resetNode && resetId !== node.id) {
-                                            resetNode.reset();
+                                        // Reset the fix chain: autofix → qa → deploy → eval
+                                        for (const resetId of ["autofix", "qa", "deploy", "eval"]) {
+                                            const resetNode = this.nodes.get(resetId);
+                                            if (resetNode && resetId !== node.id) {
+                                                resetNode.reset();
+                                            }
                                         }
+                                        // Reset eval itself (so it re-runs after deploy)
+                                        node.reset();
+
+                                        checkExecution();
+                                        return;
                                     }
-                                    // Reset eval itself (so it re-runs after deploy)
-                                    node.reset();
 
+                                    node.status = "COMPLETED";
+                                    node.result = res;
+                                    this.emit("node-complete", { node, result: res });
                                     checkExecution();
-                                    return;
-                                }
-
-                                node.status = "COMPLETED";
-                                node.result = res;
-                                this.emit("node-complete", { node, result: res });
-                                checkExecution();
-                            }).catch(err => {
-                                node.status = "FAILED";
-                                node.error = err;
-                                this.error = err;
-                                this.emit("node-fail", { node, error: err });
-                                checkExecution();
-                            });
+                                })
+                                .catch((err) => {
+                                    node.status = "FAILED";
+                                    node.error = err;
+                                    this.error = err;
+                                    this.emit("node-fail", { node, error: err });
+                                    checkExecution();
+                                });
                         }
                     }
                 }
 
                 // LOGIC-03: Deadlock detection — if no node is RUNNING and no node is runnable,
                 // but we haven't resolved/rejected yet, then we have a deadlock (orphaned dependency).
-                const anyRunning = Array.from(this.nodes.values()).some(n => n.status === "RUNNING");
+                const anyRunning = Array.from(this.nodes.values()).some((n) => n.status === "RUNNING");
                 if (!anyRunning) {
-                    const pendingNodes = Array.from(this.nodes.values()).filter(n => n.status === "PENDING");
+                    const pendingNodes = Array.from(this.nodes.values()).filter((n) => n.status === "PENDING");
                     if (pendingNodes.length > 0) {
                         this.running = false;
-                        const stuck = pendingNodes.map(n => `${n.id}(deps: ${n.dependencies.join(',')})`).join(', ');
-                        return reject(new Error(`Pipeline deadlock: nodes stuck in PENDING with unresolvable dependencies: ${stuck}`));
+                        const stuck = pendingNodes.map((n) => `${n.id}(deps: ${n.dependencies.join(",")})`).join(", ");
+                        return reject(
+                            new Error(
+                                `Pipeline deadlock: nodes stuck in PENDING with unresolvable dependencies: ${stuck}`
+                            )
+                        );
                     }
                 }
             };

@@ -1,10 +1,10 @@
 // QUAL-34: @ts-nocheck removed — type safety restored
 /**
  * Embedding Service — Semantic Code Search (Phase 2.5)
- * 
+ *
  * Vectorizes repository files using google/gemini-embedding-2-preview via OpenRouter,
  * stores embeddings locally, and provides semantic search for agent context injection.
- * 
+ *
  * Storage: /data/embeddings/{projectId}.json
  */
 
@@ -16,12 +16,12 @@ import crypto from "node:crypto";
 // ─── Types ───
 
 export interface EmbeddingChunk {
-    filePath: string;         // relative path in repo
+    filePath: string; // relative path in repo
     startLine: number;
     endLine: number;
     content: string;
-    contentHash: string;      // sha256 of content for cache invalidation
-    vector: number[];         // embedding vector
+    contentHash: string; // sha256 of content for cache invalidation
+    vector: number[]; // embedding vector
 }
 
 export interface EmbeddingIndex {
@@ -37,7 +37,7 @@ export interface SearchResult {
     startLine: number;
     endLine: number;
     content: string;
-    score: number;            // cosine similarity
+    score: number; // cosine similarity
 }
 
 // ─── Constants ───
@@ -46,20 +46,55 @@ const EMBEDDING_MODEL = "google/gemini-embedding-2-preview";
 const EMBEDDING_DIM = 768; // gemini-embedding-2 output dimension
 
 const INDEXABLE_EXTENSIONS = new Set([
-    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-    ".py", ".go", ".rs", ".java", ".kt", ".swift", ".c", ".cpp", ".h",
-    ".css", ".scss", ".less",
-    ".html", ".vue", ".svelte",
-    ".json", ".yml", ".yaml", ".toml",
-    ".md", ".txt",
-    ".sql", ".sh", ".bash",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs",
+    ".py",
+    ".go",
+    ".rs",
+    ".java",
+    ".kt",
+    ".swift",
+    ".c",
+    ".cpp",
+    ".h",
+    ".css",
+    ".scss",
+    ".less",
+    ".html",
+    ".vue",
+    ".svelte",
+    ".json",
+    ".yml",
+    ".yaml",
+    ".toml",
+    ".md",
+    ".txt",
+    ".sql",
+    ".sh",
+    ".bash",
     ".dockerfile",
 ]);
 
 const EXCLUDED_DIRS = new Set([
-    "node_modules", ".git", "dist", "build", ".next", "__pycache__",
-    ".venv", "venv", "vendor", "target", ".turbo", ".cache",
-    "coverage", ".nyc_output", ".parcel-cache",
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    ".next",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "vendor",
+    "target",
+    ".turbo",
+    ".cache",
+    "coverage",
+    ".nyc_output",
+    ".parcel-cache",
 ]);
 
 const MAX_FILE_SIZE = 100 * 1024; // 100KB
@@ -95,9 +130,7 @@ export class EmbeddingService {
                 input: texts,
             });
 
-            return response.data
-                .sort((a, b) => a.index - b.index)
-                .map(d => d.embedding);
+            return response.data.sort((a, b) => a.index - b.index).map((d) => d.embedding);
         } catch (err: any) {
             console.error(`🔮 [Embedding] API error:`, err.message);
             throw err;
@@ -130,7 +163,7 @@ export class EmbeddingService {
                     const ext = path.extname(entry.name).toLowerCase();
                     // Special case: Dockerfile has no extension
                     const isDockerfile = entry.name === "Dockerfile" || entry.name.startsWith("Dockerfile.");
-                    
+
                     if (!INDEXABLE_EXTENSIONS.has(ext) && !isDockerfile) continue;
 
                     const fullPath = path.join(dir, entry.name);
@@ -260,7 +293,7 @@ export class EmbeddingService {
 
         for (let i = 0; i < newChunks.length; i += BATCH_SIZE) {
             const batch = newChunks.slice(i, i + BATCH_SIZE);
-            const texts = batch.map(c => c.text);
+            const texts = batch.map((c) => c.text);
 
             try {
                 const vectors = await this.embed(texts);
@@ -276,14 +309,16 @@ export class EmbeddingService {
                     });
                 }
 
-                console.log(`🔮 [Embedding] Batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(newChunks.length / BATCH_SIZE)} done`);
+                console.log(
+                    `🔮 [Embedding] Batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(newChunks.length / BATCH_SIZE)} done`
+                );
             } catch (err: any) {
                 console.error(`🔮 [Embedding] Batch failed, skipping:`, err.message);
             }
 
             // Small delay between batches to avoid rate limits
             if (i + BATCH_SIZE < newChunks.length) {
-                await new Promise(r => setTimeout(r, 200));
+                await new Promise((r) => setTimeout(r, 200));
             }
         }
 
@@ -299,7 +334,9 @@ export class EmbeddingService {
         await this.saveIndex(projectId, index);
 
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        console.log(`🔮 [Embedding] Indexation complete: ${fileCount} files, ${embeddedChunks.length} chunks in ${elapsed}s`);
+        console.log(
+            `🔮 [Embedding] Indexation complete: ${fileCount} files, ${embeddedChunks.length} chunks in ${elapsed}s`
+        );
 
         return index;
     }
@@ -361,7 +398,7 @@ export class EmbeddingService {
         const results = await this.search(projectId, query, topK);
         if (results.length === 0) return "";
 
-        const parts = results.map(r => {
+        const parts = results.map((r) => {
             const header = `── ${r.filePath} (L${r.startLine}-${r.endLine}) [relevance: ${(r.score * 100).toFixed(0)}%]`;
             return `${header}\n${r.content}`;
         });
@@ -421,7 +458,9 @@ export class EmbeddingService {
 function cosineSimilarity(a: number[], b: number[]): number {
     if (a.length !== b.length) return 0;
 
-    let dot = 0, normA = 0, normB = 0;
+    let dot = 0,
+        normA = 0,
+        normB = 0;
     for (let i = 0; i < a.length; i++) {
         dot += a[i] * b[i];
         normA += a[i] * a[i];

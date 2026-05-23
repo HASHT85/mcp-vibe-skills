@@ -1,7 +1,13 @@
 import { AgentNode, type AgentNodeOptions } from "./AgentNode.js";
 import type { NodeContext } from "../Node.js";
 import type { SkillContent } from "../../skills.js";
-import { tryParseJson, detectProjectType, getArchitectureGuidance, getScaffoldGuidance, getDockerfileTemplate } from "../../utils/project_helpers.js";
+import {
+    tryParseJson,
+    detectProjectType,
+    getArchitectureGuidance,
+    getScaffoldGuidance,
+    getDockerfileTemplate,
+} from "../../utils/project_helpers.js";
 import { getTemplateById, type ProjectTemplate } from "../../templates/registry.js";
 
 /** Helper: get pipeline's template or undefined */
@@ -21,7 +27,7 @@ export class AnalysisNode extends AgentNode {
             model: model,
             dependencies: ["research"],
             maxTurns: 8,
-            allowedTools: ["web_search", "fetch_url", "read_memory", "write_memory", "bash", "list_dir", "read_file"]
+            allowedTools: ["web_search", "fetch_url", "read_memory", "write_memory", "bash", "list_dir", "read_file"],
         });
     }
 
@@ -50,10 +56,13 @@ export class AnalysisNode extends AgentNode {
             if (repoContext) {
                 const parts: string[] = [];
                 if (repoContext.readme) parts.push(`\n📄 README.md (extrait):\n${repoContext.readme.slice(0, 3000)}`);
-                if (repoContext.dockerfile) parts.push(`\n🐳 Dockerfile existant:\n${repoContext.dockerfile.slice(0, 1500)}`);
-                if (repoContext.dockerCompose) parts.push(`\n🐳 docker-compose.yml existant:\n${repoContext.dockerCompose.slice(0, 1500)}`);
+                if (repoContext.dockerfile)
+                    parts.push(`\n🐳 Dockerfile existant:\n${repoContext.dockerfile.slice(0, 1500)}`);
+                if (repoContext.dockerCompose)
+                    parts.push(`\n🐳 docker-compose.yml existant:\n${repoContext.dockerCompose.slice(0, 1500)}`);
                 if (repoContext.goMod) parts.push(`\n📦 go.mod:\n${repoContext.goMod}`);
-                if (repoContext.packageJson) parts.push(`\n📦 package.json:\n${repoContext.packageJson.slice(0, 1000)}`);
+                if (repoContext.packageJson)
+                    parts.push(`\n📦 package.json:\n${repoContext.packageJson.slice(0, 1000)}`);
                 gitSection += parts.join("");
                 gitSection += `\n\n⚠️ CRITIQUE: Ce projet a DÉJÀ du code fonctionnel. Ne réécris PAS le code depuis zéro. Adapte et améliore l'existant. Si un Dockerfile et/ou une image Docker Hub existent déjà, UTILISE-LES.`;
             }
@@ -93,7 +102,7 @@ export class ArchitectureNode extends AgentNode {
             model: model,
             dependencies: ["skills_enrichment"],
             maxTurns: 10,
-            allowedTools: ["web_search", "fetch_url", "read_memory", "write_memory"]
+            allowedTools: ["web_search", "fetch_url", "read_memory", "write_memory"],
         });
     }
 
@@ -109,7 +118,8 @@ export class ArchitectureNode extends AgentNode {
     }
 
     protected getSystemPrompt(context: NodeContext): string {
-        let base = "Tu es un Architecte Logiciel Senior. Rends UNIQUEMENT un objet JSON décrivant l'architecture. Utilise write_memory pour enregistrer les ports convenus et les endpoints vitaux pour les autres agents.";
+        let base =
+            "Tu es un Architecte Logiciel Senior. Rends UNIQUEMENT un objet JSON décrivant l'architecture. Utilise write_memory pour enregistrer les ports convenus et les endpoints vitaux pour les autres agents.";
         const skills = context.pipeline.artifacts.skills as SkillContent[] | undefined;
         if (skills?.length) {
             base += "\n\n📚 BEST PRACTICES (from skills.sh):\n";
@@ -138,7 +148,7 @@ export class ScaffoldNode extends AgentNode {
             model: model,
             dependencies: ["architecture"],
             maxTurns: 30,
-            allowedTools: ["bash", "write_file", "list_dir", "read_memory", "write_memory"]
+            allowedTools: ["bash", "write_file", "list_dir", "read_memory", "write_memory"],
         });
     }
 
@@ -151,7 +161,7 @@ export class ScaffoldNode extends AgentNode {
             ? `\n\n🎯 INSTRUCTIONS SCAFFOLD (${template.name}):\n${template.prompts.scaffold}`
             : `\nN'oublie pas de créer le docker-compose.yml pour le développement LOCAL.`;
 
-        let prompt = `Crée le scaffold initial de ce projet dans le répertoire courant.\n\nArchitecture globale: ${JSON.stringify(architecture, null, 2)}\n\nTypes de services: ${p.services.map((s: any) => s.type).join(', ')}${templateHint}`;
+        let prompt = `Crée le scaffold initial de ce projet dans le répertoire courant.\n\nArchitecture globale: ${JSON.stringify(architecture, null, 2)}\n\nTypes de services: ${p.services.map((s: any) => s.type).join(", ")}${templateHint}`;
 
         if ((this as any).supervisorFeedback) {
             prompt += `\n\n⚠️ ATTENTION: Le superviseur a REJETÉ ton travail:\n${(this as any).supervisorFeedback}\n\nApplique ces corrections IMMÉDIATEMENT.`;
@@ -160,7 +170,8 @@ export class ScaffoldNode extends AgentNode {
     }
 
     protected getSystemPrompt(context: NodeContext): string {
-        let base = "Tu es un Développeur Senior. Utilise bash pour initier les projets et crée un docker-compose.yml fonctionnant en local sur 0.0.0.0 avec des binds de ports.";
+        let base =
+            "Tu es un Développeur Senior. Utilise bash pour initier les projets et crée un docker-compose.yml fonctionnant en local sur 0.0.0.0 avec des binds de ports.";
         const skills = context.pipeline.artifacts.skills as SkillContent[] | undefined;
         if (skills?.length) {
             base += "\n\n📚 BEST PRACTICES (from skills.sh):\n";
@@ -182,7 +193,15 @@ export class DevelopmentNode extends AgentNode {
             emoji: "💻",
             dependencies: ["supervisor_for_scaffold"],
             maxTurns: 60,
-            allowedTools: ["read_file", "write_file", "replace_in_file", "bash", "list_dir", "read_memory", "write_memory"]
+            allowedTools: [
+                "read_file",
+                "write_file",
+                "replace_in_file",
+                "bash",
+                "list_dir",
+                "read_memory",
+                "write_memory",
+            ],
         });
     }
 
@@ -284,7 +303,7 @@ export class QANode extends AgentNode {
             model: model,
             dependencies: dynamicDependencies,
             maxTurns: 30,
-            allowedTools: ["bash", "read_file", "read_memory", "write_memory"]
+            allowedTools: ["bash", "read_file", "read_memory", "write_memory"],
         });
     }
 
@@ -314,7 +333,7 @@ export class DeployNode extends AgentNode {
             model: model,
             dependencies: ["qa"],
             maxTurns: 15,
-            allowedTools: ["bash", "read_file", "write_file", "replace_in_file", "read_memory", "write_memory"]
+            allowedTools: ["bash", "read_file", "write_file", "replace_in_file", "read_memory", "write_memory"],
         });
     }
 
@@ -322,7 +341,9 @@ export class DeployNode extends AgentNode {
         const p = context.pipeline;
         const template = getTemplate(context);
         // Derive subdomain from repo name (repo.hach.dev) instead of pipeline ID
-        const repoSlug = p.github?.repo ? p.github.repo.toLowerCase().replace(/[^a-z0-9-]/g, '-') : p.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+        const repoSlug = p.github?.repo
+            ? p.github.repo.toLowerCase().replace(/[^a-z0-9-]/g, "-")
+            : p.name.toLowerCase().replace(/[^a-z0-9-]/g, "-");
         const hostDomain = `${repoSlug}.hach.dev`;
 
         // If template says no Traefik, use simplified deploy
@@ -342,7 +363,7 @@ Crée un docker-compose.prod.yml simple avec:
         }
 
         return `Tu dois configurer le déploiement de ce projet pour la production Hostinger via Traefik.
-${template ? `\n🎯 TYPE: ${template.emoji} ${template.name}\n${template.prompts.deploy}\n` : ''}
+${template ? `\n🎯 TYPE: ${template.emoji} ${template.name}\n${template.prompts.deploy}\n` : ""}
         
 Instructions:
 1. Ne modifie pas le \`docker-compose.yml\` existant qui est réservé au développement local.
