@@ -3,8 +3,9 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Cache buster
-ARG CACHE_BUSTER=20260311-2200
+# Cache buster — update this value to force a full rebuild
+ARG CACHE_BUSTER=20260523-2100
+RUN echo "Cache buster: $CACHE_BUSTER"
 
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
