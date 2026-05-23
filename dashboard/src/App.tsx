@@ -112,9 +112,10 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
       setAuth(user, pass);
       await listPipelines();
       onLogin();
-    } catch {
+    } catch (err) {
       localStorage.removeItem('veist_auth');
-      setError('Invalid credentials');
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Erreur: ${msg}`);
     } finally { setLoading(false); }
   };
 
